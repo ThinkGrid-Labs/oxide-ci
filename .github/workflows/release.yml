@@ -5,13 +5,12 @@ on:
     branches:
       - main
 
-
 permissions:
   contents: write
 
 jobs:
-  build-release:
-    name: Build Release Binaries
+  build:
+    name: Build Binaries
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -49,9 +48,32 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: mv target/${{ matrix.target }}/release/oxide-ci.exe ${{ matrix.asset_name }}
 
-      - name: Upload Release Asset
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
+
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare Release Assets
+        run: |
+          mkdir -p release_assets
+          # GitHub artifacts download into folders named after the artifact name
+          mv artifacts/*/* release_assets/
+          ls -la release_assets/
+
+      - name: Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          files: ${{ matrix.asset_name }}
+          files: release_assets/*
           generate_release_notes: true
