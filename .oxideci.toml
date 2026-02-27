@@ -1,0 +1,24 @@
+# oxide-ci self-scan configuration
+# Excludes files that intentionally contain fake/example secret patterns
+# (test fixtures, documentation examples, and regex pattern definitions)
+
+[scan]
+exclude_patterns = [
+    # Integration tests contain deliberate fake patterns as test fixtures
+    "tests/**",
+    # Unit tests inside scanner.rs use fake patterns to verify detection works
+    "src/modules/scanner.rs",
+    # README contains pattern examples and documentation snippets
+    "README.md",
+    # Build artifacts
+    "target/**",
+    # Git internals
+    ".git/**",
+]
+
+[coverage]
+file = "coverage/lcov.info"
+min = 80.0
+
+[lint]
+target_dir = "."

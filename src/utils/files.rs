@@ -1,7 +1,7 @@
 use ignore::{WalkBuilder, Walk};
 use std::path::Path;
 
-pub fn get_parallel_walker<P: AsRef<Path>>(dir: P) -> Walk {
-    // using WalkBuilder to ignore things per .gitignore, creating a walker
+pub fn get_walker<P: AsRef<Path>>(dir: P) -> Walk {
+    // Respects .gitignore rules; hidden(false) ensures dotfiles like .env are included
     WalkBuilder::new(dir).hidden(false).build()
 }

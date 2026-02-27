@@ -1,7 +1,7 @@
 use indicatif::{ProgressBar, ProgressStyle};
 
 pub fn info(msg: &str) {
-    println!("ℹ️  {}", msg);
+    eprintln!("ℹ️  {}", msg);
 }
 
 pub fn success(msg: &str) {
@@ -9,7 +9,7 @@ pub fn success(msg: &str) {
 }
 
 pub fn warn(msg: &str) {
-    println!("⚠️  {}", msg);
+    eprintln!("⚠️  {}", msg);
 }
 
 pub fn create_progress_bar(len: u64) -> ProgressBar {
