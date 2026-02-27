@@ -9,22 +9,40 @@ OxideCI is a blazing fast, language-agnostic DevOps CLI tool designed to enforce
 - **Out-of-the-Box Smart Traverse**: Automatically respects your project's `.gitignore` rules when scanning files, saving you from writing complex path exclusion configurations.
 - **All-in-One Binary**: A single, dependency-free compiled binary you can drop into any CI pipeline or run locally with ease. 
 
-## 🛠 Installation & Usage
+## 🛠 Installation
 
 OxideCI is distributed as a standalone binary, making it entirely dependency-free for your CI pipelines. 
 
-### Recommended: CI Pipeline (GitHub Actions / CI)
+### Recommended: CI Pipeline (GitHub Actions / GitLab CI / etc.)
 The fastest way to use OxideCI in your pipelines is to download the pre-compiled binary directly.
 
 ```yaml
-# Example: GitHub Actions Pipeline
+# Example snippet: Download and Install
 - name: Install OxideCI
   run: |
     curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 -o /usr/local/bin/oxide-ci
     chmod +x /usr/local/bin/oxide-ci
+```
 
-- name: Run Secret Scan
-  run: oxide-ci scan
+### Local Mac & Linux (No Cargo Required)
+You don't need Rust or Cargo to run OxideCI on your machine! Just grab the binary directly from GitHub:
+
+**For Mac (Apple Silicon / M1+):**
+```bash
+curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-macos-arm64 -o /usr/local/bin/oxide-ci
+chmod +x /usr/local/bin/oxide-ci
+```
+
+**For Mac (Intel):**
+```bash
+curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-macos-amd64 -o /usr/local/bin/oxide-ci
+chmod +x /usr/local/bin/oxide-ci
+```
+
+**For Linux (x64):**
+```bash
+curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 -o /usr/local/bin/oxide-ci
+chmod +x /usr/local/bin/oxide-ci
 ```
 
 ### Alternative: Install via Cargo
@@ -36,27 +54,64 @@ oxide-ci --help
 
 ---
 
-## 🚦 Commands
+## 🚦 Comprehensive Usage & Examples
 
 ### 1. Secret & PII Scanning
 Quickly scan your entire repository for hardcoded AWS keys, SSNs, emails, and other sensitive PII patterns.
 
+**💻 Locally via Terminal:**
 ```bash
-# Scan the current directory
+# Simply run the scan command in your project root
 oxide-ci scan
 ```
 
-### 2. Kubernetes Manifest Linting
-Ensure your Kubernetes deployments are safe by validating that your YAML files have resource limits defined. *(WIP)*
+**☁️ In GitHub Actions:**
+```yaml
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install OxideCI
+        run: |
+          curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 -o /usr/local/bin/oxide-ci
+          chmod +x /usr/local/bin/oxide-ci
+          
+      - name: Run Secret Scan
+        run: oxide-ci scan
+```
 
+### 2. Kubernetes Manifest Linting *(WIP)*
+Ensure your Kubernetes deployments are safe by validating that your YAML files have resource limits defined.
+
+**💻 Locally via Terminal:**
 ```bash
 # Lint Kubernetes files in the local directory
 oxide-ci lint
 ```
 
-### 3. Coverage Threshold Gates
-Ensure your team doesn't drop their testing standards. Parse your locally generated coverage reports (like `lcov.info`) and automatically fail the CI job if coverage drops below a strict minimum threshold. *(WIP)*
+**☁️ In GitHub Actions:**
+```yaml
+jobs:
+  k8s-linting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install OxideCI
+        run: |
+          curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 -o /usr/local/bin/oxide-ci
+          chmod +x /usr/local/bin/oxide-ci
+          
+      - name: Lint Kubernetes YAMLs
+        run: oxide-ci lint
+```
 
+### 3. Coverage Threshold Gates *(WIP)*
+Ensure your team doesn't drop their testing standards. Parse your locally generated coverage reports (like `lcov.info`) and automatically fail the CI job if coverage drops below a strict minimum threshold.
+
+**💻 Locally via Terminal:**
 ```bash
 # Verify coverage file meets 80% (default)
 oxide-ci coverage --file path/to/lcov.info
@@ -64,6 +119,19 @@ oxide-ci coverage --file path/to/lcov.info
 # Set a custom threshold of 95%
 oxide-ci coverage --file path/to/lcov.info --min 95
 ```
+
+**🦊 In GitLab CI:**
+```yaml
+coverage_check:
+  stage: test
+  script:
+    - curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 -o /usr/local/bin/oxide-ci
+    - chmod +x /usr/local/bin/oxide-ci
+    # Assuming tests in a previous step generated lcov.info
+    - oxide-ci coverage --file coverage/lcov.info --min 90
+```
+
+---
 
 ## 🏗 Architecture
 OxideCI is built to be extensible:
