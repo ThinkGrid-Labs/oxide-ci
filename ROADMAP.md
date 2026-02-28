@@ -14,6 +14,8 @@ All features below are shipped in this release.
 - [x] **Inline Suppression** (`# oxide-ci: ignore`) — Mark any line with `# oxide-ci: ignore` or `// oxide-ci: ignore` to silently skip it. Works for both regex and entropy findings.
 - [x] **Multi-lock-file Audit** — Walks the entire repository tree instead of stopping at the first lock file found. Monorepos with multiple sub-projects are fully audited in one pass.
 - [x] **Go Module Support** — Parses `go.sum` files and queries the OSV `Go` ecosystem for known CVEs. Skips `/go.mod` verification lines automatically.
+- [x] **yarn.lock support** — Parses both Yarn v1 (classic) and v2/v3 (Berry) lock formats. Scoped packages (`@babel/core`) and multi-specifier entries handled. Workspace/link/file dependencies skipped.
+- [x] **pnpm-lock.yaml support** — Parses pnpm v5–v9 lock formats. Handles leading-slash keys (v5–v8), plain keys (v9), scoped packages, and peer-dep version suffixes. Only the `packages:` section is read; `snapshots:` is ignored.
 
 ---
 

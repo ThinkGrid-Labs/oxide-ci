@@ -142,11 +142,132 @@ fn parse_go_sum(content: &str, source: PathBuf) -> Vec<Package> {
         .collect()
 }
 
+/// Parse `yarn.lock` (v1 classic and v2/v3 berry) and return npm packages.
+///
+/// v1 format: non-indented header lines followed by `  version "x.y.z"`
+/// v2 format: non-indented header lines followed by `  version: x.y.z`
+fn parse_yarn_lock(content: &str, source: PathBuf) -> Vec<Package> {
+    let mut packages = Vec::new();
+    let mut current_name: Option<String> = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        // Comment lines and __metadata block reset state
+        if trimmed.starts_with('#') || trimmed.starts_with("__metadata") {
+            current_name = None;
+            continue;
+        }
+
+        // Non-indented line ending with ':' → package header
+        if !line.starts_with(' ') && !line.starts_with('\t') && trimmed.ends_with(':') {
+            let header = trimmed.trim_end_matches(':');
+            // Take the first comma-separated specifier
+            let first = header.split(',').next().unwrap_or(header).trim();
+            // Strip surrounding quotes
+            let first = first.trim_matches('"');
+            // Skip workspace / local / link dependencies — no OSV entries
+            if first.contains("workspace:") || first.contains("link:") || first.contains("file:") {
+                current_name = None;
+                continue;
+            }
+            // Find the '@' separating name from version specifier.
+            // Scoped packages start with '@', so skip the first character when searching.
+            let search_from = if first.starts_with('@') { 1 } else { 0 };
+            current_name = first[search_from..]
+                .find('@')
+                .map(|i| first[..i + search_from].to_string());
+        }
+        // Indented version line (we have a pending package name)
+        else if let Some(ref name) = current_name.clone() {
+            // v1: version "4.17.21"
+            if let Some(v) = trimmed
+                .strip_prefix("version \"")
+                .and_then(|s| s.strip_suffix('"'))
+            {
+                packages.push(Package {
+                    name: name.clone(),
+                    version: v.to_string(),
+                    ecosystem: "npm",
+                    source_file: source.clone(),
+                });
+                current_name = None;
+            }
+            // v2/v3 berry: version: 4.17.21
+            else if let Some(v) = trimmed.strip_prefix("version: ") {
+                let v = v.trim().trim_matches('"');
+                packages.push(Package {
+                    name: name.clone(),
+                    version: v.to_string(),
+                    ecosystem: "npm",
+                    source_file: source.clone(),
+                });
+                current_name = None;
+            }
+        }
+    }
+
+    packages
+}
+
+/// Parse `pnpm-lock.yaml` and return npm packages.
+///
+/// Only the `packages:` section is parsed (canonical resolved package list).
+/// Handles pnpm v5–v9: v5–v8 use `/name@version:` keys; v9 uses `name@version:`.
+fn parse_pnpm_lock(content: &str, source: PathBuf) -> Vec<Package> {
+    let mut packages = Vec::new();
+    let mut in_packages = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Top-level (non-indented) key transitions between sections
+        if !line.starts_with(' ') && !line.starts_with('\t') && !trimmed.is_empty() {
+            in_packages = trimmed == "packages:";
+            continue;
+        }
+
+        if !in_packages || trimmed.is_empty() {
+            continue;
+        }
+
+        // 2-space indented package entries (not 4-space sub-fields)
+        if line.starts_with("  ") && !line.starts_with("    ") && trimmed.ends_with(':') {
+            let key = trimmed.trim_end_matches(':');
+            // Strip leading slash present in pnpm v5–v8 format
+            let key = key.trim_start_matches('/');
+            // Find the '@' separating name from version (handle scoped packages)
+            let search_from = if key.starts_with('@') { 1 } else { 0 };
+            if let Some(at_idx) = key[search_from..].find('@').map(|i| i + search_from) {
+                let name = &key[..at_idx];
+                let version_str = &key[at_idx + 1..];
+                // Strip peer-dep suffix like "4.17.21(react@18.0.0)"
+                let version = version_str.split('(').next().unwrap_or(version_str).trim();
+                if !name.is_empty() && !version.is_empty() {
+                    packages.push(Package {
+                        name: name.to_string(),
+                        version: version.to_string(),
+                        ecosystem: "npm",
+                        source_file: source.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    packages
+}
+
 // ── Lock-file discovery ───────────────────────────────────────────────────────
 
 /// Walk the entire directory tree and collect packages from ALL supported lock files.
 ///
-/// Supported: `Cargo.lock`, `package-lock.json`, `requirements.txt`, `go.sum`
+/// Supported: `Cargo.lock`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`,
+/// `requirements.txt`, `go.sum`
 ///
 /// Unlike the old single-file detection, this walks the whole repo so monorepos
 /// with multiple sub-projects are fully covered.
@@ -169,6 +290,8 @@ fn collect_all_lockfiles(root: &Path) -> Result<Vec<Package>> {
         let pkgs: Vec<Package> = match file_name {
             "Cargo.lock" => parse_cargo_lock(&content, path.clone()),
             "package-lock.json" => parse_package_lock(&content, path.clone()),
+            "yarn.lock" => parse_yarn_lock(&content, path.clone()),
+            "pnpm-lock.yaml" => parse_pnpm_lock(&content, path.clone()),
             "requirements.txt" => parse_requirements_txt(&content, path.clone()),
             "go.sum" => parse_go_sum(&content, path.clone()),
             _ => continue,
@@ -263,7 +386,7 @@ pub fn run_audit() -> Result<()> {
 
     if all_packages.is_empty() {
         anyhow::bail!(
-            "No supported lock files found. Supported: Cargo.lock, package-lock.json, requirements.txt, go.sum"
+            "No supported lock files found. Supported: Cargo.lock, package-lock.json, yarn.lock, pnpm-lock.yaml, requirements.txt, go.sum"
         );
     }
 
@@ -472,6 +595,194 @@ golang.org/x/net v0.12.0 h1:something=\n\
         let source = PathBuf::from("subdir/go.sum");
         let pkgs = parse_go_sum(content, source.clone());
         assert_eq!(pkgs[0].source_file, source);
+    }
+
+    // ── yarn.lock ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_yarn_lock_v1_basic() {
+        let content = concat!(
+            "# yarn lockfile v1\n",
+            "\n",
+            "lodash@^4.17.21:\n",
+            "  version \"4.17.21\"\n",
+            "  resolved \"https://registry.yarnpkg.com/lodash/-/lodash-4.17.21.tgz\"\n",
+            "  integrity sha512-xxx\n",
+        );
+        let pkgs = parse_yarn_lock(content, PathBuf::from("yarn.lock"));
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "lodash");
+        assert_eq!(pkgs[0].version, "4.17.21");
+        assert_eq!(pkgs[0].ecosystem, "npm");
+    }
+
+    #[test]
+    fn test_parse_yarn_lock_v2_berry() {
+        let content = concat!(
+            "__metadata:\n",
+            "  version: 6\n",
+            "  cacheKey: 8\n",
+            "\n",
+            "\"lodash@npm:^4.17.21\":\n",
+            "  version: 4.17.21\n",
+            "  resolution: \"lodash@npm:4.17.21\"\n",
+        );
+        let pkgs = parse_yarn_lock(content, PathBuf::from("yarn.lock"));
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "lodash");
+        assert_eq!(pkgs[0].version, "4.17.21");
+    }
+
+    #[test]
+    fn test_parse_yarn_lock_scoped_package() {
+        let content = concat!(
+            "\"@babel/core@^7.0.0\":\n",
+            "  version \"7.21.0\"\n",
+            "  resolved \"https://registry.yarnpkg.com/@babel/core/-/core-7.21.0.tgz\"\n",
+        );
+        let pkgs = parse_yarn_lock(content, PathBuf::from("yarn.lock"));
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "@babel/core");
+        assert_eq!(pkgs[0].version, "7.21.0");
+    }
+
+    #[test]
+    fn test_parse_yarn_lock_multiple_specifiers_same_line() {
+        // Yarn v1 often merges multiple specifiers into one block
+        let content = concat!(
+            "lodash@^4.17.0, lodash@^4.17.21:\n",
+            "  version \"4.17.21\"\n",
+        );
+        let pkgs = parse_yarn_lock(content, PathBuf::from("yarn.lock"));
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "lodash");
+    }
+
+    #[test]
+    fn test_parse_yarn_lock_skips_workspace_deps() {
+        let content = concat!(
+            "\"my-app@workspace:.\":\n",
+            "  version: 0.0.0-use.local\n",
+        );
+        let pkgs = parse_yarn_lock(content, PathBuf::from("yarn.lock"));
+        assert!(pkgs.is_empty(), "workspace deps should be skipped");
+    }
+
+    #[test]
+    fn test_parse_yarn_lock_empty() {
+        let pkgs = parse_yarn_lock("# yarn lockfile v1\n", PathBuf::from("yarn.lock"));
+        assert!(pkgs.is_empty());
+    }
+
+    // ── pnpm-lock.yaml ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_pnpm_lock_v5_v8_with_slash() {
+        let content = concat!(
+            "lockfileVersion: '6.0'\n",
+            "\n",
+            "packages:\n",
+            "\n",
+            "  /lodash@4.17.21:\n",
+            "    resolution: {integrity: sha512-xxx}\n",
+            "    dev: false\n",
+        );
+        let pkgs = parse_pnpm_lock(content, PathBuf::from("pnpm-lock.yaml"));
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "lodash");
+        assert_eq!(pkgs[0].version, "4.17.21");
+        assert_eq!(pkgs[0].ecosystem, "npm");
+    }
+
+    #[test]
+    fn test_parse_pnpm_lock_v9_no_slash() {
+        let content = concat!(
+            "lockfileVersion: '9.0'\n",
+            "\n",
+            "packages:\n",
+            "\n",
+            "  lodash@4.17.21:\n",
+            "    resolution: {integrity: sha512-xxx}\n",
+        );
+        let pkgs = parse_pnpm_lock(content, PathBuf::from("pnpm-lock.yaml"));
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "lodash");
+        assert_eq!(pkgs[0].version, "4.17.21");
+    }
+
+    #[test]
+    fn test_parse_pnpm_lock_scoped_package() {
+        let content = concat!(
+            "lockfileVersion: '6.0'\n",
+            "\n",
+            "packages:\n",
+            "\n",
+            "  /@babel/core@7.21.0:\n",
+            "    resolution: {integrity: sha512-xxx}\n",
+        );
+        let pkgs = parse_pnpm_lock(content, PathBuf::from("pnpm-lock.yaml"));
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "@babel/core");
+        assert_eq!(pkgs[0].version, "7.21.0");
+    }
+
+    #[test]
+    fn test_parse_pnpm_lock_peer_dep_suffix_stripped() {
+        // pnpm encodes peer deps as version(peer@ver)
+        let content = concat!(
+            "lockfileVersion: '9.0'\n",
+            "\n",
+            "packages:\n",
+            "\n",
+            "  react-dom@18.2.0(react@18.2.0):\n",
+            "    resolution: {integrity: sha512-xxx}\n",
+        );
+        let pkgs = parse_pnpm_lock(content, PathBuf::from("pnpm-lock.yaml"));
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "react-dom");
+        assert_eq!(pkgs[0].version, "18.2.0");
+    }
+
+    #[test]
+    fn test_parse_pnpm_lock_ignores_importers_section() {
+        let content = concat!(
+            "lockfileVersion: '9.0'\n",
+            "\n",
+            "importers:\n",
+            "  .:\n",
+            "    dependencies:\n",
+            "      lodash:\n",
+            "        specifier: ^4.17.21\n",
+            "        version: 4.17.21\n",
+            "\n",
+            "packages:\n",
+            "\n",
+            "  lodash@4.17.21:\n",
+            "    resolution: {integrity: sha512-xxx}\n",
+        );
+        let pkgs = parse_pnpm_lock(content, PathBuf::from("pnpm-lock.yaml"));
+        // importers section must not produce extra entries
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "lodash");
+    }
+
+    #[test]
+    fn test_parse_pnpm_lock_stops_at_snapshots_section() {
+        let content = concat!(
+            "lockfileVersion: '9.0'\n",
+            "\n",
+            "packages:\n",
+            "\n",
+            "  lodash@4.17.21:\n",
+            "    resolution: {integrity: sha512-xxx}\n",
+            "\n",
+            "snapshots:\n",
+            "\n",
+            "  lodash@4.17.21: {}\n",
+        );
+        let pkgs = parse_pnpm_lock(content, PathBuf::from("pnpm-lock.yaml"));
+        // snapshots section must not double-count
+        assert_eq!(pkgs.len(), 1);
     }
 
     // ── Deduplication ──────────────────────────────────────────────────────

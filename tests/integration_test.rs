@@ -363,6 +363,76 @@ fn audit_parses_go_sum_file() {
     );
 }
 
+#[test]
+fn audit_finds_yarn_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("yarn.lock"),
+        concat!(
+            "# yarn lockfile v1\n",
+            "\n",
+            "lodash@^4.17.21:\n",
+            "  version \"4.17.21\"\n",
+            "  resolved \"https://registry.yarnpkg.com/lodash/-/lodash-4.17.21.tgz\"\n",
+            "  integrity sha512-xxx\n",
+        ),
+    )
+    .unwrap();
+
+    let output = Command::new(binary())
+        .arg("audit")
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        !stderr.contains("No supported lock files found"),
+        "should find yarn.lock; stderr: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("yarn.lock") || stderr.contains("lodash"),
+        "should report yarn.lock or lodash; stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn audit_finds_pnpm_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("pnpm-lock.yaml"),
+        concat!(
+            "lockfileVersion: '6.0'\n",
+            "\n",
+            "packages:\n",
+            "\n",
+            "  /lodash@4.17.21:\n",
+            "    resolution: {integrity: sha512-xxx}\n",
+        ),
+    )
+    .unwrap();
+
+    let output = Command::new(binary())
+        .arg("audit")
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        !stderr.contains("No supported lock files found"),
+        "should find pnpm-lock.yaml; stderr: {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("pnpm-lock.yaml") || stderr.contains("lodash"),
+        "should report pnpm-lock.yaml or lodash; stderr: {}",
+        stderr
+    );
+}
+
 // ── install-hooks ─────────────────────────────────────────────────────────────
 
 #[test]
