@@ -2,6 +2,10 @@
 # Excludes files that intentionally contain fake/example secret patterns
 # (test fixtures, documentation examples, and regex pattern definitions)
 
+# oxide-ci self-scan configuration
+# Excludes files that intentionally contain fake/example secret patterns
+# (test fixtures, documentation examples, and regex pattern definitions)
+
 [scan]
 exclude_patterns = [
     # Integration tests contain deliberate fake patterns as test fixtures
@@ -15,6 +19,13 @@ exclude_patterns = [
     # Git internals
     ".git/**",
 ]
+
+# Shannon entropy detection (v0.2.0)
+# Tokens with entropy above this threshold are flagged as potential secrets.
+# Lower = more sensitive (more false positives); higher = more specific.
+entropy = true
+entropy_threshold = 4.5
+entropy_min_length = 20
 
 [coverage]
 file = "coverage/lcov.info"

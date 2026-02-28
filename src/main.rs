@@ -25,6 +25,10 @@ enum Commands {
         /// Only scan files changed since the given commit (e.g. --since HEAD~1)
         #[arg(long)]
         since: Option<String>,
+        /// Scan the entire git commit history for secrets (slow on large repos).
+        /// Use `# oxide-ci: ignore` on individual lines to suppress false positives.
+        #[arg(long)]
+        history: bool,
     },
     /// Validates Kubernetes YAML manifests for resource limits and security issues
     Lint {
@@ -60,13 +64,16 @@ fn main() -> anyhow::Result<()> {
             format,
             staged,
             since,
+            history,
         } => {
             let output_format = match format.as_str() {
                 "json" => OutputFormat::Json,
                 "sarif" => OutputFormat::Sarif,
                 _ => OutputFormat::Text,
             };
-            let diff = if staged {
+            let diff = if history {
+                Some(DiffMode::History)
+            } else if staged {
                 Some(DiffMode::Staged)
             } else {
                 since.map(DiffMode::Since)

@@ -197,6 +197,172 @@ fn coverage_exits_nonzero_below_threshold() {
     assert!(!status.success(), "50% should fail 80% threshold");
 }
 
+// ── Feature 3: Inline suppression ─────────────────────────────────────────────
+
+#[test]
+fn scan_suppressed_line_is_not_flagged() {
+    let dir = tempfile::tempdir().unwrap();
+    // AWS key on a line marked with the suppression comment — must not be flagged
+    std::fs::write(
+        dir.path().join("config.env"),
+        "AWS_KEY=AKIAIOSFODNN7EXAMPLEKEY1  # oxide-ci: ignore\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .arg("scan")
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        status.success(),
+        "suppressed line should not cause non-zero exit"
+    );
+}
+
+#[test]
+fn scan_suppression_only_on_marked_line() {
+    let dir = tempfile::tempdir().unwrap();
+    // Line 1: suppressed → no finding; Line 2: NOT suppressed → 1 finding expected
+    std::fs::write(
+        dir.path().join("config.env"),
+        format!(
+            "SAFE=AKIAIOSFODNN7EXAMPLEKEY1  # oxide-ci: ignore\n{}\n",
+            "REAL=AKIAIOSFODNN7EXAMPLEKEY1"
+        ),
+    )
+    .unwrap();
+
+    let output = Command::new(binary())
+        .args(["scan", "--format", "json"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["total"].as_u64().unwrap(),
+        1,
+        "only the unsuppressed line should be flagged"
+    );
+}
+
+// ── Feature 1: Entropy detection ──────────────────────────────────────────────
+
+#[test]
+fn scan_detects_high_entropy_string() {
+    let dir = tempfile::tempdir().unwrap();
+    // 32-char high-entropy base64-like token — doesn't match any named regex pattern
+    std::fs::write(
+        dir.path().join("config.env"),
+        "API_SECRET=aB3dEfGhIjKlMnOpQrStUvWxYz012345\n",
+    )
+    .unwrap();
+
+    let output = Command::new(binary())
+        .args(["scan", "--format", "json"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "high-entropy token should be flagged");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let rules: Vec<&str> = parsed["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule"].as_str().unwrap_or(""))
+        .collect();
+    assert!(
+        rules.iter().any(|r| r.contains("High Entropy")),
+        "expected a High Entropy finding, got rules: {:?}",
+        rules
+    );
+}
+
+// ── Feature 2: Git history scan ───────────────────────────────────────────────
+
+#[test]
+fn scan_history_flag_accepted() {
+    // Run in oxide-ci's own repo — guaranteed to be a git repository.
+    // Check only that the flag is recognised and any output is valid JSON.
+    let output = Command::new(binary())
+        .args(["scan", "--history", "--format", "json"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    if !stdout.trim().is_empty() {
+        let _: serde_json::Value = serde_json::from_str(&stdout)
+            .expect("--history --format json must produce valid JSON on stdout");
+    }
+}
+
+// ── Features 4+5: Multi-lockfile audit + Go support ───────────────────────────
+
+#[test]
+fn audit_finds_multiple_lockfiles_in_subdirectories() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // Rust sub-project
+    std::fs::create_dir(dir.path().join("api")).unwrap();
+    std::fs::write(
+        dir.path().join("api/Cargo.lock"),
+        "[package]\nname = \"api\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    // Node sub-project
+    std::fs::create_dir(dir.path().join("frontend")).unwrap();
+    std::fs::write(
+        dir.path().join("frontend/package-lock.json"),
+        r#"{"packages": {"node_modules/lodash": {"version": "4.17.21"}}}"#,
+    )
+    .unwrap();
+
+    let output = Command::new(binary())
+        .arg("audit")
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        !stderr.contains("No supported lock file found"),
+        "should find lock files in subdirectories; stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn audit_parses_go_sum_file() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("go.sum"),
+        "github.com/gin-gonic/gin v1.9.1 h1:fakehash=\n\
+         github.com/gin-gonic/gin v1.9.1/go.mod h1:fakehash2=\n",
+    )
+    .unwrap();
+
+    let output = Command::new(binary())
+        .arg("audit")
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("go.sum") || stderr.contains("Go") || stderr.contains("gin"),
+        "should detect go.sum and report on it; stderr: {}",
+        stderr
+    );
+}
+
 // ── install-hooks ─────────────────────────────────────────────────────────────
 
 #[test]

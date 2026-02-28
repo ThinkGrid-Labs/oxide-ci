@@ -10,12 +10,36 @@ pub struct Config {
     pub lint: LintConfig,
 }
 
-#[derive(Deserialize, Default, Clone)]
+/// Per-scan settings loaded from `.oxideci.toml`.
+/// `#[derive(Default)]` is not used because the entropy fields require non-zero defaults
+/// that cannot be expressed with Rust's `Default` trait directly; use helper fns instead.
+#[derive(Deserialize, Clone)]
 pub struct ScanConfig {
     #[serde(default)]
     pub exclude_patterns: Vec<String>,
     #[serde(default)]
     pub extra_patterns: Vec<ExtraPattern>,
+    /// Enable Shannon entropy detection for high-entropy tokens (default: true)
+    #[serde(default = "default_entropy_enabled")]
+    pub entropy: bool,
+    /// Minimum entropy score for base64-like tokens to be flagged (default: 4.5)
+    #[serde(default = "default_entropy_threshold")]
+    pub entropy_threshold: f64,
+    /// Minimum token length (chars) before entropy is checked (default: 20)
+    #[serde(default = "default_entropy_min_length")]
+    pub entropy_min_length: usize,
+}
+
+impl Default for ScanConfig {
+    fn default() -> Self {
+        Self {
+            exclude_patterns: Vec::new(),
+            extra_patterns: Vec::new(),
+            entropy: default_entropy_enabled(),
+            entropy_threshold: default_entropy_threshold(),
+            entropy_min_length: default_entropy_min_length(),
+        }
+    }
 }
 
 #[derive(Deserialize, Clone)]
@@ -55,6 +79,15 @@ impl Default for LintConfig {
     }
 }
 
+fn default_entropy_enabled() -> bool {
+    true
+}
+fn default_entropy_threshold() -> f64 {
+    4.5
+}
+fn default_entropy_min_length() -> usize {
+    20
+}
 fn default_coverage_min() -> f64 {
     80.0
 }
