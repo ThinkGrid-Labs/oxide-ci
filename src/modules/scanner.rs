@@ -610,7 +610,7 @@ fn build_excludes(patterns: &[String]) -> Result<Option<ignore::overrides::Overr
 
 fn is_excluded(path: &PathBuf, excludes: &Option<ignore::overrides::Override>) -> bool {
     if let Some(ov) = excludes {
-        ov.matched(path, false).is_whitelist()
+        ov.matched(path, false).is_ignore()
     } else {
         false
     }

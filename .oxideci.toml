@@ -12,8 +12,12 @@ exclude_patterns = [
     "tests/**",
     # Unit tests inside scanner.rs use fake patterns to verify detection works
     "src/modules/scanner.rs",
+    # audit.rs test fixtures contain go.sum hash strings (not secrets)
+    "src/modules/audit.rs",
     # README contains pattern examples and documentation snippets
     "README.md",
+    # Cargo.lock contains SHA-256 package checksums (not secrets)
+    "Cargo.lock",
     # Build artifacts
     "target/**",
     # Git internals
