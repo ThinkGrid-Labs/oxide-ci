@@ -30,14 +30,12 @@ pub fn run_coverage(file: &str, min: f64) -> Result<()> {
             current_hit = val.trim().parse::<u64>().unwrap_or(0);
         } else if let Some(val) = line.strip_prefix("LF:") {
             current_found = val.trim().parse::<u64>().unwrap_or(0);
-        } else if line == "end_of_record" {
-            if !current_path.is_empty() {
-                records.push(FileRecord {
-                    path: current_path.clone(),
-                    hit: current_hit,
-                    found: current_found,
-                });
-            }
+        } else if line == "end_of_record" && !current_path.is_empty() {
+            records.push(FileRecord {
+                path: current_path.clone(),
+                hit: current_hit,
+                found: current_found,
+            });
         }
     }
 

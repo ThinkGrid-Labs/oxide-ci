@@ -74,11 +74,11 @@ fn collect_yaml_files(dir: &str) -> Vec<std::path::PathBuf> {
     let walker = ignore::WalkBuilder::new(dir).hidden(true).build();
     walker
         .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().map_or(false, |ft| ft.is_file()))
+        .filter(|e| e.file_type().is_some_and(|ft| ft.is_file()))
         .map(|e| e.into_path())
         .filter(|p| {
             p.extension()
-                .map_or(false, |ext| ext == "yaml" || ext == "yml")
+                .is_some_and(|ext| ext == "yaml" || ext == "yml")
         })
         .collect()
 }

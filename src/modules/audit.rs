@@ -802,7 +802,7 @@ golang.org/x/net v0.12.0 h1:something=\n\
     #[test]
     fn test_deduplication_across_lockfiles() {
         // Same package appearing in two different lock files
-        let pkgs = vec![
+        let pkgs = [
             Package {
                 name: "anyhow".into(),
                 version: "1.0.86".into(),

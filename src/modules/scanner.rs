@@ -156,7 +156,7 @@ fn check_entropy(line: &str, config: &ScanConfig) -> Vec<String> {
     if !config.entropy {
         return Vec::new();
     }
-    line.split(|c: char| matches!(c, '=' | ':' | '"' | '\'' | ' ' | '\t' | ',' | ';'))
+    line.split(['=', ':', '"', '\'', ' ', '\t', ',', ';'])
         .filter(|s| s.len() >= config.entropy_min_length)
         .flat_map(|token| {
             let e = shannon_entropy(token);
@@ -209,10 +209,7 @@ fn parse_git_log_patch(stdout: &str) -> Vec<(String, PathBuf, String, usize)> {
         if raw_line.starts_with("@@ ") {
             // Extract the "+new_start" portion
             if let Some(after_plus) = raw_line.split('+').nth(1) {
-                let num_str = after_plus
-                    .split(|c| c == ',' || c == ' ')
-                    .next()
-                    .unwrap_or("1");
+                let num_str = after_plus.split([',', ' ']).next().unwrap_or("1");
                 hunk_line_no = num_str.parse().unwrap_or(1);
                 // hunk_line_no now points to the first line of the hunk in the new file;
                 // we'll increment BEFORE recording or after context lines.
@@ -227,9 +224,9 @@ fn parse_git_log_patch(stdout: &str) -> Vec<(String, PathBuf, String, usize)> {
                 // Diff file header lines — skip, don't advance counter
                 continue;
             }
-            if raw_line.starts_with('+') {
+            if let Some(stripped) = raw_line.strip_prefix('+') {
                 hunk_line_no += 1;
-                let content = raw_line[1..].to_string();
+                let content = stripped.to_string();
                 results.push((current_commit.clone(), path.clone(), content, hunk_line_no));
             } else if raw_line.starts_with(' ') {
                 // Context line — advance new-file counter but don't collect
@@ -390,7 +387,7 @@ fn run_file_scan(
             let walker = files::get_walker("./");
             walker
                 .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().map_or(false, |ft| ft.is_file()))
+                .filter(|e| e.file_type().is_some_and(|ft| ft.is_file()))
                 .map(|e| e.into_path())
                 .collect()
         }
