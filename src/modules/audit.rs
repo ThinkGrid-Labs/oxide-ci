@@ -1,6 +1,6 @@
 use crate::utils::{files, terminal};
 use anyhow::{Context, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -345,13 +345,11 @@ fn query_osv(packages: &[Package]) -> Result<Vec<Vulnerability>> {
     let mut vulns = Vec::new();
     for (i, result_entry) in results.iter().enumerate() {
         let pkg = &packages[i];
-        let vuln_array: &Vec<Value> = match result_entry
-            .get("vulns")
-            .and_then(|v: &Value| v.as_array())
-        {
-            Some(a) => a,
-            None => continue,
-        };
+        let vuln_array: &Vec<Value> =
+            match result_entry.get("vulns").and_then(|v: &Value| v.as_array()) {
+                Some(a) => a,
+                None => continue,
+            };
         for vuln in vuln_array {
             let id = vuln
                 .get("id")
@@ -489,7 +487,10 @@ name = "local-crate"
 version = "0.1.0"
 "#;
         let pkgs = parse_cargo_lock(content, PathBuf::from("Cargo.lock"));
-        assert!(pkgs.iter().any(|p| p.name == "anyhow" && p.version == "1.0.86"));
+        assert!(
+            pkgs.iter()
+                .any(|p| p.name == "anyhow" && p.version == "1.0.86")
+        );
     }
 
     #[test]
@@ -519,7 +520,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 }"#;
         let pkgs = parse_package_lock(content, PathBuf::from("package-lock.json"));
         assert_eq!(pkgs.len(), 2);
-        assert!(pkgs.iter().any(|p| p.name == "express" && p.version == "4.18.0"));
+        assert!(
+            pkgs.iter()
+                .any(|p| p.name == "express" && p.version == "4.18.0")
+        );
     }
 
     // ── requirements.txt ──────────────────────────────────────────────────
@@ -529,8 +533,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
         let content = "Django==4.2.0\nrequests>=2.28.0\nflask==2.3.2\n# comment\n";
         let pkgs = parse_requirements_txt(content, PathBuf::from("requirements.txt"));
         assert_eq!(pkgs.len(), 2);
-        assert!(pkgs.iter().any(|p| p.name == "Django" && p.version == "4.2.0"));
-        assert!(pkgs.iter().any(|p| p.name == "flask" && p.version == "2.3.2"));
+        assert!(
+            pkgs.iter()
+                .any(|p| p.name == "Django" && p.version == "4.2.0")
+        );
+        assert!(
+            pkgs.iter()
+                .any(|p| p.name == "flask" && p.version == "2.3.2")
+        );
     }
 
     #[test]
@@ -560,19 +570,24 @@ golang.org/x/net v0.12.0 h1:something=\n\
         let pkgs = parse_go_sum(content, PathBuf::from("go.sum"));
         // /go.mod line must be skipped → 2 packages, not 3
         assert_eq!(pkgs.len(), 2);
-        assert!(pkgs
-            .iter()
-            .any(|p| p.name == "github.com/gin-gonic/gin" && p.version == "v1.9.1"));
-        assert!(pkgs
-            .iter()
-            .any(|p| p.name == "golang.org/x/net" && p.version == "v0.12.0"));
+        assert!(
+            pkgs.iter()
+                .any(|p| p.name == "github.com/gin-gonic/gin" && p.version == "v1.9.1")
+        );
+        assert!(
+            pkgs.iter()
+                .any(|p| p.name == "golang.org/x/net" && p.version == "v0.12.0")
+        );
     }
 
     #[test]
     fn test_parse_go_sum_skips_go_mod_lines() {
         let content = "mod.example.com/foo v1.0.0/go.mod h1:abc=\n";
         let pkgs = parse_go_sum(content, PathBuf::from("go.sum"));
-        assert!(pkgs.is_empty(), "version ending with /go.mod must be skipped");
+        assert!(
+            pkgs.is_empty(),
+            "version ending with /go.mod must be skipped"
+        );
     }
 
     #[test]
@@ -660,10 +675,7 @@ golang.org/x/net v0.12.0 h1:something=\n\
 
     #[test]
     fn test_parse_yarn_lock_skips_workspace_deps() {
-        let content = concat!(
-            "\"my-app@workspace:.\":\n",
-            "  version: 0.0.0-use.local\n",
-        );
+        let content = concat!("\"my-app@workspace:.\":\n", "  version: 0.0.0-use.local\n",);
         let pkgs = parse_yarn_lock(content, PathBuf::from("yarn.lock"));
         assert!(pkgs.is_empty(), "workspace deps should be skipped");
     }
@@ -817,6 +829,10 @@ golang.org/x/net v0.12.0 h1:something=\n\
             .filter(|p| seen.insert((p.name.clone(), p.version.clone(), p.ecosystem)))
             .collect();
 
-        assert_eq!(unique.len(), 2, "anyhow should be deduplicated to one entry");
+        assert_eq!(
+            unique.len(),
+            2,
+            "anyhow should be deduplicated to one entry"
+        );
     }
 }

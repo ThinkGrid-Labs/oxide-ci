@@ -9,7 +9,11 @@ fn binary() -> std::path::PathBuf {
 #[test]
 fn scan_exits_zero_on_clean_directory() {
     let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("clean.txt"), "hello world, no secrets here\n").unwrap();
+    std::fs::write(
+        dir.path().join("clean.txt"),
+        "hello world, no secrets here\n",
+    )
+    .unwrap();
 
     let status = Command::new(binary())
         .arg("scan")
@@ -35,7 +39,10 @@ fn scan_exits_nonzero_on_secrets() {
         .status()
         .unwrap();
 
-    assert!(!status.success(), "expected non-zero exit when secrets found");
+    assert!(
+        !status.success(),
+        "expected non-zero exit when secrets found"
+    );
 }
 
 #[test]
@@ -268,7 +275,10 @@ fn scan_detects_high_entropy_string() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success(), "high-entropy token should be flagged");
+    assert!(
+        !output.status.success(),
+        "high-entropy token should be flagged"
+    );
     let stdout = String::from_utf8(output.stdout).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let rules: Vec<&str> = parsed["findings"]

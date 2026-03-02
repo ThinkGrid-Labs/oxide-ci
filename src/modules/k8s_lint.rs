@@ -65,10 +65,7 @@ pub fn run_lint(target_dir: &str) -> Result<()> {
         );
     }
 
-    anyhow::bail!(
-        "K8s lint failed: {} issue(s) found.",
-        all_issues.len()
-    );
+    anyhow::bail!("K8s lint failed: {} issue(s) found.", all_issues.len());
 }
 
 // ── File discovery ────────────────────────────────────────────────────────────
@@ -118,13 +115,7 @@ fn split_yaml_docs(content: &str) -> Vec<String> {
 
 // ── Manifest checks ───────────────────────────────────────────────────────────
 
-const WORKLOAD_KINDS: &[&str] = &[
-    "Deployment",
-    "DaemonSet",
-    "StatefulSet",
-    "Job",
-    "CronJob",
-];
+const WORKLOAD_KINDS: &[&str] = &["Deployment", "DaemonSet", "StatefulSet", "Job", "CronJob"];
 
 fn check_manifest(path: &Path, doc: &Value) -> Vec<LintIssue> {
     let mut issues = Vec::new();
@@ -149,7 +140,10 @@ fn check_manifest(path: &Path, doc: &Value) -> Vec<LintIssue> {
     let file = path.display().to_string();
 
     for container in seq {
-        let name = container["name"].as_str().unwrap_or("<unnamed>").to_string();
+        let name = container["name"]
+            .as_str()
+            .unwrap_or("<unnamed>")
+            .to_string();
 
         // 1. Unpinned / latest image
         if let Some(image) = container["image"].as_str() {
@@ -270,7 +264,11 @@ spec:
     #[test]
     fn test_good_deployment_no_issues() {
         let issues = check(GOOD_DEPLOYMENT);
-        assert!(issues.is_empty(), "Expected no issues, got: {:?}", issues.iter().map(|i| i.rule).collect::<Vec<_>>());
+        assert!(
+            issues.is_empty(),
+            "Expected no issues, got: {:?}",
+            issues.iter().map(|i| i.rule).collect::<Vec<_>>()
+        );
     }
 
     #[test]

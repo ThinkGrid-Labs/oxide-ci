@@ -1,4 +1,4 @@
-use ignore::{WalkBuilder, Walk};
+use ignore::{Walk, WalkBuilder};
 use std::path::Path;
 
 pub fn get_walker<P: AsRef<Path>>(dir: P) -> Walk {

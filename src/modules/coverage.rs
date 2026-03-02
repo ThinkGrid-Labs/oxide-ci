@@ -13,8 +13,8 @@ pub fn run_coverage(file: &str, min: f64) -> Result<()> {
         file, min
     ));
 
-    let content =
-        std::fs::read_to_string(file).with_context(|| format!("Cannot read LCOV file: {}", file))?;
+    let content = std::fs::read_to_string(file)
+        .with_context(|| format!("Cannot read LCOV file: {}", file))?;
 
     let mut records: Vec<FileRecord> = Vec::new();
     let mut current_path = String::new();
@@ -81,11 +81,7 @@ pub fn run_coverage(file: &str, min: f64) -> Result<()> {
             "Coverage {:.1}% is below threshold {:.1}% ({} files, {}/{} lines covered)",
             coverage_pct, min, files_scanned, total_hit, total_found
         ));
-        anyhow::bail!(
-            "Coverage gate failed: {:.1}% < {:.1}%",
-            coverage_pct,
-            min
-        );
+        anyhow::bail!("Coverage gate failed: {:.1}% < {:.1}%", coverage_pct, min);
     }
 
     terminal::success(&format!(
@@ -108,18 +104,14 @@ mod tests {
 
     #[test]
     fn test_passes_above_threshold() {
-        let lcov = write_lcov(
-            "SF:src/main.rs\nLH:90\nLF:100\nend_of_record\n",
-        );
+        let lcov = write_lcov("SF:src/main.rs\nLH:90\nLF:100\nend_of_record\n");
         let result = super::run_coverage(lcov.path().to_str().unwrap(), 80.0);
         assert!(result.is_ok(), "expected pass at 90% with threshold 80%");
     }
 
     #[test]
     fn test_fails_below_threshold() {
-        let lcov = write_lcov(
-            "SF:src/main.rs\nLH:50\nLF:100\nend_of_record\n",
-        );
+        let lcov = write_lcov("SF:src/main.rs\nLH:50\nLF:100\nend_of_record\n");
         let result = super::run_coverage(lcov.path().to_str().unwrap(), 80.0);
         assert!(result.is_err(), "expected fail at 50% with threshold 80%");
     }

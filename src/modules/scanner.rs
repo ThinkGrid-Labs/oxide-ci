@@ -43,10 +43,7 @@ const BUILTIN_PATTERNS: &[(&str, &str)] = &[
     ("Alibaba Cloud Access Key ID", r"LTAI[A-Za-z0-9]{14,20}"),
     // ── GitHub ─────────────────────────────────────────────────────────────
     ("GitHub PAT (classic)", r"ghp_[A-Za-z0-9]{36}"),
-    (
-        "GitHub PAT (fine-grained)",
-        r"github_pat_[A-Za-z0-9_]{82}",
-    ),
+    ("GitHub PAT (fine-grained)", r"github_pat_[A-Za-z0-9_]{82}"),
     // ── Slack ──────────────────────────────────────────────────────────────
     (
         "Slack Webhook",
@@ -233,12 +230,7 @@ fn parse_git_log_patch(stdout: &str) -> Vec<(String, PathBuf, String, usize)> {
             if raw_line.starts_with('+') {
                 hunk_line_no += 1;
                 let content = raw_line[1..].to_string();
-                results.push((
-                    current_commit.clone(),
-                    path.clone(),
-                    content,
-                    hunk_line_no,
-                ));
+                results.push((current_commit.clone(), path.clone(), content, hunk_line_no));
             } else if raw_line.starts_with(' ') {
                 // Context line — advance new-file counter but don't collect
                 hunk_line_no += 1;
@@ -251,10 +243,7 @@ fn parse_git_log_patch(stdout: &str) -> Vec<(String, PathBuf, String, usize)> {
 }
 
 /// Scan the full git commit history for secrets in added lines.
-fn run_history_scan(
-    opts: &ScanOpts,
-    all_patterns: &[(String, Regex)],
-) -> Result<Vec<Finding>> {
+fn run_history_scan(opts: &ScanOpts, all_patterns: &[(String, Regex)]) -> Result<Vec<Finding>> {
     let is_text = matches!(opts.format, OutputFormat::Text);
 
     if is_text {
@@ -271,8 +260,7 @@ fn run_history_scan(
         anyhow::bail!("git log failed: {}", stderr.trim());
     }
 
-    let stdout = String::from_utf8(output.stdout)
-        .context("git log output is not valid UTF-8")?;
+    let stdout = String::from_utf8(output.stdout).context("git log output is not valid UTF-8")?;
 
     let added_lines = parse_git_log_patch(&stdout);
     let total = added_lines.len() as u64;
@@ -662,7 +650,10 @@ mod tests {
     #[test]
     fn test_aws_access_key_matches() {
         let patterns = compile_builtins();
-        let (_, re) = patterns.iter().find(|(n, _)| n == "AWS Access Key").unwrap();
+        let (_, re) = patterns
+            .iter()
+            .find(|(n, _)| n == "AWS Access Key")
+            .unwrap();
         assert!(re.is_match("AKIAIOSFODNN7EXAMPLE123"));
         assert!(re.is_match("export KEY=AKIAIOSFODNN7EXAMPLEKEY1"));
     }
@@ -670,7 +661,10 @@ mod tests {
     #[test]
     fn test_aws_access_key_no_false_positive() {
         let patterns = compile_builtins();
-        let (_, re) = patterns.iter().find(|(n, _)| n == "AWS Access Key").unwrap();
+        let (_, re) = patterns
+            .iter()
+            .find(|(n, _)| n == "AWS Access Key")
+            .unwrap();
         assert!(!re.is_match("some random text without keys"));
         assert!(!re.is_match("AKIA_SHORT"));
     }
@@ -770,8 +764,7 @@ mod tests {
             .iter()
             .find(|(n, _)| n == "Azure SAS Token")
             .unwrap();
-        let sample =
-            "https://account.blob.core.windows.net/container?sv=2023-01-03&ss=b&srt=sco\
+        let sample = "https://account.blob.core.windows.net/container?sv=2023-01-03&ss=b&srt=sco\
              &sp=rwdlacupitfx&se=2025-01-01T00:00:00Z&st=2024-01-01T00:00:00Z\
              &spr=https&sig=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH==";
         assert!(re.is_match(sample));
