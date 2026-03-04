@@ -30,10 +30,7 @@ struct ComponentResult {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 pub fn run_reassure(opts: ReassureOpts) -> Result<()> {
-    terminal::info(&format!(
-        "Parsing Reassure report: {}",
-        opts.current
-    ));
+    terminal::info(&format!("Parsing Reassure report: {}", opts.current));
 
     let current = load_report(opts.current)?;
 
@@ -150,9 +147,10 @@ pub fn run_reassure(opts: ReassureOpts) -> Result<()> {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn load_report(path: &str) -> Result<PerfReport> {
-    let content =
-        std::fs::read_to_string(path).with_context(|| format!("Cannot read Reassure file: {}", path))?;
-    serde_json::from_str(&content).with_context(|| format!("Failed to parse Reassure file: {}", path))
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Cannot read Reassure file: {}", path))?;
+    serde_json::from_str(&content)
+        .with_context(|| format!("Failed to parse Reassure file: {}", path))
 }
 
 fn truncate(s: &str, max: usize) -> String {

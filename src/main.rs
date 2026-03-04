@@ -29,6 +29,11 @@ enum Commands {
         /// Use `# oxide-ci: ignore` on individual lines to suppress false positives.
         #[arg(long)]
         history: bool,
+        /// Post findings as a GitHub Check Run with per-line annotations and a PR review
+        /// comment. Requires GITHUB_TOKEN, GITHUB_REPOSITORY, and GITHUB_SHA env vars.
+        /// No-op when env vars are absent.
+        #[arg(long)]
+        annotate: bool,
     },
     /// Validates Kubernetes YAML manifests for resource limits and security issues
     Lint {
@@ -101,6 +106,7 @@ fn main() -> anyhow::Result<()> {
             staged,
             since,
             history,
+            annotate,
         } => {
             let output_format = match format.as_str() {
                 "json" => OutputFormat::Json,
@@ -114,6 +120,21 @@ fn main() -> anyhow::Result<()> {
             } else {
                 since.map(DiffMode::Since)
             };
+            if annotate {
+                if let Some(env) = modules::github::detect_github_env() {
+                    let opts = ScanOpts {
+                        format: output_format.clone(),
+                        diff,
+                        config: &cfg.scan,
+                        sast_config: &cfg.sast,
+                    };
+                    let findings = modules::scanner::collect_findings(&opts)?;
+                    if let Err(e) = modules::github::annotate(&findings, &env) {
+                        eprintln!("oxide-ci: warning: GitHub annotation failed: {}", e);
+                    }
+                    return modules::scanner::emit_findings(&findings, &output_format);
+                }
+            }
             modules::scanner::run_scan(ScanOpts {
                 format: output_format,
                 diff,
@@ -147,13 +168,11 @@ fn main() -> anyhow::Result<()> {
         } => {
             use modules::perf_lighthouse::{LighthouseOpts, LighthouseThresholds};
 
-            let resolved_url = url
-                .or_else(|| cfg.lighthouse.url.clone())
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "No URL specified. Pass --url <URL> or set [lighthouse] url in .oxideci.toml"
-                    )
-                })?;
+            let resolved_url = url.or_else(|| cfg.lighthouse.url.clone()).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No URL specified. Pass --url <URL> or set [lighthouse] url in .oxideci.toml"
+                )
+            })?;
 
             modules::perf_lighthouse::run_lighthouse(LighthouseOpts {
                 url: &resolved_url,
@@ -161,8 +180,7 @@ fn main() -> anyhow::Result<()> {
                 thresholds: LighthouseThresholds {
                     performance: min_performance.unwrap_or(cfg.lighthouse.min_performance),
                     accessibility: min_accessibility.unwrap_or(cfg.lighthouse.min_accessibility),
-                    best_practices: min_best_practices
-                        .unwrap_or(cfg.lighthouse.min_best_practices),
+                    best_practices: min_best_practices.unwrap_or(cfg.lighthouse.min_best_practices),
                     seo: min_seo.unwrap_or(cfg.lighthouse.min_seo),
                 },
                 api_key: key.or(cfg.lighthouse.api_key),

@@ -7,15 +7,37 @@ struct FileRecord {
     found: u64,
 }
 
-pub fn run_coverage(file: &str, min: f64) -> Result<()> {
-    terminal::info(&format!(
-        "Analyzing coverage file: {} (threshold: {:.1}%)",
-        file, min
-    ));
+// ── Format detection ──────────────────────────────────────────────────────────
 
-    let content = std::fs::read_to_string(file)
-        .with_context(|| format!("Cannot read LCOV file: {}", file))?;
+enum CoverageFormat {
+    Lcov,
+    Cobertura,
+}
 
+fn detect_format(file: &str) -> CoverageFormat {
+    let path = std::path::Path::new(file);
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("xml") => return CoverageFormat::Cobertura,
+        Some("info") => return CoverageFormat::Lcov,
+        _ => {}
+    }
+    // Ambiguous extension: peek at the first 256 bytes for an XML signature.
+    if let Ok(mut f) = std::fs::File::open(file) {
+        use std::io::Read;
+        let mut buf = [0u8; 256];
+        let n = f.read(&mut buf).unwrap_or(0);
+        if let Ok(head) = std::str::from_utf8(&buf[..n]) {
+            if head.contains("<coverage") || head.contains("<!DOCTYPE coverage") {
+                return CoverageFormat::Cobertura;
+            }
+        }
+    }
+    CoverageFormat::Lcov
+}
+
+// ── LCOV parser ───────────────────────────────────────────────────────────────
+
+fn parse_lcov(content: &str) -> Result<(u64, u64, Vec<FileRecord>)> {
     let mut records: Vec<FileRecord> = Vec::new();
     let mut current_path = String::new();
     let mut current_hit: u64 = 0;
@@ -39,18 +61,75 @@ pub fn run_coverage(file: &str, min: f64) -> Result<()> {
         }
     }
 
-    if records.is_empty() {
-        anyhow::bail!("No coverage records found in '{}'", file);
+    let total_hit: u64 = records.iter().map(|r| r.hit).sum();
+    let total_found: u64 = records.iter().map(|r| r.found).sum();
+    Ok((total_hit, total_found, records))
+}
+
+// ── Cobertura XML parser ──────────────────────────────────────────────────────
+
+fn parse_cobertura(content: &str) -> Result<(u64, u64, Vec<FileRecord>)> {
+    let doc =
+        roxmltree::Document::parse(content).with_context(|| "Failed to parse Cobertura XML")?;
+
+    let mut records: Vec<FileRecord> = Vec::new();
+
+    for class_node in doc.descendants().filter(|n| n.has_tag_name("class")) {
+        let filename = class_node.attribute("filename").unwrap_or("").to_string();
+
+        let mut hit: u64 = 0;
+        let mut found: u64 = 0;
+
+        for line_node in class_node.descendants().filter(|n| n.has_tag_name("line")) {
+            found += 1;
+            let hits: u64 = line_node
+                .attribute("hits")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0);
+            if hits > 0 {
+                hit += 1;
+            }
+        }
+
+        if found > 0 {
+            records.push(FileRecord {
+                path: filename,
+                hit,
+                found,
+            });
+        }
     }
 
     let total_hit: u64 = records.iter().map(|r| r.hit).sum();
     let total_found: u64 = records.iter().map(|r| r.found).sum();
+    Ok((total_hit, total_found, records))
+}
 
-    if total_found == 0 {
-        anyhow::bail!("LCOV file '{}' has no line data (LF: 0)", file);
+// ── Public entry point ────────────────────────────────────────────────────────
+
+pub fn run_coverage(file: &str, min: f64) -> Result<()> {
+    terminal::info(&format!(
+        "Analyzing coverage file: {} (threshold: {:.1}%)",
+        file, min
+    ));
+
+    let content = std::fs::read_to_string(file)
+        .with_context(|| format!("Cannot read coverage file: {}", file))?;
+
+    let (total_hit, total_found, records) = match detect_format(file) {
+        CoverageFormat::Lcov => parse_lcov(&content)?,
+        CoverageFormat::Cobertura => parse_cobertura(&content)?,
+    };
+
+    if records.is_empty() {
+        anyhow::bail!("No coverage records found in '{}'", file);
     }
 
-    // Per-file breakdown (only show files below threshold)
+    if total_found == 0 {
+        anyhow::bail!("Coverage file '{}' has no line data", file);
+    }
+
+    // Per-file breakdown: show files below threshold.
     let mut below: Vec<&FileRecord> = records
         .iter()
         .filter(|r| r.found > 0)
@@ -92,13 +171,21 @@ pub fn run_coverage(file: &str, min: f64) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use std::io::Write;
-    use tempfile::NamedTempFile;
+    use tempfile::{Builder, NamedTempFile};
 
     fn write_lcov(content: &str) -> NamedTempFile {
         let mut f = NamedTempFile::new().unwrap();
         f.write_all(content.as_bytes()).unwrap();
         f
     }
+
+    fn write_cobertura(content: &str) -> NamedTempFile {
+        let mut f = Builder::new().suffix(".xml").tempfile().unwrap();
+        f.write_all(content.as_bytes()).unwrap();
+        f
+    }
+
+    // ── LCOV (existing tests, unchanged) ──────────────────────────────────────
 
     #[test]
     fn test_passes_above_threshold() {
@@ -116,7 +203,6 @@ mod tests {
 
     #[test]
     fn test_aggregates_multiple_files() {
-        // file1: 80/100 = 80%, file2: 80/100 = 80% => total 160/200 = 80%
         let lcov = write_lcov(
             "SF:src/a.rs\nLH:80\nLF:100\nend_of_record\nSF:src/b.rs\nLH:80\nLF:100\nend_of_record\n",
         );
@@ -135,5 +221,67 @@ mod tests {
         let lcov = write_lcov("# no data\n");
         let result = super::run_coverage(lcov.path().to_str().unwrap(), 80.0);
         assert!(result.is_err());
+    }
+
+    // ── Cobertura ─────────────────────────────────────────────────────────────
+
+    fn cobertura_xml(lines: &[(&str, u64, u64)]) -> String {
+        // lines: [(filename, hit_count, total_count)]
+        let classes: String = lines
+            .iter()
+            .map(|(name, hits, total)| {
+                let line_els: String = (1..=*total)
+                    .map(|i| {
+                        format!(
+                            r#"<line number="{}" hits="{}"/>"#,
+                            i,
+                            if i <= *hits { 1 } else { 0 }
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                format!(r#"<class filename="{name}"><lines>{line_els}</lines></class>"#,)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!(
+            r#"<?xml version="1.0"?><coverage><packages><package><classes>{classes}</classes></package></packages></coverage>"#
+        )
+    }
+
+    #[test]
+    fn test_cobertura_passes_above_threshold() {
+        // 4/5 lines hit = 80%
+        let xml = cobertura_xml(&[("src/a.py", 4, 5)]);
+        let f = write_cobertura(&xml);
+        assert!(super::run_coverage(f.path().to_str().unwrap(), 70.0).is_ok());
+    }
+
+    #[test]
+    fn test_cobertura_fails_below_threshold() {
+        // 1/3 lines hit ≈ 33%
+        let xml = cobertura_xml(&[("src/a.py", 1, 3)]);
+        let f = write_cobertura(&xml);
+        assert!(super::run_coverage(f.path().to_str().unwrap(), 80.0).is_err());
+    }
+
+    #[test]
+    fn test_cobertura_aggregates_multiple_classes() {
+        // 4/5 + 4/5 = 8/10 = 80%
+        let xml = cobertura_xml(&[("src/a.py", 4, 5), ("src/b.py", 4, 5)]);
+        let f = write_cobertura(&xml);
+        assert!(super::run_coverage(f.path().to_str().unwrap(), 80.0).is_ok());
+    }
+
+    #[test]
+    fn test_format_detection_by_extension() {
+        assert!(matches!(
+            super::detect_format("coverage.xml"),
+            super::CoverageFormat::Cobertura
+        ));
+        assert!(matches!(
+            super::detect_format("lcov.info"),
+            super::CoverageFormat::Lcov
+        ));
     }
 }

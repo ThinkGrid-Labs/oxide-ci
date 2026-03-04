@@ -16,6 +16,7 @@
 - [Commands](#commands)
   - [scan](#scan--secret--pii-scanning)
     - [SAST for JS/TS](#sast-static-analysis-for-jsts)
+    - [GitHub Annotations](#github-check-run-annotations---annotate)
   - [lint](#lint--kubernetes-manifest-linting)
   - [coverage](#coverage--coverage-threshold-gate)
   - [audit](#audit--dependency-vulnerability-audit)
@@ -71,13 +72,16 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 | AST-based SAST for JS/TS/TSX/JSX | ✅ |
 | String-literal scoping (no comment / JSX-text noise) | ✅ |
 | Dangerous pattern detection (XSS, eval, command injection) | ✅ |
+| Code smell / complexity rules (long functions, deep nesting, too many params) | ✅ |
+| Custom SAST rules via config (tree-sitter S-expression queries) | ✅ |
 | Custom extra patterns via config | ✅ |
 | Exclude paths via glob patterns | ✅ |
 | Inline suppression (`// oxide-ci: ignore`) | ✅ |
 | Git diff / staged-only / full history scanning | ✅ |
 | JSON & SARIF 2.1.0 output | ✅ |
+| GitHub Check Run annotations + PR review comment (`--annotate`) | ✅ |
 | Kubernetes manifest linting (7 rules) | ✅ |
-| LCOV coverage threshold gate | ✅ |
+| LCOV & Cobertura XML coverage threshold gate | ✅ |
 | Dependency audit via OSV API (6 ecosystems) | ✅ |
 | Git pre-commit hook installer | ✅ |
 | Web performance audit via PageSpeed Insights | ✅ |
@@ -117,7 +121,7 @@ cargo install --git https://github.com/ThinkGrid-Labs/oxide-ci
 ### Verify installation
 ```
 $ oxide-ci --version
-oxide-ci 0.2.2
+oxide-ci 0.2.4
 
 $ oxide-ci --help
 A high-performance DevOps CLI tool in Rust
@@ -127,7 +131,7 @@ Usage: oxide-ci <COMMAND>
 Commands:
   scan           Scans the current directory for hardcoded secrets and PII
   lint           Validates Kubernetes YAML manifests for resource limits and security issues
-  coverage       Parses an LCOV coverage file and fails if total coverage is below threshold
+  coverage       Parses an LCOV or Cobertura XML coverage file and fails if total coverage is below threshold
   audit          Audits project dependencies for known vulnerabilities via the OSV database
   install-hooks  Installs oxide-ci as a git pre-commit hook
   lighthouse     Audits web performance via Google PageSpeed Insights (Lighthouse)
@@ -179,6 +183,10 @@ Options:
   --format <FORMAT>    Output format: text (default), json, sarif
   --staged             Only scan git-staged files (git diff --cached)
   --since <COMMIT>     Only scan files changed since the given commit
+  --history            Scan the entire git commit history (slow on large repos)
+  --annotate           Post findings as a GitHub Check Run with per-line annotations
+                       and a PR review comment. Requires GITHUB_TOKEN,
+                       GITHUB_REPOSITORY, and GITHUB_SHA env vars. No-op when absent.
   -h, --help           Print help
 ```
 
@@ -199,6 +207,12 @@ oxide-ci scan --format sarif > results.sarif
 
 # Output JSON for custom tooling
 oxide-ci scan --format json | jq '.findings[].rule'
+
+# Post findings directly to the GitHub Checks tab and PR review thread
+GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
+GITHUB_REPOSITORY=owner/repo \
+GITHUB_SHA=${{ github.sha }} \
+oxide-ci scan --annotate
 ```
 
 **Sample output (text):**
@@ -267,6 +281,42 @@ SAST also runs 13 structural rules that detect dangerous API calls regardless of
 | `SAST/DocumentWrite` | `document.write(expr)` |
 | `SAST/DocumentWriteln` | `document.writeln(expr)` |
 
+**3. Code smell / complexity rules**
+
+Three additional rules flag maintainability issues at the function level:
+
+| Rule ID | Trigger | Default threshold |
+|---|---|---|
+| `SMELL/LongFunction` | Function body exceeds `max_function_lines` lines | 50 lines |
+| `SMELL/TooManyParameters` | Function has more than `max_parameters` parameters | 5 params |
+| `SMELL/DeepNesting` | Control-flow depth exceeds `max_nesting_depth` inside a function | 4 levels |
+
+Rule IDs include the measured value for immediate context — e.g. `SMELL/LongFunction (63 lines, max 50)`. Thresholds are configurable in `.oxideci.toml`:
+
+```toml
+[sast]
+max_function_lines = 60   # default 50
+max_parameters     = 6    # default 5
+max_nesting_depth  = 5    # default 4
+```
+
+**4. Custom SAST rules**
+
+Define project-specific rules using [tree-sitter S-expression queries](https://tree-sitter.github.io/tree-sitter/using-parsers/queries/). Each rule must include a `@match` capture that marks the outermost node to report:
+
+```toml
+[sast]
+custom_rules = [
+  # Flag any direct call to eval()
+  { id = "CUSTOM/EvalCall", query = "(call_expression function: (identifier) @_fn (#eq? @_fn \"eval\") arguments: (_) @match)" },
+
+  # Flag fetch() calls (useful for auditing outbound requests)
+  { id = "CUSTOM/FetchCall", query = "(call_expression function: (identifier) @_fn (#eq? @_fn \"fetch\") @match)" },
+]
+```
+
+Custom rules are validated at startup — invalid queries are skipped with a warning and never cause `oxide-ci scan` to crash. Custom rule IDs can be disabled with `disabled_rules` like any built-in rule.
+
 > **Note:** SAST runs automatically when `oxide-ci scan` encounters a JS/TS file — there is no separate command. Non-JS/TS files (`.py`, `.rs`, `.go`, `.yaml`, etc.) continue to use the regex scanner.
 
 **Disabling SAST or individual rules:**
@@ -282,8 +332,22 @@ enabled = true
 disabled_rules = [
     "SAST/ChildProcessExec",     # if you intentionally shell out in a Node script
     "SAST/DocumentWrite",        # if you have a legacy codebase that uses it
+    "SMELL/LongFunction",        # if you have intentionally large generated files
 ]
 ```
+
+**GitHub Check Run annotations (`--annotate`):**
+
+When running in GitHub Actions, pass `--annotate` to have oxide-ci post findings directly to the Checks tab with per-line annotations and a summary comment on the pull request. No SARIF upload step required.
+
+```yaml
+- name: Secret, PII & SAST Scan
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  run: oxide-ci scan --annotate
+```
+
+Required env vars (automatically set in GitHub Actions): `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_SHA`. When any env var is absent, `--annotate` is a no-op and the scan runs normally.
 
 ---
 
@@ -363,13 +427,20 @@ spec:
 
 ### `coverage` — Coverage Threshold Gate
 
-Parses a standard LCOV coverage report and fails with exit code 1 if the total line coverage is below the specified minimum. Shows per-file breakdown of files below the threshold.
+Parses a coverage report and fails with exit code 1 if the total line coverage is below the specified minimum. Shows per-file breakdown of files below the threshold.
+
+Two formats are supported and auto-detected by file extension (or by peeking at the file contents for ambiguous extensions):
+
+| Format | Extension | Used by |
+|---|---|---|
+| **LCOV** | `.info` or no extension | Rust (cargo-llvm-cov), Jest, pytest-cov, Go |
+| **Cobertura XML** | `.xml` | Python (coverage.py), Java (JaCoCo), .NET |
 
 ```
 oxide-ci coverage [OPTIONS]
 
 Options:
-  -f, --file <FILE>    Path to the LCOV file [default: coverage/lcov.info or coverage.file from config]
+  -f, --file <FILE>    Path to the coverage file [default: coverage/lcov.info or coverage.file from config]
   -m, --min <MIN>      Minimum coverage threshold percentage [default: 80 or coverage.min from config]
   -h, --help           Print help
 ```
@@ -377,8 +448,11 @@ Options:
 **Examples:**
 
 ```bash
-# Check coverage meets 80% (default)
-oxide-ci coverage --file coverage/lcov.info
+# LCOV (Rust, Jest, pytest)
+oxide-ci coverage --file coverage/lcov.info --min 80
+
+# Cobertura XML (Python coverage.py, JaCoCo)
+oxide-ci coverage --file coverage.xml --min 80
 
 # Enforce a stricter 90% gate
 oxide-ci coverage --file coverage/lcov.info --min 90
@@ -387,20 +461,24 @@ oxide-ci coverage --file coverage/lcov.info --min 90
 oxide-ci coverage
 ```
 
-**Generating LCOV reports by language:**
+**Generating coverage reports by language:**
 
 ```bash
-# Rust (cargo-llvm-cov)
+# Rust (cargo-llvm-cov) → LCOV
 cargo llvm-cov --lcov --output-path coverage/lcov.info
 
-# JavaScript / TypeScript (Jest)
+# JavaScript / TypeScript (Jest) → LCOV
 jest --coverage --coverageReporters=lcov
 
-# Python (pytest-cov)
+# Python (pytest-cov) → LCOV or Cobertura
 pytest --cov=. --cov-report=lcov:coverage/lcov.info
+pytest --cov=. --cov-report=xml:coverage.xml
 
-# Go (go test)
+# Go (go test) → LCOV
 go test ./... -coverprofile=coverage/lcov.info
+
+# Java (JaCoCo) → Cobertura XML
+# Configure your build tool to output Cobertura format and pass the .xml file
 ```
 
 **Sample output:**
@@ -776,7 +854,7 @@ extra_patterns = [
 
 ## SAST Rules Reference
 
-The following 13 rules are checked on all `.js`, `.jsx`, `.ts`, and `.tsx` files. They use tree-sitter AST queries and fire on the structure of the code, not on string content.
+The following rules are checked on all `.js`, `.jsx`, `.ts`, and `.tsx` files. They use tree-sitter AST queries and fire on the structure of the code, not on string content.
 
 ### XSS sinks
 
@@ -809,6 +887,16 @@ The following 13 rules are checked on all `.js`, `.jsx`, `.ts`, and `.tsx` files
 | `SAST/ChildProcessExecFile` | `cp.execFile(path)` | OS command injection |
 
 > These rules fire on any `.exec()` / `.spawn()` / `.execFile()` / `.execSync()` member-expression call, regardless of which object it's called on. Adjust with `disabled_rules` if you have a legitimate use case.
+
+### Code smell / complexity
+
+| Rule ID | Trigger | Default |
+|---|---|---|
+| `SMELL/LongFunction` | Function body exceeds `max_function_lines` lines | 50 lines |
+| `SMELL/TooManyParameters` | Function has more than `max_parameters` parameters | 5 params |
+| `SMELL/DeepNesting` | Control-flow nesting depth exceeds `max_nesting_depth` | 4 levels |
+
+Rule IDs embed the measured value — e.g. `SMELL/LongFunction (63 lines, max 50)` — so findings are self-explanatory without additional context. Thresholds are configurable per project in `.oxideci.toml`. See [Configuration File](#configuration-file-oxidecitorml) for details.
 
 ---
 
@@ -858,6 +946,18 @@ enabled = true
 disabled_rules = [
   # "SAST/ChildProcessExec",
   # "SAST/EvalUsage",
+  # "SMELL/LongFunction",
+]
+
+# Code smell thresholds (defaults shown)
+max_function_lines = 50   # flag functions longer than this many lines
+max_parameters     = 5    # flag functions with more than this many parameters
+max_nesting_depth  = 4    # flag control-flow nesting deeper than this inside a function
+
+# Custom rules using tree-sitter S-expression queries
+# Each rule must contain a @match capture marking the outermost node to report.
+custom_rules = [
+  # { id = "CUSTOM/FetchCall", query = "(call_expression function: (identifier) @_fn (#eq? @_fn \"fetch\") @match)" },
 ]
 
 [coverage]
@@ -971,7 +1071,9 @@ on: [push, pull_request]
 
 permissions:
   contents: read
-  security-events: write   # required for SARIF upload
+  security-events: write   # required for SARIF upload and Check Runs
+  checks: write            # required for --annotate (GitHub Check Runs)
+  pull-requests: write     # required for --annotate (PR review comment)
 
 jobs:
   # ── Security & code-quality gates ──────────────────────────────────────────
@@ -986,20 +1088,23 @@ jobs:
             -o /usr/local/bin/oxide-ci
           chmod +x /usr/local/bin/oxide-ci
 
+      # Option A: Native GitHub Check Run annotations (no SARIF upload step needed)
       - name: Secret, PII & SAST Scan
-        run: oxide-ci scan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: oxide-ci scan --annotate
 
-      - name: Scan (SARIF for PR annotations)
-        run: oxide-ci scan --format sarif > results.sarif
-        if: always()
-        continue-on-error: true
-
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: results.sarif
-        continue-on-error: true
+      # Option B: SARIF upload to GitHub Advanced Security (alternative to --annotate)
+      # - name: Scan (SARIF for PR annotations)
+      #   run: oxide-ci scan --format sarif > results.sarif
+      #   if: always()
+      #   continue-on-error: true
+      # - name: Upload SARIF
+      #   uses: github/codeql-action/upload-sarif@v4
+      #   if: always()
+      #   with:
+      #     sarif_file: results.sarif
+      #   continue-on-error: true
 
       - name: Kubernetes Lint
         run: oxide-ci lint --dir ./k8s
@@ -1173,8 +1278,9 @@ oxide-ci/
 │   ├── modules/
 │   │   ├── scanner.rs           # Secret/PII scanning (rayon parallel) + SAST orchestration
 │   │   ├── sast.rs              # AST-based SAST for JS/TS/TSX/JSX (tree-sitter)
+│   │   ├── github.rs            # GitHub Check Runs + PR review comment (--annotate)
 │   │   ├── k8s_lint.rs          # Kubernetes manifest linter (serde_yaml)
-│   │   ├── coverage.rs          # LCOV parser and threshold gate
+│   │   ├── coverage.rs          # LCOV & Cobertura XML parser and threshold gate
 │   │   ├── audit.rs             # OSV dependency audit (ureq)
 │   │   ├── hooks.rs             # Git hook installer
 │   │   ├── perf_lighthouse.rs   # PageSpeed Insights Lighthouse gate (ureq)
@@ -1190,15 +1296,21 @@ oxide-ci/
 **Scan pipeline for JS/TS files:**
 
 ```
-collect_scan_files()
+collect_findings()
     │
-    ├── non-JS/TS files ──→ run_regex_scan()   (rayon parallel, per-line regex + entropy)
+    ├── non-JS/TS files ──→ run_regex_scan()    (rayon parallel, per-line regex + entropy)
     │
-    └── JS/TS files ──────→ run_sast_scan()    (rayon parallel, tree-sitter per file)
+    └── JS/TS files ──────→ run_sast_scan()     (rayon parallel, tree-sitter per file)
                                 │
                                 ├── parse AST (tree-sitter)
-                                ├── scan_string_literals()   ← secrets/PII scoped to string nodes
-                                └── scan_dangerous_patterns() ← 13 structural rules (XSS, eval, exec)
+                                ├── scan_string_literals()    ← secrets/PII scoped to string nodes
+                                ├── scan_dangerous_patterns() ← 13 structural rules + custom rules
+                                └── scan_complexity()         ← 3 code smell rules
+                                                                 (long function, params, nesting)
+
+emit_findings()     ← text / JSON / SARIF
+    │
+    └── --annotate ──→ github::annotate()   ← GitHub Check Run + PR comment (no-op if env absent)
 ```
 
 **Dependencies:**
@@ -1213,10 +1325,11 @@ collect_scan_files()
 | `tree-sitter-javascript` | JS/JSX grammar |
 | `tree-sitter-typescript` | TS/TSX grammar |
 | `streaming-iterator` | Required by tree-sitter 0.24 `QueryMatches` API |
-| `serde` + `serde_json` | JSON output (SARIF, audit) |
+| `serde` + `serde_json` | JSON output (SARIF, audit, GitHub API bodies) |
 | `serde_yaml` | Kubernetes YAML parsing |
+| `roxmltree` | Zero-copy Cobertura XML parsing |
 | `toml` | Config file parsing |
-| `ureq` | HTTP client for OSV audit API |
+| `ureq` | HTTP client (OSV audit, PageSpeed, GitHub APIs) |
 | `indicatif` | Progress bars |
 | `anyhow` | Error handling and propagation |
 

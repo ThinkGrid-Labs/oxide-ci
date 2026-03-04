@@ -1,4 +1,7 @@
-use crate::utils::{config::{SastConfig, ScanConfig}, files, terminal};
+use crate::utils::{
+    config::{SastConfig, ScanConfig},
+    files, terminal,
+};
 use anyhow::{Context, Result};
 use ignore::overrides::OverrideBuilder;
 use rayon::prelude::*;
@@ -104,6 +107,7 @@ pub struct Finding {
     pub commit: Option<String>,
 }
 
+#[derive(Clone)]
 pub enum OutputFormat {
     Text,
     Json,
@@ -568,7 +572,7 @@ fn output_sarif(findings: &[Finding]) -> Result<()> {
     Ok(())
 }
 
-fn emit_findings(findings: &[Finding], format: &OutputFormat) -> Result<()> {
+pub fn emit_findings(findings: &[Finding], format: &OutputFormat) -> Result<()> {
     if findings.is_empty() {
         match format {
             OutputFormat::Text => terminal::success("No secrets or PII found."),
@@ -608,42 +612,48 @@ fn emit_findings(findings: &[Finding], format: &OutputFormat) -> Result<()> {
 
 // ── Main entry ────────────────────────────────────────────────────────────────
 
+/// Collect all findings without emitting output. Used by `run_scan` and
+/// the GitHub annotation path in `main.rs`.
+pub fn collect_findings(opts: &ScanOpts) -> Result<Vec<Finding>> {
+    let is_text = matches!(opts.format, OutputFormat::Text);
+
+    let all_patterns = compile_patterns(opts)?;
+    let excludes = build_excludes(&opts.config.exclude_patterns)?;
+
+    if let Some(DiffMode::History) = &opts.diff {
+        return run_history_scan(opts, &all_patterns);
+    }
+
+    // Collect all files once — shared between regex scan and SAST scan.
+    let files = collect_scan_files(opts, &excludes, is_text)?;
+
+    // Regex + entropy scan (skips JS/TS files when SAST is enabled).
+    let mut all_findings = run_regex_scan(opts, &all_patterns, &files, is_text);
+
+    // SAST scan: string-literal-scoped secrets + dangerous patterns for JS/TS files.
+    if opts.sast_config.enabled {
+        if is_text {
+            terminal::info("Running SAST checks...");
+        }
+        let sast_findings = crate::modules::sast::run_sast_scan(
+            &files,
+            opts.sast_config,
+            &all_patterns,
+            opts.config,
+            is_text,
+        )?;
+        all_findings.extend(sast_findings);
+    }
+
+    Ok(all_findings)
+}
+
 pub fn run_scan(opts: ScanOpts) -> Result<()> {
     let is_text = matches!(opts.format, OutputFormat::Text);
     if is_text {
         terminal::info("Starting secret and PII scan...");
     }
-
-    let all_patterns = compile_patterns(&opts)?;
-    let excludes = build_excludes(&opts.config.exclude_patterns)?;
-
-    let findings = if let Some(DiffMode::History) = &opts.diff {
-        run_history_scan(&opts, &all_patterns)?
-    } else {
-        // Collect all files once — shared between regex scan and SAST scan.
-        let files = collect_scan_files(&opts, &excludes, is_text)?;
-
-        // Regex + entropy scan (skips JS/TS files when SAST is enabled).
-        let mut all_findings = run_regex_scan(&opts, &all_patterns, &files, is_text);
-
-        // SAST scan: string-literal-scoped secrets + dangerous patterns for JS/TS files.
-        if opts.sast_config.enabled {
-            if is_text {
-                terminal::info("Running SAST checks...");
-            }
-            let sast_findings = crate::modules::sast::run_sast_scan(
-                &files,
-                opts.sast_config,
-                &all_patterns,
-                opts.config,
-                is_text,
-            )?;
-            all_findings.extend(sast_findings);
-        }
-
-        all_findings
-    };
-
+    let findings = collect_findings(&opts)?;
     emit_findings(&findings, &opts.format)
 }
 

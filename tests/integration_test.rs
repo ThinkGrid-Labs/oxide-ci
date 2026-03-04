@@ -506,7 +506,10 @@ fn sast_phase1_flags_secret_in_ts_string_literal() {
         .status()
         .unwrap();
 
-    assert!(!status.success(), "secret in TS string literal should be flagged");
+    assert!(
+        !status.success(),
+        "secret in TS string literal should be flagged"
+    );
 }
 
 #[test]
@@ -568,7 +571,10 @@ fn sast_phase2_flags_eval_in_js() {
 
     assert!(!output.status.success(), "eval() should be flagged");
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("SAST/EvalUsage"), "output should name SAST/EvalUsage rule");
+    assert!(
+        stdout.contains("SAST/EvalUsage"),
+        "output should name SAST/EvalUsage rule"
+    );
 }
 
 #[test]
@@ -582,7 +588,10 @@ fn sast_phase2_flags_inner_html_assignment() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success(), "innerHTML assignment should be flagged");
+    assert!(
+        !output.status.success(),
+        "innerHTML assignment should be flagged"
+    );
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(stdout.contains("SAST/InnerHTMLAssignment"));
 }
@@ -602,7 +611,10 @@ fn sast_phase2_flags_dangerously_set_inner_html_in_tsx() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success(), "dangerouslySetInnerHTML should be flagged");
+    assert!(
+        !output.status.success(),
+        "dangerouslySetInnerHTML should be flagged"
+    );
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(stdout.contains("SAST/DangerouslySetInnerHTML"));
 }
@@ -622,7 +634,10 @@ fn sast_phase2_flags_document_write() {
         .output()
         .unwrap();
 
-    assert!(!output.status.success(), "document.write() should be flagged");
+    assert!(
+        !output.status.success(),
+        "document.write() should be flagged"
+    );
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(stdout.contains("SAST/DocumentWrite"));
 }

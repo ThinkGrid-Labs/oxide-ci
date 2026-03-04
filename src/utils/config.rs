@@ -16,6 +16,15 @@ pub struct Config {
     pub sast: SastConfig,
 }
 
+/// A user-defined tree-sitter query rule from `.oxideci.toml`.
+#[derive(Deserialize, Clone)]
+pub struct CustomSastRule {
+    /// Unique rule ID reported in findings, e.g. "MY/NoConsoleLog"
+    pub id: String,
+    /// tree-sitter S-expression query. Must contain a @match capture.
+    pub query: String,
+}
+
 /// SAST settings loaded from `.oxideci.toml` under `[sast]`.
 #[derive(Deserialize, Clone)]
 pub struct SastConfig {
@@ -25,6 +34,18 @@ pub struct SastConfig {
     /// Rule IDs to skip, e.g. ["SAST/EvalUsage", "SAST/SetTimeout"]
     #[serde(default)]
     pub disabled_rules: Vec<String>,
+    /// Max lines in a function body before SMELL/LongFunction fires (default: 50)
+    #[serde(default = "default_max_function_lines")]
+    pub max_function_lines: usize,
+    /// Max parameters before SMELL/TooManyParameters fires (default: 5)
+    #[serde(default = "default_max_parameters")]
+    pub max_parameters: usize,
+    /// Max nesting depth before SMELL/DeepNesting fires (default: 4)
+    #[serde(default = "default_max_nesting_depth")]
+    pub max_nesting_depth: usize,
+    /// User-defined tree-sitter query rules (default: [])
+    #[serde(default)]
+    pub custom_rules: Vec<CustomSastRule>,
 }
 
 impl Default for SastConfig {
@@ -32,12 +53,25 @@ impl Default for SastConfig {
         Self {
             enabled: default_sast_enabled(),
             disabled_rules: Vec::new(),
+            max_function_lines: default_max_function_lines(),
+            max_parameters: default_max_parameters(),
+            max_nesting_depth: default_max_nesting_depth(),
+            custom_rules: Vec::new(),
         }
     }
 }
 
 fn default_sast_enabled() -> bool {
     true
+}
+fn default_max_function_lines() -> usize {
+    50
+}
+fn default_max_parameters() -> usize {
+    5
+}
+fn default_max_nesting_depth() -> usize {
+    4
 }
 
 /// Per-scan settings loaded from `.oxideci.toml`.
