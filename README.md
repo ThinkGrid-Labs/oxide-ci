@@ -1,6 +1,6 @@
 # OxideCI
 
-> A blazing-fast, language-agnostic DevOps CLI built in Rust — secret scanning, Kubernetes linting, coverage gates, dependency auditing, and more in a single zero-dependency binary.
+> A blazing-fast, language-agnostic DevOps CLI built in Rust — secret scanning, Kubernetes linting, coverage gates, dependency auditing, web performance auditing, and React component regression detection in a single zero-dependency binary.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build](https://img.shields.io/github/actions/workflow/status/ThinkGrid-Labs/oxide-ci/ci.yml?branch=main)](https://github.com/ThinkGrid-Labs/oxide-ci/actions)
@@ -19,12 +19,15 @@
   - [coverage](#coverage--coverage-threshold-gate)
   - [audit](#audit--dependency-vulnerability-audit)
   - [install-hooks](#install-hooks--git-pre-commit-hook)
+  - [lighthouse](#lighthouse--web-performance-audit)
+  - [reassure](#reassure--react-component-performance-gate)
 - [Secret Detection Patterns](#secret-detection-patterns)
 - [Configuration File](#configuration-file-oxidecitorml)
 - [Output Formats](#output-formats)
 - [Exit Codes](#exit-codes)
 - [CI/CD Integration](#cicd-integration)
 - [Architecture](#architecture)
+- [React Native](#react-native)
 - [Contributing](#contributing)
 
 ---
@@ -40,6 +43,8 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 | Test coverage silently dropping | `oxide-ci coverage` |
 | Vulnerable dependencies shipping to production | `oxide-ci audit` |
 | Secrets committed before anyone notices | `oxide-ci install-hooks` |
+| Web Lighthouse score regressing between deploys | `oxide-ci lighthouse` |
+| React component render performance regressing | `oxide-ci reassure` |
 
 **Key advantages:**
 
@@ -56,15 +61,17 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 
 | Feature | Status |
 |---|---|
-| Secret & PII scanning (20 built-in patterns) | ✅ |
+| Secret & PII scanning (23 built-in patterns) | ✅ |
 | Custom extra patterns via config | ✅ |
 | Exclude paths via glob patterns | ✅ |
-| Git diff / staged-only scanning | ✅ |
+| Git diff / staged-only / full history scanning | ✅ |
 | JSON & SARIF 2.1.0 output | ✅ |
 | Kubernetes manifest linting (5 rules) | ✅ |
 | LCOV coverage threshold gate | ✅ |
 | Dependency audit via OSV API | ✅ |
 | Git pre-commit hook installer | ✅ |
+| Web performance audit via PageSpeed Insights | ✅ |
+| React component performance gate (Reassure) | ✅ |
 | `.oxideci.toml` config file | ✅ |
 | Respects `.gitignore` | ✅ |
 
@@ -113,6 +120,8 @@ Commands:
   coverage       Parses an LCOV coverage file and fails if total coverage is below threshold
   audit          Audits project dependencies for known vulnerabilities via the OSV database
   install-hooks  Installs oxide-ci as a git pre-commit hook
+  lighthouse     Audits web performance via Google PageSpeed Insights (Lighthouse)
+  reassure       Parses a Reassure performance report and gates on regressions
   help           Print this message or the help of the given subcommand(s)
 ```
 
@@ -135,6 +144,12 @@ oxide-ci audit
 
 # Install as a git hook (runs on every commit)
 oxide-ci install-hooks
+
+# Gate on Lighthouse web performance scores
+oxide-ci lighthouse --url https://yourapp.com
+
+# Gate on React component performance regressions (after `reassure measure`)
+oxide-ci reassure
 ```
 
 ---
@@ -414,9 +429,181 @@ oxide-ci install-hooks --force
 
 ---
 
+---
+
+### `lighthouse` — Web Performance Audit
+
+Fetches your deployed URL from the [Google PageSpeed Insights API v5](https://developers.google.com/speed/docs/insights/v5/get-started) (which runs a real Lighthouse audit server-side) and gates on scores for four categories: Performance, Accessibility, Best Practices, and SEO. No Node.js required — it's a pure HTTPS call via the same HTTP client used by `audit`.
+
+```
+oxide-ci lighthouse [OPTIONS]
+
+Options:
+  --url <URL>                  URL to audit (overrides config)
+  --strategy <STRATEGY>        Device strategy: mobile (default) or desktop (overrides config)
+  --min-performance <N>        Minimum Performance score 0–100 [default: 80]
+  --min-accessibility <N>      Minimum Accessibility score 0–100 [default: 90]
+  --min-best-practices <N>     Minimum Best Practices score 0–100 [default: 80]
+  --min-seo <N>                Minimum SEO score 0–100 [default: 80]
+  --key <KEY>                  Google PageSpeed Insights API key (overrides PAGESPEED_API_KEY env var)
+  -h, --help                   Print help
+```
+
+**Examples:**
+
+```bash
+# Audit with default thresholds (mobile strategy)
+oxide-ci lighthouse --url https://yourapp.com
+
+# Desktop audit with a stricter performance threshold
+oxide-ci lighthouse --url https://yourapp.com --strategy desktop --min-performance 90
+
+# Use an API key for higher quota (unauthenticated quota: a few requests/day)
+oxide-ci lighthouse --url https://yourapp.com --key AIza...
+
+# Read URL and thresholds from .oxideci.toml
+oxide-ci lighthouse
+```
+
+**API key:** The PageSpeed Insights API works without a key for occasional runs (development, infrequent CI). For production CI pipelines that run on every PR, create a free key in the [Google Cloud Console](https://console.cloud.google.com/apis/library/pagespeedonline.googleapis.com) and pass it via the `PAGESPEED_API_KEY` environment variable:
+
+```bash
+export PAGESPEED_API_KEY=AIza...
+oxide-ci lighthouse --url https://yourapp.com
+```
+
+**Sample output:**
+```
+ℹ️  Running Lighthouse audit: https://yourapp.com (mobile)
+
+  Performance:       87  ✅  (min: 80)
+  Accessibility:     95  ✅  (min: 90)
+  Best Practices:    75  ❌  (min: 80)
+  SEO:               98  ✅  (min: 80)
+
+Error: Lighthouse failed: 1 category/-ies below threshold.
+```
+
+**Configuration (`.oxideci.toml`):**
+
+```toml
+[lighthouse]
+url = "https://yourapp.com"
+strategy = "mobile"          # mobile | desktop
+min_performance   = 80
+min_accessibility = 90
+min_best_practices = 80
+min_seo = 80
+# api_key = ""               # prefer PAGESPEED_API_KEY env var
+```
+
+> **Note:** `lighthouse` audits a live, publicly reachable URL. It is best placed in a post-deploy CI step, not in a PR build where the URL may not yet be reachable. For PR-level feedback, consider running it against a preview/staging URL.
+
+---
+
+### `reassure` — React Component Performance Gate
+
+Parses the JSON performance report produced by [Reassure](https://github.com/callstack/reassure) (`reassure measure`) and fails CI if any component's mean render time regresses beyond a configurable threshold, or if the number of renders increases.
+
+Reassure measures real component performance by running each test scenario many times (default 10 iterations × 5 runs). The output is a `.perf` JSON file that oxide-ci reads directly — no Node.js required at gate time.
+
+```
+oxide-ci reassure [OPTIONS]
+
+Options:
+  --current <PATH>    Path to current.perf file [default: output/current.perf]
+  --baseline <PATH>   Path to baseline.perf file [default: output/baseline.perf]
+  --threshold <N>     % mean-time increase allowed before failure [default: 15]
+  -h, --help          Print help
+```
+
+**Typical CI workflow:**
+
+```bash
+# 1. In your frontend project, run Reassure to produce current.perf
+npx reassure measure
+
+# 2. Gate on regressions with oxide-ci
+oxide-ci reassure
+
+# 3. To compare against a saved baseline, first save it:
+cp output/current.perf output/baseline.perf   # after a known-good run
+# Then on subsequent runs, oxide-ci compares current vs baseline automatically
+```
+
+**Regression rules:**
+
+| Condition | Result |
+|---|---|
+| `meanTime` increased by more than `threshold`% | ❌ fail |
+| `renders` count increased vs baseline | ❌ fail |
+| No `baseline.perf` found | Report-only (informational, no failure) |
+| New component with no baseline entry | Listed as `new`, not flagged |
+
+**Sample output (with baseline):**
+```
+ℹ️  Parsing Reassure report: output/current.perf
+ℹ️  Baseline found: output/baseline.perf
+
+  Component                                 Mean (ms)  Renders  Δ Mean     Δ Renders
+  ────────────────────────────────────────────────────────────────────────────────────
+  ProductList render                            15.4      2.3    +2.1%      ─
+  HeavyList render                              42.1      3.0    +21.3% ❌  ─
+  SearchBox render                               8.9      1.0    -5.2%      ─
+  NewComponent render                            6.3      1.0    new        ─
+
+Error: Reassure failed: 1 component(s) exceed the 15.0% regression threshold.
+```
+
+**Sample output (no baseline — report-only mode):**
+```
+ℹ️  Parsing Reassure report: output/current.perf
+⚠️  Baseline file not found — running in report-only mode.
+
+  Component                                 Mean (ms)  Renders
+  ─────────────────────────────────────────────────────────────
+  ProductList render                            15.4      2.3
+  HeavyList render                              42.1      3.0
+  SearchBox render                               8.9      1.0
+
+ℹ️  No baseline provided — metrics reported above (no gating applied).
+```
+
+**Configuration (`.oxideci.toml`):**
+
+```toml
+[reassure]
+current   = "output/current.perf"
+baseline  = "output/baseline.perf"
+threshold = 15.0               # % mean-time regression allowed
+```
+
+**Setting up Reassure in a React project:**
+
+```bash
+# Install
+npm install --save-dev reassure
+
+# Write a performance test (e.g. __perf__/ProductList.perf.tsx)
+import { measureRenders } from 'reassure';
+import { ProductList } from '../ProductList';
+
+test('ProductList render', async () => {
+  await measureRenders(<ProductList items={mockItems} />);
+});
+
+# Run measurement (generates output/current.perf)
+npx reassure measure
+
+# Then gate with oxide-ci
+oxide-ci reassure --threshold 10
+```
+
+> **Tip:** Store `output/baseline.perf` in your repository (or as a CI artifact) after a confirmed good release. On every PR, oxide-ci compares the freshly measured `current.perf` against it and fails if performance has regressed.
+
 ## Secret Detection Patterns
 
-OxideCI ships with 20 built-in patterns covering the most common cloud providers and services. All patterns are applied per-line across every scanned file, and findings include the exact line number.
+OxideCI ships with 23 built-in patterns covering the most common cloud providers and services (including React Native / mobile-specific patterns). All patterns are applied per-line across every scanned file, and findings include the exact line number.
 
 ### AWS
 | Rule ID | What it detects |
@@ -470,6 +657,13 @@ OxideCI ships with 20 built-in patterns covering the most common cloud providers
 | `PEM Private Key` | RSA, EC, DSA, OPENSSH private key headers |
 | `JWT Token` | Three-part base64url tokens (`eyJ…`) |
 
+### React Native / Mobile
+| Rule ID | What it detects |
+|---|---|
+| `Expo Access Token` | EAS CLI robot/personal tokens (`expa_…40+ chars`) |
+| `Sentry DSN` | Error reporting DSNs (ingest.sentry.io format) |
+| `Mapbox Secret Token` | Secret tokens (`sk.eyJ…`); public tokens (`pk.eyJ…`) are not flagged |
+
 ### PII
 | Rule ID | What it detects |
 |---|---|
@@ -509,6 +703,11 @@ extra_patterns = [
   { name = "Internal Service Token", regex = "svc_[a-z0-9]{40}" },
 ]
 
+# Shannon entropy detection (flags high-entropy tokens like unrecognized API keys)
+entropy = true
+entropy_threshold = 4.5    # lower = more sensitive
+entropy_min_length = 20    # ignore tokens shorter than this
+
 [coverage]
 # Default LCOV file path (overridden by --file)
 file = "coverage/lcov.info"
@@ -518,9 +717,31 @@ min = 85.0
 [lint]
 # Default directory to scan for Kubernetes manifests (overridden by --dir)
 target_dir = "./infrastructure/k8s"
+
+[lighthouse]
+# URL of the deployed app to audit (overridden by --url)
+url = "https://yourapp.com"
+# Device strategy: mobile (default) or desktop (overridden by --strategy)
+strategy = "mobile"
+# Per-category minimum scores 0–100 (overridden by --min-* flags)
+min_performance   = 80
+min_accessibility = 90
+min_best_practices = 80
+min_seo = 80
+# API key (optional; prefer PAGESPEED_API_KEY env var)
+# api_key = ""
+
+[reassure]
+# Path to Reassure current measurement file (overridden by --current)
+current = "output/current.perf"
+# Path to Reassure baseline file (overridden by --baseline)
+# If absent, oxide-ci runs in report-only mode (no failure)
+baseline = "output/baseline.perf"
+# Maximum mean-time regression % before failing (overridden by --threshold)
+threshold = 15.0
 ```
 
-All fields are optional. Omitted values fall back to their defaults.
+All fields are optional. Omitted values fall back to safe defaults. CLI flags always take precedence over config file values.
 
 ---
 
@@ -596,7 +817,12 @@ name: OxideCI Quality Gate
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+  security-events: write   # required for SARIF upload
+
 jobs:
+  # ── Security & code-quality gates ──────────────────────────────────────────
   oxide-ci:
     runs-on: ubuntu-latest
     steps:
@@ -613,12 +839,15 @@ jobs:
 
       - name: Secret Scan (SARIF for PR annotations)
         run: oxide-ci scan --format sarif > results.sarif
+        if: always()
         continue-on-error: true
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
           sarif_file: results.sarif
+        continue-on-error: true
 
       - name: Kubernetes Lint
         run: oxide-ci lint --dir ./k8s
@@ -628,6 +857,48 @@ jobs:
 
       - name: Dependency Audit
         run: oxide-ci audit
+
+  # ── Performance gates (post-deploy) ────────────────────────────────────────
+  # Run after deployment so the URL is live and Reassure has produced output/.
+  perf:
+    runs-on: ubuntu-latest
+    # needs: [deploy]    # uncomment and set your deploy job name
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OxideCI
+        run: |
+          curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
+            -o /usr/local/bin/oxide-ci
+          chmod +x /usr/local/bin/oxide-ci
+
+      # Lighthouse — gates on PageSpeed scores for the deployed URL.
+      # Set LIGHTHOUSE_URL as a repository variable (Settings → Variables).
+      # Set PAGESPEED_API_KEY as a repository secret for higher quota.
+      - name: Lighthouse audit
+        if: ${{ vars.LIGHTHOUSE_URL != '' }}
+        env:
+          PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
+        run: |
+          oxide-ci lighthouse \
+            --url "${{ vars.LIGHTHOUSE_URL }}" \
+            --strategy mobile \
+            --min-performance 80 \
+            --min-accessibility 90
+
+      # Reassure — gates on React component render regressions.
+      # Your frontend test job should run `reassure measure` and upload
+      # output/current.perf as an artifact, then download it here.
+      - name: Download Reassure report
+        uses: actions/download-artifact@v4
+        with:
+          name: reassure-report
+          path: output/
+        continue-on-error: true   # skip gracefully if artifact not found
+
+      - name: Reassure performance gate
+        if: hashFiles('output/current.perf') != ''
+        run: oxide-ci reassure --threshold 15
 ```
 
 ### GitLab CI
@@ -747,19 +1018,21 @@ rm .git/hooks/pre-commit
 ```
 oxide-ci/
 ├── src/
-│   ├── main.rs               # CLI entry point (clap)
+│   ├── main.rs                  # CLI entry point (clap)
 │   ├── modules/
-│   │   ├── scanner.rs        # Secret/PII scanning (rayon parallel)
-│   │   ├── k8s_lint.rs       # Kubernetes manifest linter (serde_yaml)
-│   │   ├── coverage.rs       # LCOV parser and threshold gate
-│   │   ├── audit.rs          # OSV dependency audit (ureq)
-│   │   └── hooks.rs          # Git hook installer
+│   │   ├── scanner.rs           # Secret/PII scanning (rayon parallel)
+│   │   ├── k8s_lint.rs          # Kubernetes manifest linter (serde_yaml)
+│   │   ├── coverage.rs          # LCOV parser and threshold gate
+│   │   ├── audit.rs             # OSV dependency audit (ureq)
+│   │   ├── hooks.rs             # Git hook installer
+│   │   ├── perf_lighthouse.rs   # PageSpeed Insights Lighthouse gate (ureq)
+│   │   └── reassure.rs          # Reassure .perf report parser and gate
 │   └── utils/
-│       ├── config.rs         # .oxideci.toml loader (toml + serde)
-│       ├── files.rs          # File walker (ignore crate)
-│       └── terminal.rs       # Styled output + progress bars (indicatif)
+│       ├── config.rs            # .oxideci.toml loader (toml + serde)
+│       ├── files.rs             # File walker (ignore crate)
+│       └── terminal.rs          # Styled output + progress bars (indicatif)
 └── tests/
-    └── integration_test.rs   # End-to-end binary tests
+    └── integration_test.rs      # End-to-end binary tests
 ```
 
 **Dependencies:**
@@ -776,6 +1049,138 @@ oxide-ci/
 | `ureq` | HTTP client for OSV audit API |
 | `indicatif` | Progress bars |
 | `anyhow` | Error handling and propagation |
+
+---
+
+## React Native
+
+oxide-ci works with React Native and Expo projects out of the box. npm, Yarn, and pnpm lock files are all supported for dependency auditing, and Reassure — which was originally built *for* React Native by Callstack — is a first-class citizen.
+
+### Command compatibility
+
+| Command | React Native support | Notes |
+|---|---|---|
+| `scan` | ✅ Full | Detects secrets in JS/TS, config files, and CI YAML; gitignore-aware (skips `node_modules/` automatically) |
+| `audit` | ✅ Full | Reads `package-lock.json`, `yarn.lock`, and `pnpm-lock.yaml`; queries OSV for npm CVEs |
+| `coverage` | ✅ Full | Reads Jest LCOV output (`--coverageReporters=lcov`) |
+| `install-hooks` | ✅ Full | Pre-commit hook works in any git repo |
+| `reassure` | ✅ Full | Built for React Native; parses `output/current.perf` from `reassure measure` |
+| `lint` | ⚠️ Optional | Only useful if the project has a Kubernetes backend |
+| `lighthouse` | ⚠️ Web only | Audits a public URL; applicable if you ship a React Native Web build or marketing site |
+
+> **Note on Bun:** `bun.lockb` is a binary format that oxide-ci cannot parse. If you use Bun, run `bun install --save-text-lockfile` to generate a `bun.lock` text file alongside it, or use the `package-lock.json` fallback (`bun install --backend=npm`).
+
+---
+
+### Recommended `.oxideci.toml` for React Native
+
+```toml
+[scan]
+exclude_patterns = [
+    # Build artifacts
+    "android/build/**",
+    "android/.gradle/**",
+    "ios/build/**",
+    "ios/Pods/**",
+    # Expo cache and generated files
+    ".expo/**",
+    ".expo-shared/**",
+    # Metro bundler cache
+    ".metro-cache/**",
+    # Test fixtures that intentionally contain fake patterns
+    "__tests__/**",
+    "__mocks__/**",
+    # React Native generated
+    "android/app/src/main/assets/index.android.bundle",
+]
+
+# Shannon entropy catches random API keys not matched by explicit rules.
+# Tune down min_length for shorter RN-style tokens.
+entropy = true
+entropy_threshold = 4.5
+entropy_min_length = 20
+
+[coverage]
+file = "coverage/lcov.info"
+min = 80.0
+
+[reassure]
+current  = "output/current.perf"
+baseline = "output/baseline.perf"
+threshold = 15.0   # % mean render-time regression allowed
+```
+
+---
+
+### React Native–specific secrets now detected
+
+In addition to the 20 built-in cloud patterns, oxide-ci detects these patterns common in RN projects:
+
+| Rule | What it detects |
+|---|---|
+| `Expo Access Token` | EAS CLI robot/personal tokens (`expa_…`) |
+| `Sentry DSN` | Sentry error-reporting DSNs (quota exhaustion + event read risk) |
+| `Mapbox Secret Token` | Mapbox secret tokens (`sk.eyJ…`); public tokens (`pk.eyJ…`) are not flagged |
+| `Google API Key` | Firebase API keys (`AIza…`) — same prefix as GCP, already built-in |
+| `GCP Service Account Key` | `google-services.json` leaks — already built-in |
+
+---
+
+### GitHub Actions — React Native pipeline
+
+```yaml
+name: React Native CI
+
+on: [push, pull_request]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install oxide-ci
+        run: |
+          curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
+            -o /usr/local/bin/oxide-ci
+          chmod +x /usr/local/bin/oxide-ci
+
+      - name: Secret & PII scan
+        run: oxide-ci scan
+
+      - name: Dependency audit (npm CVEs via OSV)
+        run: oxide-ci audit   # reads package-lock.json / yarn.lock / pnpm-lock.yaml
+
+      - name: Coverage gate
+        run: oxide-ci coverage   # reads coverage/lcov.info (generated by jest --coverage)
+
+  perf:
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run Reassure measurement
+        run: npx reassure measure
+        # Produces output/current.perf
+
+      - name: Install oxide-ci
+        run: |
+          curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
+            -o /usr/local/bin/oxide-ci
+          chmod +x /usr/local/bin/oxide-ci
+
+      - name: Reassure performance gate
+        run: oxide-ci reassure --threshold 15
+        # Fails if any component regresses > 15% vs baseline.perf
+```
 
 ---
 

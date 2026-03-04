@@ -65,6 +65,20 @@ const BUILTIN_PATTERNS: &[(&str, &str)] = &[
     // ── HashiCorp Vault ────────────────────────────────────────────────────
     // Service tokens (vault 1.10+) begin with hvs.
     ("HashiCorp Vault Token", r"hvs\.[A-Za-z0-9_\-]{90,}"),
+    // ── Expo / EAS (React Native) ──────────────────────────────────────────
+    // Personal Access Tokens and Robot Tokens used with EAS CLI
+    ("Expo Access Token", r"expa_[A-Za-z0-9]{40,}"),
+    // ── Sentry ─────────────────────────────────────────────────────────────
+    // DSN: https://<key>@o<org>.ingest[.us].sentry.io/<project>
+    // Leaking allows event flooding (quota exhaustion) and reading event data
+    (
+        "Sentry DSN",
+        r"https://[a-f0-9]{16,32}@o[0-9]+\.ingest(?:\.us)?\.sentry\.io/[0-9]+",
+    ),
+    // ── Mapbox ─────────────────────────────────────────────────────────────
+    // Secret tokens (sk.eyJ...) grant full account/billing access
+    // Public tokens (pk.eyJ...) are intentionally client-side — not flagged
+    ("Mapbox Secret Token", r"sk\.eyJ[A-Za-z0-9_\-]+"),
     // ── Private keys & generic tokens ─────────────────────────────────────
     (
         "PEM Private Key",

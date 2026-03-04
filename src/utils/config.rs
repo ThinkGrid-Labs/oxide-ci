@@ -8,6 +8,10 @@ pub struct Config {
     pub coverage: CoverageConfig,
     #[serde(default)]
     pub lint: LintConfig,
+    #[serde(default)]
+    pub lighthouse: LighthouseConfig,
+    #[serde(default)]
+    pub reassure: ReassureConfig,
 }
 
 /// Per-scan settings loaded from `.oxideci.toml`.
@@ -79,6 +83,70 @@ impl Default for LintConfig {
     }
 }
 
+// ── Lighthouse config ─────────────────────────────────────────────────────────
+
+#[derive(Deserialize, Clone)]
+pub struct LighthouseConfig {
+    /// URL to audit (required for `oxide-ci lighthouse` unless passed via CLI)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Device strategy: "mobile" (default) or "desktop"
+    #[serde(default = "default_lighthouse_strategy")]
+    pub strategy: String,
+    #[serde(default = "default_lighthouse_perf")]
+    pub min_performance: u8,
+    #[serde(default = "default_lighthouse_a11y")]
+    pub min_accessibility: u8,
+    #[serde(default = "default_lighthouse_bp")]
+    pub min_best_practices: u8,
+    #[serde(default = "default_lighthouse_seo")]
+    pub min_seo: u8,
+    /// Google PageSpeed Insights API key (optional; can also set PAGESPEED_API_KEY env var)
+    #[serde(default)]
+    pub api_key: Option<String>,
+}
+
+impl Default for LighthouseConfig {
+    fn default() -> Self {
+        Self {
+            url: None,
+            strategy: default_lighthouse_strategy(),
+            min_performance: default_lighthouse_perf(),
+            min_accessibility: default_lighthouse_a11y(),
+            min_best_practices: default_lighthouse_bp(),
+            min_seo: default_lighthouse_seo(),
+            api_key: None,
+        }
+    }
+}
+
+// ── Reassure config ───────────────────────────────────────────────────────────
+
+#[derive(Deserialize, Clone)]
+pub struct ReassureConfig {
+    /// Path to Reassure current.perf file
+    #[serde(default = "default_reassure_current")]
+    pub current: String,
+    /// Path to Reassure baseline.perf file (optional)
+    #[serde(default = "default_reassure_baseline")]
+    pub baseline: String,
+    /// Percentage mean-time increase allowed before flagging a regression
+    #[serde(default = "default_reassure_threshold")]
+    pub threshold: f64,
+}
+
+impl Default for ReassureConfig {
+    fn default() -> Self {
+        Self {
+            current: default_reassure_current(),
+            baseline: default_reassure_baseline(),
+            threshold: default_reassure_threshold(),
+        }
+    }
+}
+
+// ── Default value fns ─────────────────────────────────────────────────────────
+
 fn default_entropy_enabled() -> bool {
     true
 }
@@ -96,6 +164,30 @@ fn default_lcov_file() -> String {
 }
 fn default_target_dir() -> String {
     ".".to_string()
+}
+fn default_lighthouse_strategy() -> String {
+    "mobile".to_string()
+}
+fn default_lighthouse_perf() -> u8 {
+    80
+}
+fn default_lighthouse_a11y() -> u8 {
+    90
+}
+fn default_lighthouse_bp() -> u8 {
+    80
+}
+fn default_lighthouse_seo() -> u8 {
+    80
+}
+fn default_reassure_current() -> String {
+    "output/current.perf".to_string()
+}
+fn default_reassure_baseline() -> String {
+    "output/baseline.perf".to_string()
+}
+fn default_reassure_threshold() -> f64 {
+    15.0
 }
 
 /// Load `.oxideci.toml` from the current directory, falling back to defaults.
