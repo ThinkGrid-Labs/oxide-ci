@@ -120,20 +120,20 @@ fn main() -> anyhow::Result<()> {
             } else {
                 since.map(DiffMode::Since)
             };
-            if annotate {
-                if let Some(env) = modules::github::detect_github_env() {
-                    let opts = ScanOpts {
-                        format: output_format.clone(),
-                        diff,
-                        config: &cfg.scan,
-                        sast_config: &cfg.sast,
-                    };
-                    let findings = modules::scanner::collect_findings(&opts)?;
-                    if let Err(e) = modules::github::annotate(&findings, &env) {
-                        eprintln!("oxide-ci: warning: GitHub annotation failed: {}", e);
-                    }
-                    return modules::scanner::emit_findings(&findings, &output_format);
+            if annotate
+                && let Some(env) = modules::github::detect_github_env()
+            {
+                let opts = ScanOpts {
+                    format: output_format.clone(),
+                    diff,
+                    config: &cfg.scan,
+                    sast_config: &cfg.sast,
+                };
+                let findings = modules::scanner::collect_findings(&opts)?;
+                if let Err(e) = modules::github::annotate(&findings, &env) {
+                    eprintln!("oxide-ci: warning: GitHub annotation failed: {}", e);
                 }
+                return modules::scanner::emit_findings(&findings, &output_format);
             }
             modules::scanner::run_scan(ScanOpts {
                 format: output_format,

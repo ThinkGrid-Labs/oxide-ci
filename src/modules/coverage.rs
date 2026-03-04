@@ -26,10 +26,10 @@ fn detect_format(file: &str) -> CoverageFormat {
         use std::io::Read;
         let mut buf = [0u8; 256];
         let n = f.read(&mut buf).unwrap_or(0);
-        if let Ok(head) = std::str::from_utf8(&buf[..n]) {
-            if head.contains("<coverage") || head.contains("<!DOCTYPE coverage") {
-                return CoverageFormat::Cobertura;
-            }
+        if let Ok(head) = std::str::from_utf8(&buf[..n])
+            && (head.contains("<coverage") || head.contains("<!DOCTYPE coverage"))
+        {
+            return CoverageFormat::Cobertura;
         }
     }
     CoverageFormat::Lcov

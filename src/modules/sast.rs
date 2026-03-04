@@ -471,20 +471,19 @@ fn scan_complexity(
                     .disabled_rules
                     .iter()
                     .any(|d| d == "SMELL/DeepNesting")
+                    && let Some(body) = node.child_by_field_name("body")
                 {
-                    if let Some(body) = node.child_by_field_name("body") {
-                        let depth = max_nesting_depth_in(body, 0);
-                        if depth > sast_config.max_nesting_depth {
-                            findings.push(Finding {
-                                path: path.to_path_buf(),
-                                rule_id: format!(
-                                    "SMELL/DeepNesting (depth {}, max {})",
-                                    depth, sast_config.max_nesting_depth
-                                ),
-                                line: line_no,
-                                commit: None,
-                            });
-                        }
+                    let depth = max_nesting_depth_in(body, 0);
+                    if depth > sast_config.max_nesting_depth {
+                        findings.push(Finding {
+                            path: path.to_path_buf(),
+                            rule_id: format!(
+                                "SMELL/DeepNesting (depth {}, max {})",
+                                depth, sast_config.max_nesting_depth
+                            ),
+                            line: line_no,
+                            commit: None,
+                        });
                     }
                 }
             }
