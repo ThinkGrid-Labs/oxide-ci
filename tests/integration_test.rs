@@ -487,3 +487,180 @@ fn install_hooks_does_not_overwrite_without_force() {
         "existing hook should not be overwritten without --force"
     );
 }
+
+// ── SAST: Phase 1 (string-literal-scoped detection) ───────────────────────────
+
+#[test]
+fn sast_phase1_flags_secret_in_ts_string_literal() {
+    let dir = tempfile::tempdir().unwrap();
+    // AWS key inside a TS string literal — SAST Phase 1 must flag it
+    std::fs::write(
+        dir.path().join("config.ts"),
+        "const key = \"AKIAIOSFODNN7EXAMPLEKEY1\";\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .args(["scan", "--format", "json"])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(!status.success(), "secret in TS string literal should be flagged");
+}
+
+#[test]
+fn sast_phase1_does_not_flag_secret_in_ts_comment() {
+    let dir = tempfile::tempdir().unwrap();
+    // Key is only in a comment — SAST Phase 1 must NOT flag it (no string_fragment node)
+    std::fs::write(
+        dir.path().join("config.ts"),
+        "// Example: AKIAIOSFODNN7EXAMPLEKEY1\nconst x = 1;\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .arg("scan")
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        status.success(),
+        "secret in a TS comment should NOT be flagged by SAST"
+    );
+}
+
+#[test]
+fn sast_phase1_does_not_flag_email_in_tsx_jsx_text() {
+    let dir = tempfile::tempdir().unwrap();
+    // Email is in JSX text content, not a string literal — should not be flagged
+    std::fs::write(
+        dir.path().join("footer.tsx"),
+        "export const Footer = () => <p>contact@example.com</p>;\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .arg("scan")
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        status.success(),
+        "email in JSX text content should NOT be flagged by SAST Phase 1"
+    );
+}
+
+// ── SAST: Phase 2 (dangerous pattern detection) ───────────────────────────────
+
+#[test]
+fn sast_phase2_flags_eval_in_js() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("app.js"), "eval(userInput);\n").unwrap();
+
+    let output = Command::new(binary())
+        .args(["scan", "--format", "json"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "eval() should be flagged");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("SAST/EvalUsage"), "output should name SAST/EvalUsage rule");
+}
+
+#[test]
+fn sast_phase2_flags_inner_html_assignment() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("dom.js"), "el.innerHTML = dangerousData;\n").unwrap();
+
+    let output = Command::new(binary())
+        .args(["scan", "--format", "json"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "innerHTML assignment should be flagged");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("SAST/InnerHTMLAssignment"));
+}
+
+#[test]
+fn sast_phase2_flags_dangerously_set_inner_html_in_tsx() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("comp.tsx"),
+        "export const C = ({v}:{v:string}) => <div dangerouslySetInnerHTML={{__html:v}} />;\n",
+    )
+    .unwrap();
+
+    let output = Command::new(binary())
+        .args(["scan", "--format", "json"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "dangerouslySetInnerHTML should be flagged");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("SAST/DangerouslySetInnerHTML"));
+}
+
+#[test]
+fn sast_phase2_flags_document_write() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("legacy.js"),
+        "document.write(\"<script>\" + userInput);\n",
+    )
+    .unwrap();
+
+    let output = Command::new(binary())
+        .args(["scan", "--format", "json"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "document.write() should be flagged");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("SAST/DocumentWrite"));
+}
+
+#[test]
+fn sast_disabled_via_config_skips_scan() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("app.js"), "eval(x);\n").unwrap();
+    std::fs::write(
+        dir.path().join(".oxideci.toml"),
+        "[sast]\nenabled = false\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .arg("scan")
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(status.success(), "SAST disabled should produce no findings");
+}
+
+#[test]
+fn sast_specific_rule_disabled_via_config() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("app.js"), "eval(x);\n").unwrap();
+    std::fs::write(
+        dir.path().join(".oxideci.toml"),
+        "[sast]\ndisabled_rules = [\"SAST/EvalUsage\"]\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .arg("scan")
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(status.success(), "disabled rule should produce no findings");
+}

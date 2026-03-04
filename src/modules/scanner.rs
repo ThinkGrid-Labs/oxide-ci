@@ -1,4 +1,4 @@
-use crate::utils::{config::ScanConfig, files, terminal};
+use crate::utils::{config::{SastConfig, ScanConfig}, files, terminal};
 use anyhow::{Context, Result};
 use ignore::overrides::OverrideBuilder;
 use rayon::prelude::*;
@@ -121,6 +121,15 @@ pub struct ScanOpts<'a> {
     pub format: OutputFormat,
     pub diff: Option<DiffMode>,
     pub config: &'a ScanConfig,
+    pub sast_config: &'a SastConfig,
+}
+
+/// Returns true for JS/TS source files that the SAST scanner handles.
+pub(crate) fn is_js_ts_file(path: &std::path::Path) -> bool {
+    matches!(
+        path.extension().and_then(|e| e.to_str()),
+        Some("ts" | "tsx" | "js" | "jsx")
+    )
 }
 
 // ── Entropy detection ─────────────────────────────────────────────────────────
@@ -166,7 +175,7 @@ fn classify_charset(token: &str) -> CharsetKind {
 
 /// Check one source line for high-entropy tokens that may be unrecognised secrets.
 /// Returns rule IDs for each flagged token (may be empty).
-fn check_entropy(line: &str, config: &ScanConfig) -> Vec<String> {
+pub(crate) fn check_entropy(line: &str, config: &ScanConfig) -> Vec<String> {
     if !config.entropy {
         return Vec::new();
     }
@@ -384,13 +393,13 @@ fn get_changed_files(mode: &DiffMode) -> Result<Vec<PathBuf>> {
 
 // ── File scan ─────────────────────────────────────────────────────────────────
 
-fn run_file_scan(
+/// Collect all files to scan (honoring diff mode and exclusions) into a Vec.
+fn collect_scan_files(
     opts: &ScanOpts,
-    all_patterns: &[(String, Regex)],
     excludes: &Option<ignore::overrides::Override>,
     is_text: bool,
-) -> Result<Vec<Finding>> {
-    let files_to_scan: Vec<PathBuf> = match &opts.diff {
+) -> Result<Vec<PathBuf>> {
+    let files: Vec<PathBuf> = match &opts.diff {
         Some(DiffMode::Staged) | Some(DiffMode::Since(_)) => {
             if is_text {
                 terminal::info("Diff mode: scanning only changed files...");
@@ -405,49 +414,59 @@ fn run_file_scan(
                 .map(|e| e.into_path())
                 .collect()
         }
-        Some(DiffMode::History) => {
-            unreachable!("History mode is handled before run_file_scan")
-        }
+        Some(DiffMode::History) => unreachable!("History mode handled before collect_scan_files"),
     };
 
-    let files_to_scan: Vec<PathBuf> = files_to_scan
+    Ok(files
         .into_iter()
         .filter(|p| !is_excluded(p, excludes))
-        .collect();
+        .collect())
+}
+
+/// Regex + entropy scan over a pre-built file list.
+/// When SAST is enabled, JS/TS files are skipped here — the SAST module handles them.
+fn run_regex_scan(
+    opts: &ScanOpts,
+    all_patterns: &[(String, Regex)],
+    files: &[PathBuf],
+    is_text: bool,
+) -> Vec<Finding> {
+    // When SAST is enabled, skip JS/TS files (SAST Phase 1 handles them with
+    // context-aware, string-literal-scoped detection — fewer false positives).
+    let scan_files: Vec<&PathBuf> = if opts.sast_config.enabled {
+        files.iter().filter(|p| !is_js_ts_file(p)).collect()
+    } else {
+        files.iter().collect()
+    };
 
     let bar = if is_text {
-        Some(terminal::create_progress_bar(files_to_scan.len() as u64))
+        Some(terminal::create_progress_bar(scan_files.len() as u64))
     } else {
         None
     };
 
-    let findings: Vec<Finding> = files_to_scan
+    let findings: Vec<Finding> = scan_files
         .par_iter()
         .flat_map(|path| {
             let mut file_findings: Vec<Finding> = Vec::new();
             if let Ok(content) = fs::read_to_string(path) {
                 for (line_no, line) in content.lines().enumerate() {
-                    // Feature 3: inline suppression — silently skip marked lines
                     if line.contains("oxide-ci: ignore") {
                         continue;
                     }
-
-                    // Regex-based pattern detection
                     for (name, regex) in all_patterns {
                         if regex.is_match(line) {
                             file_findings.push(Finding {
-                                path: path.clone(),
+                                path: path.to_path_buf(),
                                 rule_id: name.clone(),
                                 line: line_no + 1,
                                 commit: None,
                             });
                         }
                     }
-
-                    // Feature 1: Shannon entropy detection
                     for rule_id in check_entropy(line, opts.config) {
                         file_findings.push(Finding {
-                            path: path.clone(),
+                            path: path.to_path_buf(),
                             rule_id,
                             line: line_no + 1,
                             commit: None,
@@ -466,7 +485,7 @@ fn run_file_scan(
         b.finish_with_message("Scan complete.");
     }
 
-    Ok(findings)
+    findings
 }
 
 // ── Output helpers ────────────────────────────────────────────────────────────
@@ -601,7 +620,28 @@ pub fn run_scan(opts: ScanOpts) -> Result<()> {
     let findings = if let Some(DiffMode::History) = &opts.diff {
         run_history_scan(&opts, &all_patterns)?
     } else {
-        run_file_scan(&opts, &all_patterns, &excludes, is_text)?
+        // Collect all files once — shared between regex scan and SAST scan.
+        let files = collect_scan_files(&opts, &excludes, is_text)?;
+
+        // Regex + entropy scan (skips JS/TS files when SAST is enabled).
+        let mut all_findings = run_regex_scan(&opts, &all_patterns, &files, is_text);
+
+        // SAST scan: string-literal-scoped secrets + dangerous patterns for JS/TS files.
+        if opts.sast_config.enabled {
+            if is_text {
+                terminal::info("Running SAST checks...");
+            }
+            let sast_findings = crate::modules::sast::run_sast_scan(
+                &files,
+                opts.sast_config,
+                &all_patterns,
+                opts.config,
+                is_text,
+            )?;
+            all_findings.extend(sast_findings);
+        }
+
+        all_findings
     };
 
     emit_findings(&findings, &opts.format)

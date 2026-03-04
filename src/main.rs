@@ -118,6 +118,7 @@ fn main() -> anyhow::Result<()> {
                 format: output_format,
                 diff,
                 config: &cfg.scan,
+                sast_config: &cfg.sast,
             })?;
         }
         Commands::Lint { dir } => {

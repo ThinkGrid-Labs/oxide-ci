@@ -12,6 +12,32 @@ pub struct Config {
     pub lighthouse: LighthouseConfig,
     #[serde(default)]
     pub reassure: ReassureConfig,
+    #[serde(default)]
+    pub sast: SastConfig,
+}
+
+/// SAST settings loaded from `.oxideci.toml` under `[sast]`.
+#[derive(Deserialize, Clone)]
+pub struct SastConfig {
+    /// Master switch — set to false to disable all SAST checks (default: true)
+    #[serde(default = "default_sast_enabled")]
+    pub enabled: bool,
+    /// Rule IDs to skip, e.g. ["SAST/EvalUsage", "SAST/SetTimeout"]
+    #[serde(default)]
+    pub disabled_rules: Vec<String>,
+}
+
+impl Default for SastConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_sast_enabled(),
+            disabled_rules: Vec::new(),
+        }
+    }
+}
+
+fn default_sast_enabled() -> bool {
+    true
 }
 
 /// Per-scan settings loaded from `.oxideci.toml`.

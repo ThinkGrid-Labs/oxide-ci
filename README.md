@@ -1,6 +1,6 @@
 # OxideCI
 
-> A blazing-fast, language-agnostic DevOps CLI built in Rust — secret scanning, Kubernetes linting, coverage gates, dependency auditing, web performance auditing, and React component regression detection in a single zero-dependency binary.
+> A blazing-fast, language-agnostic DevOps CLI built in Rust — secret scanning, AST-based SAST, Kubernetes linting, coverage gates, dependency auditing, web performance auditing, and React component regression detection in a single zero-dependency binary.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build](https://img.shields.io/github/actions/workflow/status/ThinkGrid-Labs/oxide-ci/ci.yml?branch=main)](https://github.com/ThinkGrid-Labs/oxide-ci/actions)
@@ -15,6 +15,7 @@
 - [Quick Start](#quick-start)
 - [Commands](#commands)
   - [scan](#scan--secret--pii-scanning)
+    - [SAST for JS/TS](#sast-static-analysis-for-jsts)
   - [lint](#lint--kubernetes-manifest-linting)
   - [coverage](#coverage--coverage-threshold-gate)
   - [audit](#audit--dependency-vulnerability-audit)
@@ -22,23 +23,27 @@
   - [lighthouse](#lighthouse--web-performance-audit)
   - [reassure](#reassure--react-component-performance-gate)
 - [Secret Detection Patterns](#secret-detection-patterns)
+- [SAST Rules Reference](#sast-rules-reference)
+- [Suppressing Findings](#suppressing-findings)
 - [Configuration File](#configuration-file-oxidecitorml)
 - [Output Formats](#output-formats)
 - [Exit Codes](#exit-codes)
 - [CI/CD Integration](#cicd-integration)
 - [Architecture](#architecture)
 - [React Native](#react-native)
+- [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 
 ---
 
 ## Why OxideCI?
 
-Most DevOps quality tools are either slow, require a runtime (Node, Python, Java), or solve only one problem. OxideCI packages five essential CI gates into a single compiled Rust binary:
+Most DevOps quality tools are either slow, require a runtime (Node, Python, Java), or solve only one problem. OxideCI packages essential CI gates into a single compiled Rust binary:
 
 | Problem | OxideCI command |
 |---|---|
 | Hardcoded secrets pushed to git | `oxide-ci scan` |
+| XSS, eval, command injection in JS/TS | `oxide-ci scan` (SAST) |
 | Kubernetes manifests missing resource limits | `oxide-ci lint` |
 | Test coverage silently dropping | `oxide-ci coverage` |
 | Vulnerable dependencies shipping to production | `oxide-ci audit` |
@@ -50,7 +55,8 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 
 - **Zero runtime dependencies** — drop a single binary into any CI pipeline, Docker image, or developer machine. No Node, Python, or JVM required.
 - **Blazing fast** — parallel file scanning via `rayon` across all CPU cores. Typical repos scan in under a second.
-- **Cloud-provider agnostic** — detects secrets across AWS, Azure, GCP, DigitalOcean, Alibaba Cloud, Stripe, GitHub, Twilio, and more.
+- **AST-based SAST** — tree-sitter parses JS/TS/TSX/JSX into a real AST before pattern matching. Secrets are only flagged when they appear inside string literals, eliminating comment noise and JSX text false positives.
+- **Cloud-provider agnostic** — detects secrets across AWS, Azure, GCP, DigitalOcean, Alibaba Cloud, Stripe, GitHub, Twilio, Expo, Sentry, Mapbox, and more.
 - **gitignore-aware** — uses the `ignore` crate to automatically skip files in `.gitignore`, so you never scan `node_modules/` or `target/` by accident.
 - **CI-native output** — `--format sarif` produces SARIF 2.1.0 output that GitHub Advanced Security displays as inline PR annotations with zero extra config.
 - **Configurable** — a single `.oxideci.toml` file sets defaults for all commands; CLI flags always override it.
@@ -61,14 +67,18 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 
 | Feature | Status |
 |---|---|
-| Secret & PII scanning (23 built-in patterns) | ✅ |
+| Secret & PII scanning (26 built-in patterns) | ✅ |
+| AST-based SAST for JS/TS/TSX/JSX | ✅ |
+| String-literal scoping (no comment / JSX-text noise) | ✅ |
+| Dangerous pattern detection (XSS, eval, command injection) | ✅ |
 | Custom extra patterns via config | ✅ |
 | Exclude paths via glob patterns | ✅ |
+| Inline suppression (`// oxide-ci: ignore`) | ✅ |
 | Git diff / staged-only / full history scanning | ✅ |
 | JSON & SARIF 2.1.0 output | ✅ |
-| Kubernetes manifest linting (5 rules) | ✅ |
+| Kubernetes manifest linting (7 rules) | ✅ |
 | LCOV coverage threshold gate | ✅ |
-| Dependency audit via OSV API | ✅ |
+| Dependency audit via OSV API (6 ecosystems) | ✅ |
 | Git pre-commit hook installer | ✅ |
 | Web performance audit via PageSpeed Insights | ✅ |
 | React component performance gate (Reassure) | ✅ |
@@ -99,7 +109,7 @@ curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxi
   -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
 ```
 
-### Build from source (requires Rust 1.70+)
+### Build from source (requires Rust 1.85+)
 ```bash
 cargo install --git https://github.com/ThinkGrid-Labs/oxide-ci
 ```
@@ -107,7 +117,7 @@ cargo install --git https://github.com/ThinkGrid-Labs/oxide-ci
 ### Verify installation
 ```
 $ oxide-ci --version
-oxide-ci 0.1.0
+oxide-ci 0.2.2
 
 $ oxide-ci --help
 A high-performance DevOps CLI tool in Rust
@@ -130,7 +140,7 @@ Commands:
 ## Quick Start
 
 ```bash
-# Scan for secrets in current repo
+# Scan for secrets in current repo (includes SAST for JS/TS files)
 oxide-ci scan
 
 # Lint all Kubernetes YAML files
@@ -158,7 +168,9 @@ oxide-ci reassure
 
 ### `scan` — Secret & PII Scanning
 
-Recursively scans every file in the current directory for hardcoded secrets, credentials, and PII using 20 built-in regex patterns. Respects `.gitignore` automatically.
+Recursively scans every file in the current directory for hardcoded secrets, credentials, and PII using 26 built-in regex patterns. Respects `.gitignore` automatically.
+
+For JavaScript, TypeScript, TSX, and JSX files, the scanner automatically uses an AST-based pass (SAST) instead of plain regex. This eliminates false positives from comments and JSX text content, and additionally flags dangerous API patterns (XSS sinks, code injection, command injection). See [SAST for JS/TS](#sast-static-analysis-for-jsts) below.
 
 ```
 oxide-ci scan [OPTIONS]
@@ -192,21 +204,85 @@ oxide-ci scan --format json | jq '.findings[].rule'
 **Sample output (text):**
 ```
 ℹ️  Starting secret and PII scan...
-⚠️  Found 2 potential issue(s):
-  - [AWS Access Key] src/config.rs:14
-  - [GCP Service Account Key] credentials/service_account.json:3
-Error: Scan failed: 2 secret(s)/PII found. Review the findings above.
+ℹ️  Running SAST checks...
+ℹ️  SAST: scanning 12 JS/TS file(s)...
+⚠️  Found 3 potential issue(s):
+  - [AWS Access Key] src/config.ts:14
+  - [SAST/EvalUsage] src/utils/parser.js:42
+  - [SAST/InnerHTMLAssignment] src/components/Widget.tsx:88
+Error: Scan failed: 3 secret(s)/PII found. Review the findings above.
 ```
 
 **Sample output (`--format json`):**
 ```json
 {
-  "total": 2,
+  "total": 3,
   "findings": [
-    { "rule": "AWS Access Key", "file": "src/config.rs", "line": 14 },
-    { "rule": "GCP Service Account Key", "file": "credentials/service_account.json", "line": 3 }
+    { "rule": "AWS Access Key",           "file": "src/config.ts",            "line": 14 },
+    { "rule": "SAST/EvalUsage",           "file": "src/utils/parser.js",      "line": 42 },
+    { "rule": "SAST/InnerHTMLAssignment", "file": "src/components/Widget.tsx", "line": 88 }
   ]
 }
+```
+
+---
+
+#### SAST: Static Analysis for JS/TS
+
+When scanning `.js`, `.jsx`, `.ts`, or `.tsx` files, oxide-ci uses [tree-sitter](https://tree-sitter.github.io/tree-sitter/) to parse each file into an AST before running any checks. This gives two important improvements over plain regex:
+
+**1. String-literal scoping for secrets**
+
+Secret and PII regex patterns are applied only against string literal values (including template literals) — not against comments, import declarations, or JSX text content. This means:
+
+```ts
+// AKIAIOSFODNN7EXAMPLE123   ← comment: NOT flagged ✅
+const key = "AKIAIOSFODNN7EXAMPLE123";  // ← string literal: flagged ⚠️
+const msg = `Contact us at admin@example.com`;  // ← template literal: flagged ⚠️
+```
+
+```tsx
+// JSX text content is never flagged — only string attributes are:
+<p>contact@example.com</p>           // ← JSX text: NOT flagged ✅
+<Input placeholder="name@example.com" />  // ← string attribute: flagged ⚠️
+```
+
+**2. Dangerous pattern detection**
+
+SAST also runs 13 structural rules that detect dangerous API calls regardless of whether their arguments are string literals. These catch XSS sinks, code injection, and command injection patterns that no regex can reliably find:
+
+| Rule ID | What it flags |
+|---|---|
+| `SAST/DangerouslySetInnerHTML` | `<div dangerouslySetInnerHTML={{__html: ...}} />` in TSX/JSX |
+| `SAST/InnerHTMLAssignment` | `element.innerHTML = expr` |
+| `SAST/OuterHTMLAssignment` | `element.outerHTML = expr` |
+| `SAST/EvalUsage` | `eval(expr)` |
+| `SAST/FunctionConstructor` | `new Function(...)` |
+| `SAST/SetTimeoutString` | `setTimeout("code", delay)` — string as first arg |
+| `SAST/SetIntervalString` | `setInterval("code", delay)` — string as first arg |
+| `SAST/ChildProcessExec` | `child_process.exec(cmd)` |
+| `SAST/ChildProcessExecSync` | `child_process.execSync(cmd)` |
+| `SAST/ChildProcessSpawn` | `child_process.spawn(cmd, args)` |
+| `SAST/ChildProcessExecFile` | `child_process.execFile(cmd)` |
+| `SAST/DocumentWrite` | `document.write(expr)` |
+| `SAST/DocumentWriteln` | `document.writeln(expr)` |
+
+> **Note:** SAST runs automatically when `oxide-ci scan` encounters a JS/TS file — there is no separate command. Non-JS/TS files (`.py`, `.rs`, `.go`, `.yaml`, etc.) continue to use the regex scanner.
+
+**Disabling SAST or individual rules:**
+
+```toml
+# .oxideci.toml
+
+[sast]
+# Set to false to disable SAST entirely and fall back to regex for JS/TS files
+enabled = true
+
+# Suppress specific rules that generate noise in your codebase
+disabled_rules = [
+    "SAST/ChildProcessExec",     # if you intentionally shell out in a Node script
+    "SAST/DocumentWrite",        # if you have a legacy codebase that uses it
+]
 ```
 
 ---
@@ -245,9 +321,6 @@ oxide-ci lint
 
 # Lint a specific directory
 oxide-ci lint --dir ./infrastructure/k8s
-
-# Use the target_dir from .oxideci.toml
-oxide-ci lint
 ```
 
 **Sample output:**
@@ -274,8 +347,8 @@ spec:
         image: myapp:1.4.2          # pinned tag
         resources:
           limits:
-            cpu: "500m"             # cpu limit set
-            memory: "256Mi"         # memory limit set
+            cpu: "500m"
+            memory: "256Mi"
         readinessProbe:
           httpGet:
             path: /health
@@ -346,7 +419,7 @@ Error: Coverage gate failed: 74.8% < 80.0%
 
 ### `audit` — Dependency Vulnerability Audit
 
-Automatically detects your project's lock file, parses all pinned dependencies, and queries the [OSV (Open Source Vulnerabilities)](https://osv.dev) database in a single batch request. Works with Rust, Node.js, and Python projects.
+Automatically detects your project's lock file, parses all pinned dependencies, and queries the [OSV (Open Source Vulnerabilities)](https://osv.dev) database in a single batch request. Works across six ecosystems.
 
 ```
 oxide-ci audit
@@ -361,7 +434,10 @@ Options:
 |---|---|---|
 | `Cargo.lock` | `crates.io` | All registry packages |
 | `package-lock.json` | `npm` | v2/v3 format (`packages` map) |
+| `yarn.lock` | `npm` | v1 (classic) and v2/Berry |
+| `pnpm-lock.yaml` | `npm` | v5–v9 (slash and no-slash formats) |
 | `requirements.txt` | `PyPI` | Only `==` pinned versions |
+| `go.sum` | `Go` | All module checksums |
 
 **Examples:**
 
@@ -369,10 +445,13 @@ Options:
 # Rust project
 oxide-ci audit
 
-# Node.js project (auto-detected)
+# Node.js project (npm, yarn, or pnpm — auto-detected)
 oxide-ci audit
 
 # Python project (auto-detected)
+oxide-ci audit
+
+# Go project (auto-detected)
 oxide-ci audit
 ```
 
@@ -426,8 +505,6 @@ oxide-ci install-hooks --force
 ```
 
 > **Tip:** Combine with `oxide-ci scan --staged` in CI for a two-layer defence: developers catch issues locally before pushing, and CI catches anything that slips through.
-
----
 
 ---
 
@@ -601,9 +678,11 @@ oxide-ci reassure --threshold 10
 
 > **Tip:** Store `output/baseline.perf` in your repository (or as a CI artifact) after a confirmed good release. On every PR, oxide-ci compares the freshly measured `current.perf` against it and fails if performance has regressed.
 
+---
+
 ## Secret Detection Patterns
 
-OxideCI ships with 23 built-in patterns covering the most common cloud providers and services (including React Native / mobile-specific patterns). All patterns are applied per-line across every scanned file, and findings include the exact line number.
+OxideCI ships with 26 built-in patterns covering the most common cloud providers and services. All patterns are applied per-line for non-JS/TS files, and scoped to string literals for JS/TS/TSX/JSX files (no comment noise).
 
 ### AWS
 | Rule ID | What it detects |
@@ -620,8 +699,8 @@ OxideCI ships with 23 built-in patterns covering the most common cloud providers
 ### GCP / Google Cloud
 | Rule ID | What it detects |
 |---|---|
-| `Google API Key` | Browser/server API keys (`AIza…35 chars`) |
-| `GCP Service Account Key` | Service account JSON files (`"type": "service_account"`) |
+| `Google API Key` | Browser/server API keys (`AIza…35 chars`); also catches Firebase API keys |
+| `GCP Service Account Key` | Service account JSON files (`"type": "service_account"`); also catches `google-services.json` |
 | `GCP OAuth2 Token` | Short-lived access tokens (`ya29.…`) |
 
 ### DigitalOcean
@@ -661,7 +740,7 @@ OxideCI ships with 23 built-in patterns covering the most common cloud providers
 | Rule ID | What it detects |
 |---|---|
 | `Expo Access Token` | EAS CLI robot/personal tokens (`expa_…40+ chars`) |
-| `Sentry DSN` | Error reporting DSNs (ingest.sentry.io format) |
+| `Sentry DSN` | Error reporting DSNs (`https://key@o123.ingest.sentry.io/project`) |
 | `Mapbox Secret Token` | Secret tokens (`sk.eyJ…`); public tokens (`pk.eyJ…`) are not flagged |
 
 ### PII
@@ -669,6 +748,17 @@ OxideCI ships with 23 built-in patterns covering the most common cloud providers
 |---|---|
 | `Generic PII (SSN)` | US Social Security Numbers (`XXX-XX-XXXX`) |
 | `Generic PII (Email)` | Email addresses |
+
+### Shannon entropy detection
+
+In addition to the named patterns, oxide-ci flags high-entropy tokens that don't match any known pattern — catching unrecognised API keys, random secrets, and opaque credentials:
+
+```toml
+[scan]
+entropy           = true   # enable/disable (default: true)
+entropy_threshold = 4.5    # Shannon entropy score; lower = more sensitive (default: 4.5)
+entropy_min_length = 20    # minimum token length before entropy is checked (default: 20)
+```
 
 ### Adding custom patterns
 
@@ -681,6 +771,58 @@ extra_patterns = [
   { name = "Database URL",       regex = "postgres://[^@]+@[^/]+" },
 ]
 ```
+
+---
+
+## SAST Rules Reference
+
+The following 13 rules are checked on all `.js`, `.jsx`, `.ts`, and `.tsx` files. They use tree-sitter AST queries and fire on the structure of the code, not on string content.
+
+### XSS sinks
+
+| Rule ID | Trigger | Risk |
+|---|---|---|
+| `SAST/DangerouslySetInnerHTML` | `<El dangerouslySetInnerHTML={{__html: v}} />` | XSS via React bypass |
+| `SAST/InnerHTMLAssignment` | `el.innerHTML = expr` | DOM XSS |
+| `SAST/OuterHTMLAssignment` | `el.outerHTML = expr` | DOM XSS |
+| `SAST/DocumentWrite` | `document.write(expr)` | Legacy DOM XSS |
+| `SAST/DocumentWriteln` | `document.writeln(expr)` | Legacy DOM XSS |
+
+### Code injection
+
+| Rule ID | Trigger | Risk |
+|---|---|---|
+| `SAST/EvalUsage` | `eval(expr)` | Arbitrary code execution |
+| `SAST/FunctionConstructor` | `new Function(...)` | Arbitrary code execution |
+| `SAST/SetTimeoutString` | `setTimeout("string", delay)` | eval-equivalent |
+| `SAST/SetIntervalString` | `setInterval("string", delay)` | eval-equivalent |
+
+> `setTimeout` / `setInterval` are only flagged when the **first argument is a string or template literal**. Passing an arrow function or function reference is safe and not flagged.
+
+### Command injection (Node.js)
+
+| Rule ID | Trigger | Risk |
+|---|---|---|
+| `SAST/ChildProcessExec` | `cp.exec(cmd)` | OS command injection |
+| `SAST/ChildProcessExecSync` | `cp.execSync(cmd)` | OS command injection |
+| `SAST/ChildProcessSpawn` | `cp.spawn(cmd, args)` | OS command injection |
+| `SAST/ChildProcessExecFile` | `cp.execFile(path)` | OS command injection |
+
+> These rules fire on any `.exec()` / `.spawn()` / `.execFile()` / `.execSync()` member-expression call, regardless of which object it's called on. Adjust with `disabled_rules` if you have a legitimate use case.
+
+---
+
+## Suppressing Findings
+
+Add `// oxide-ci: ignore` on the same line as a finding to suppress it:
+
+```ts
+const legacyKey = "AKIAIOSFODNN7EXAMPLE123"; // oxide-ci: ignore
+el.innerHTML = sanitizedHtml;                 // oxide-ci: ignore
+eval(trustedAdminScript);                     // oxide-ci: ignore
+```
+
+Suppression works for both secret/PII findings and SAST dangerous-pattern findings. It is applied per-line — only the finding on that exact line is suppressed.
 
 ---
 
@@ -698,7 +840,7 @@ exclude_patterns = [
   "vendor/**",
 ]
 
-# Extra patterns on top of the 20 built-ins
+# Extra patterns on top of the 26 built-ins
 extra_patterns = [
   { name = "Internal Service Token", regex = "svc_[a-z0-9]{40}" },
 ]
@@ -707,6 +849,16 @@ extra_patterns = [
 entropy = true
 entropy_threshold = 4.5    # lower = more sensitive
 entropy_min_length = 20    # ignore tokens shorter than this
+
+[sast]
+# Set to false to disable SAST entirely for JS/TS files (falls back to plain regex)
+enabled = true
+
+# Suppress specific SAST rule IDs that generate noise in your codebase
+disabled_rules = [
+  # "SAST/ChildProcessExec",
+  # "SAST/EvalUsage",
+]
 
 [coverage]
 # Default LCOV file path (overridden by --file)
@@ -761,7 +913,7 @@ Machine-readable JSON written to stdout. Status messages and progress go to stde
 
 ```bash
 oxide-ci scan --format json
-oxide-ci scan --format json | jq '.findings[] | select(.rule | startswith("AWS"))'
+oxide-ci scan --format json | jq '.findings[] | select(.rule | startswith("SAST"))'
 ```
 
 ```json
@@ -769,8 +921,8 @@ oxide-ci scan --format json | jq '.findings[] | select(.rule | startswith("AWS")
   "total": 1,
   "findings": [
     {
-      "rule": "AWS Access Key",
-      "file": "./src/config.rs",
+      "rule": "SAST/EvalUsage",
+      "file": "./src/utils.js",
       "line": 42
     }
   ]
@@ -786,11 +938,11 @@ oxide-ci scan --format sarif > results.sarif
 
 In GitHub Actions:
 ```yaml
-- name: Secret Scan
+- name: Secret & SAST Scan
   run: oxide-ci scan --format sarif > results.sarif
 
 - name: Upload SARIF
-  uses: github/codeql-action/upload-sarif@v3
+  uses: github/codeql-action/upload-sarif@v4
   with:
     sarif_file: results.sarif
 ```
@@ -802,7 +954,7 @@ In GitHub Actions:
 | Code | Meaning |
 |---|---|
 | `0` | All checks passed — safe to proceed |
-| `1` | Check failed (secrets found, lint issues, coverage below threshold, vulnerabilities detected) or tool error |
+| `1` | Check failed (secrets found, SAST issues, lint issues, coverage below threshold, vulnerabilities detected) or tool error |
 
 > CI pipelines can rely on the exit code directly — no parsing required.
 
@@ -834,16 +986,16 @@ jobs:
             -o /usr/local/bin/oxide-ci
           chmod +x /usr/local/bin/oxide-ci
 
-      - name: Secret & PII Scan
+      - name: Secret, PII & SAST Scan
         run: oxide-ci scan
 
-      - name: Secret Scan (SARIF for PR annotations)
+      - name: Scan (SARIF for PR annotations)
         run: oxide-ci scan --format sarif > results.sarif
         if: always()
         continue-on-error: true
 
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: results.sarif
@@ -859,7 +1011,6 @@ jobs:
         run: oxide-ci audit
 
   # ── Performance gates (post-deploy) ────────────────────────────────────────
-  # Run after deployment so the URL is live and Reassure has produced output/.
   perf:
     runs-on: ubuntu-latest
     # needs: [deploy]    # uncomment and set your deploy job name
@@ -916,7 +1067,7 @@ variables:
     - curl -sL $OXIDE_CI_URL -o /usr/local/bin/oxide-ci
     - chmod +x /usr/local/bin/oxide-ci
 
-secret-scan:
+secret-and-sast-scan:
   stage: security
   <<: *install_oxide
   script:
@@ -980,7 +1131,7 @@ jobs:
               -o /usr/local/bin/oxide-ci
             chmod +x /usr/local/bin/oxide-ci
       - run:
-          name: Secret Scan
+          name: Secret, PII & SAST Scan
           command: oxide-ci scan
       - run:
           name: Kubernetes Lint
@@ -1020,7 +1171,8 @@ oxide-ci/
 ├── src/
 │   ├── main.rs                  # CLI entry point (clap)
 │   ├── modules/
-│   │   ├── scanner.rs           # Secret/PII scanning (rayon parallel)
+│   │   ├── scanner.rs           # Secret/PII scanning (rayon parallel) + SAST orchestration
+│   │   ├── sast.rs              # AST-based SAST for JS/TS/TSX/JSX (tree-sitter)
 │   │   ├── k8s_lint.rs          # Kubernetes manifest linter (serde_yaml)
 │   │   ├── coverage.rs          # LCOV parser and threshold gate
 │   │   ├── audit.rs             # OSV dependency audit (ureq)
@@ -1035,6 +1187,20 @@ oxide-ci/
     └── integration_test.rs      # End-to-end binary tests
 ```
 
+**Scan pipeline for JS/TS files:**
+
+```
+collect_scan_files()
+    │
+    ├── non-JS/TS files ──→ run_regex_scan()   (rayon parallel, per-line regex + entropy)
+    │
+    └── JS/TS files ──────→ run_sast_scan()    (rayon parallel, tree-sitter per file)
+                                │
+                                ├── parse AST (tree-sitter)
+                                ├── scan_string_literals()   ← secrets/PII scoped to string nodes
+                                └── scan_dangerous_patterns() ← 13 structural rules (XSS, eval, exec)
+```
+
 **Dependencies:**
 
 | Crate | Purpose |
@@ -1043,6 +1209,10 @@ oxide-ci/
 | `rayon` | CPU-bound parallelism (file scanning) |
 | `ignore` | gitignore-aware file walking |
 | `regex` | Secret pattern matching |
+| `tree-sitter` | AST parsing engine |
+| `tree-sitter-javascript` | JS/JSX grammar |
+| `tree-sitter-typescript` | TS/TSX grammar |
+| `streaming-iterator` | Required by tree-sitter 0.24 `QueryMatches` API |
 | `serde` + `serde_json` | JSON output (SARIF, audit) |
 | `serde_yaml` | Kubernetes YAML parsing |
 | `toml` | Config file parsing |
@@ -1054,13 +1224,13 @@ oxide-ci/
 
 ## React Native
 
-oxide-ci works with React Native and Expo projects out of the box. npm, Yarn, and pnpm lock files are all supported for dependency auditing, and Reassure — which was originally built *for* React Native by Callstack — is a first-class citizen.
+oxide-ci works with React Native and Expo projects out of the box. npm, Yarn, and pnpm lock files are all supported for dependency auditing, SAST runs automatically on all JS/TS/TSX files, and Reassure — which was originally built *for* React Native by Callstack — is a first-class citizen.
 
 ### Command compatibility
 
 | Command | React Native support | Notes |
 |---|---|---|
-| `scan` | ✅ Full | Detects secrets in JS/TS, config files, and CI YAML; gitignore-aware (skips `node_modules/` automatically) |
+| `scan` | ✅ Full | Secrets + PII + SAST on JS/TS/TSX files; gitignore-aware (skips `node_modules/` automatically) |
 | `audit` | ✅ Full | Reads `package-lock.json`, `yarn.lock`, and `pnpm-lock.yaml`; queries OSV for npm CVEs |
 | `coverage` | ✅ Full | Reads Jest LCOV output (`--coverageReporters=lcov`) |
 | `install-hooks` | ✅ Full | Pre-commit hook works in any git repo |
@@ -1069,6 +1239,28 @@ oxide-ci works with React Native and Expo projects out of the box. npm, Yarn, an
 | `lighthouse` | ⚠️ Web only | Audits a public URL; applicable if you ship a React Native Web build or marketing site |
 
 > **Note on Bun:** `bun.lockb` is a binary format that oxide-ci cannot parse. If you use Bun, run `bun install --save-text-lockfile` to generate a `bun.lock` text file alongside it, or use the `package-lock.json` fallback (`bun install --backend=npm`).
+
+---
+
+### React Native–specific secrets detected
+
+In addition to the 23 built-in cloud patterns, oxide-ci detects these patterns common in RN projects (scoped to string literals in JS/TS files):
+
+| Rule | What it detects |
+|---|---|
+| `Expo Access Token` | EAS CLI robot/personal tokens (`expa_…`) |
+| `Sentry DSN` | Sentry error-reporting DSNs (quota exhaustion + event read risk) |
+| `Mapbox Secret Token` | Mapbox secret tokens (`sk.eyJ…`); public tokens (`pk.eyJ…`) are not flagged |
+| `Google API Key` | Firebase API keys (`AIza…`) — same prefix as GCP, already built-in |
+| `GCP Service Account Key` | `google-services.json` leaks — already built-in |
+
+### SAST in React Native projects
+
+SAST is especially valuable in RN/Expo codebases because:
+
+- **`dangerouslySetInnerHTML`** — `SAST/DangerouslySetInnerHTML` catches this in TSX/JSX files. React Native itself doesn't render HTML, but React Native Web builds do.
+- **`eval`** — `SAST/EvalUsage` flags dynamic code evaluation in JS bundles. Metro bundler includes all JS in the final bundle, making eval a supply-chain risk.
+- **Node.js build scripts** — `SAST/ChildProcessExec` / `SAST/ChildProcessSpawn` flags shell commands in custom Metro config, build scripts, and Expo plugins.
 
 ---
 
@@ -1090,15 +1282,18 @@ exclude_patterns = [
     # Test fixtures that intentionally contain fake patterns
     "__tests__/**",
     "__mocks__/**",
-    # React Native generated
+    # React Native generated bundle
     "android/app/src/main/assets/index.android.bundle",
 ]
 
 # Shannon entropy catches random API keys not matched by explicit rules.
-# Tune down min_length for shorter RN-style tokens.
 entropy = true
 entropy_threshold = 4.5
 entropy_min_length = 20
+
+[sast]
+enabled = true
+# disabled_rules = []   # uncomment to suppress specific rules
 
 [coverage]
 file = "coverage/lcov.info"
@@ -1107,22 +1302,8 @@ min = 80.0
 [reassure]
 current  = "output/current.perf"
 baseline = "output/baseline.perf"
-threshold = 15.0   # % mean render-time regression allowed
+threshold = 15.0
 ```
-
----
-
-### React Native–specific secrets now detected
-
-In addition to the 20 built-in cloud patterns, oxide-ci detects these patterns common in RN projects:
-
-| Rule | What it detects |
-|---|---|
-| `Expo Access Token` | EAS CLI robot/personal tokens (`expa_…`) |
-| `Sentry DSN` | Sentry error-reporting DSNs (quota exhaustion + event read risk) |
-| `Mapbox Secret Token` | Mapbox secret tokens (`sk.eyJ…`); public tokens (`pk.eyJ…`) are not flagged |
-| `Google API Key` | Firebase API keys (`AIza…`) — same prefix as GCP, already built-in |
-| `GCP Service Account Key` | `google-services.json` leaks — already built-in |
 
 ---
 
@@ -1145,7 +1326,7 @@ jobs:
             -o /usr/local/bin/oxide-ci
           chmod +x /usr/local/bin/oxide-ci
 
-      - name: Secret & PII scan
+      - name: Secret, PII & SAST scan
         run: oxide-ci scan
 
       - name: Dependency audit (npm CVEs via OSV)
@@ -1184,6 +1365,236 @@ jobs:
 
 ---
 
+## Troubleshooting
+
+### SARIF upload fails with "Resource not accessible by integration"
+
+```
+Error: Resource not accessible by integration
+```
+
+This is **expected behaviour for private repositories**. Uploading SARIF results to the GitHub Security tab requires [GitHub Advanced Security (GHAS)](https://docs.github.com/en/get-started/learning-about-github/about-github-advanced-security), which is:
+
+- **Free** for public repositories
+- **Paid add-on** for private repositories (part of GitHub Enterprise)
+
+The `oxide-ci scan` step itself still runs and will fail the job if real secrets or SAST issues are found — your security gate is intact. The SARIF upload is only needed for inline PR annotations in the Security tab.
+
+**Options:**
+
+| Option | When to use |
+|---|---|
+| Keep `continue-on-error: true` (default) | Private repo, no GHAS — scan still blocks on findings |
+| Enable GitHub Advanced Security | You have GitHub Enterprise or want inline PR annotations |
+| Remove the SARIF upload steps | You don't need the Security tab integration |
+
+---
+
+### Too many false positives from lockfiles
+
+Package managers store sha512 integrity hashes in lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`). These look like high-entropy secrets and will generate hundreds of false positives.
+
+**Fix:** Exclude lockfiles in `.oxideci.toml`:
+
+```toml
+[scan]
+exclude_patterns = [
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "package-lock.json",
+    "Cargo.lock",   # sha256 checksums
+]
+```
+
+---
+
+### High-entropy false positives from SVGs and minified files
+
+Compiled or generated files commonly contain base64-encoded data and high-entropy strings that are not secrets:
+
+| File type | Reason flagged |
+|---|---|
+| `favicon.svg` | Embedded base64 image data |
+| `pdf.worker.min.mjs` / `*.min.js` | Minified third-party library code |
+| `*.chunk.js` | Webpack/Next.js build output |
+
+**Fix:** Exclude public assets and minified files:
+
+```toml
+[scan]
+exclude_patterns = [
+    "**/public/**",       # static assets directory
+    "**/*.min.js",
+    "**/*.min.mjs",
+    ".next/**",           # Next.js build output
+    "dist/**",
+    "build/**",
+]
+```
+
+---
+
+### Sentry config files flagged for PII (Email)
+
+Sentry DSN URLs contain an `@` symbol (e.g. `https://abc123@o123.ingest.sentry.io/456`), which triggers the `Generic PII (Email)` pattern. In properly configured projects the DSN is loaded from an environment variable (`NEXT_PUBLIC_SENTRY_DSN`), so the source files contain no hardcoded secret.
+
+**Fix:** Exclude Sentry and instrumentation config files:
+
+```toml
+[scan]
+exclude_patterns = [
+    "**/sentry.client.config.ts",
+    "**/sentry.server.config.ts",
+    "**/sentry.edge.config.ts",
+    "**/instrumentation.ts",
+]
+```
+
+> **Note:** If your Sentry DSN *is* hardcoded in these files, oxide-ci is correctly flagging it as a secret. Move it to an environment variable before excluding the file.
+
+---
+
+### Test fixtures flagged for PII (Email)
+
+Test files commonly use placeholder addresses like `user@example.com` as input fixtures. These are not real PII.
+
+**Fix:** Exclude test files and directories:
+
+```toml
+[scan]
+exclude_patterns = [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/__tests__/**",
+]
+```
+
+---
+
+### Emails in docs or UI components flagged as PII
+
+The `Generic PII (Email)` pattern catches any email-shaped string. Contact addresses in footers, documentation, form placeholders, or help pages are intentional — not secrets.
+
+**Fix:** Exclude the specific files or directories:
+
+```toml
+[scan]
+exclude_patterns = [
+    "docs/**",
+    "*.md",
+    "**/components/footer/**",
+    "**/components/forms/**",   # input placeholder emails
+    "**/app/**/help/**",        # contact emails on help pages
+]
+```
+
+---
+
+### `.oxideci.toml` itself is flagged
+
+If your config file contains example emails in comments (e.g. `user@example.com`), oxide-ci will flag the config file itself. Exclude it:
+
+```toml
+[scan]
+exclude_patterns = [
+    ".oxideci.toml",
+]
+```
+
+---
+
+### SAST rule fires on intentional usage
+
+Some SAST rules (e.g. `SAST/ChildProcessExec`) fire on any usage of a pattern, even when it's intentional in a build script or CLI tool. Two ways to handle this:
+
+**Option 1 — Inline suppression** (preferred for isolated occurrences):
+```js
+child_process.exec(buildCmd, callback); // oxide-ci: ignore
+```
+
+**Option 2 — Disable the rule globally** (preferred when the pattern is widespread):
+```toml
+[sast]
+disabled_rules = ["SAST/ChildProcessExec"]
+```
+
+---
+
+### Reference `.oxideci.toml` for a Next.js / React monorepo
+
+Copy this as a starting point and remove exclusions that don't apply to your project:
+
+```toml
+[scan]
+exclude_patterns = [
+    # Package manager lockfiles — sha512 integrity hashes, not secrets
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "package-lock.json",
+
+    # Public assets and minified files — base64 image data and bundled libraries
+    "**/public/**",
+    "**/*.min.js",
+    "**/*.min.mjs",
+
+    # Sentry / OpenTelemetry config — DSN URLs contain @ but are loaded from env vars
+    "**/sentry.client.config.ts",
+    "**/sentry.server.config.ts",
+    "**/sentry.edge.config.ts",
+    "**/instrumentation.ts",
+
+    # Test fixtures — placeholder emails used as test input, not real PII
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/__tests__/**",
+
+    # The config file itself — comments may contain example emails like user@example.com
+    ".oxideci.toml",
+
+    # Docs and markdown — example snippets and editorial emails
+    "docs/**",
+    "*.md",
+
+    # Build output
+    ".next/**",
+    "dist/**",
+    "build/**",
+    ".git/**",
+]
+
+entropy = true
+entropy_threshold = 4.5
+entropy_min_length = 20
+
+[sast]
+enabled = true
+# disabled_rules = ["SAST/ChildProcessExec"]
+```
+
+---
+
+### CodeQL Action v3 deprecation warning
+
+```
+Warning: CodeQL Action v3 will be deprecated in December 2026.
+```
+
+Update the SARIF upload action in your workflow from `@v3` to `@v4`:
+
+```yaml
+# Before
+uses: github/codeql-action/upload-sarif@v3
+
+# After
+uses: github/codeql-action/upload-sarif@v4
+```
+
+---
+
 ## Contributing
 
 OxideCI is open source under the [MIT License](LICENSE). Contributions are welcome.
@@ -1193,6 +1604,13 @@ OxideCI is open source under the [MIT License](LICENSE). Contributions are welco
 1. Add a `(&str, &str)` tuple to `BUILTIN_PATTERNS` in [src/modules/scanner.rs](src/modules/scanner.rs) inside the appropriate cloud provider section
 2. Add a matching `#[test]` for both a positive match and a false-positive check
 3. Run `cargo test` to verify
+
+**Adding a new SAST rule:**
+
+1. Add a `SastRule { id, query }` entry to `RULES` in [src/modules/sast.rs](src/modules/sast.rs)
+2. Write the tree-sitter S-expression query — the `@match` capture marks the outermost node for location reporting
+3. Add a unit test in the `#[cfg(test)]` block that asserts the rule fires and (if applicable) that a safe variant does not fire
+4. Run `cargo test` to verify
 
 **Adding a new lint rule:**
 
@@ -1204,6 +1622,7 @@ OxideCI is open source under the [MIT License](LICENSE). Contributions are welco
 ```bash
 cargo test          # all unit + integration tests
 cargo test scanner  # only scanner tests
+cargo test sast     # only SAST tests
 cargo clippy        # lint
 ```
 
