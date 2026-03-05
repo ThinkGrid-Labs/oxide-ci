@@ -1,9 +1,14 @@
-# OxideCI
+# OxideCI — Rust DevOps CLI: Secret Scanner, AST SAST, Kubernetes Linter & CI Quality Gates
 
 > A blazing-fast, language-agnostic DevOps CLI built in Rust — secret scanning, AST-based SAST, Kubernetes linting, coverage gates, dependency auditing, web performance auditing, and React component regression detection in a single zero-dependency binary.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build](https://img.shields.io/github/actions/workflow/status/ThinkGrid-Labs/oxide-ci/ci.yml?branch=main)](https://github.com/ThinkGrid-Labs/oxide-ci/actions)
+[![GitHub release](https://img.shields.io/github/v/release/ThinkGrid-Labs/oxide-ci)](https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest)
+[![Crates.io](https://img.shields.io/crates/v/oxide-ci)](https://crates.io/crates/oxide-ci)
+[![Downloads](https://img.shields.io/crates/d/oxide-ci)](https://crates.io/crates/oxide-ci)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-orange)](https://www.rust-lang.org)
+[![GitHub Stars](https://img.shields.io/github/stars/ThinkGrid-Labs/oxide-ci?style=social)](https://github.com/ThinkGrid-Labs/oxide-ci/stargazers)
 
 ---
 
