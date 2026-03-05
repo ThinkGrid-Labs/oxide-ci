@@ -14,8 +14,9 @@ exclude_patterns = [
     "src/modules/scanner.rs",
     # audit.rs test fixtures contain go.sum hash strings (not secrets)
     "src/modules/audit.rs",
-    # README contains pattern examples and documentation snippets
+    # README and docs contain pattern examples and documentation snippets
     "README.md",
+    "docs/**",
     # Cargo.lock contains SHA-256 package checksums (not secrets)
     "Cargo.lock",
     # Build artifacts
