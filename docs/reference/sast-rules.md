@@ -8,7 +8,7 @@ These rules fire on specific API calls regardless of whether arguments are strin
 
 | Rule ID | What it flags |
 |---|---|
-| `SAST/DangerouslySetInnerHTML` | `<div dangerouslySetInnerHTML={{__html: ...}} />` in TSX/JSX |
+| `SAST/DangerouslySetInnerHTML` | `dangerouslySetInnerHTML` prop with `__html` value in TSX/JSX |
 | `SAST/InnerHTMLAssignment` | `element.innerHTML = expr` |
 | `SAST/OuterHTMLAssignment` | `element.outerHTML = expr` |
 | `SAST/EvalUsage` | `eval(expr)` |
