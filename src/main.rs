@@ -120,9 +120,7 @@ fn main() -> anyhow::Result<()> {
             } else {
                 since.map(DiffMode::Since)
             };
-            if annotate
-                && let Some(env) = modules::github::detect_github_env()
-            {
+            if annotate && let Some(env) = modules::github::detect_github_env() {
                 let opts = ScanOpts {
                     format: output_format.clone(),
                     diff,
