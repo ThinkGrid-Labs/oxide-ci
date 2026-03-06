@@ -742,7 +742,7 @@ fn output_gitlab(findings: &[Finding]) -> Result<()> {
                 "version": env!("CARGO_PKG_VERSION")
             },
             "type": "sast",
-            "status": if findings.is_empty() { "success" } else { "success" }
+            "status": "success"
         }
     });
     println!("{}", serde_json::to_string_pretty(&report)?);
@@ -827,33 +827,33 @@ pub fn enrich_with_blame(findings: &mut [Finding]) {
             ])
             .output();
 
-        if let Ok(out) = output {
-            if out.status.success() {
-                let text = String::from_utf8_lossy(&out.stdout);
-                let mut commit = String::new();
-                let mut author = String::new();
-                let mut email = String::new();
-                for line in text.lines() {
-                    if commit.is_empty()
-                        && line.len() >= 8
-                        && line.chars().next().map_or(false, |c| c.is_ascii_hexdigit())
-                    {
-                        commit = line
-                            .split_whitespace()
-                            .next()
-                            .unwrap_or("")
-                            .chars()
-                            .take(8)
-                            .collect();
-                    } else if let Some(rest) = line.strip_prefix("author ") {
-                        author = rest.trim().to_string();
-                    } else if let Some(rest) = line.strip_prefix("author-mail ") {
-                        email = rest.trim().trim_matches(['<', '>']).to_string();
-                    }
+        if let Ok(out) = output
+            && out.status.success()
+        {
+            let text = String::from_utf8_lossy(&out.stdout);
+            let mut commit = String::new();
+            let mut author = String::new();
+            let mut email = String::new();
+            for line in text.lines() {
+                if commit.is_empty()
+                    && line.len() >= 8
+                    && line.chars().next().is_some_and(|c| c.is_ascii_hexdigit())
+                {
+                    commit = line
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or("")
+                        .chars()
+                        .take(8)
+                        .collect();
+                } else if let Some(rest) = line.strip_prefix("author ") {
+                    author = rest.trim().to_string();
+                } else if let Some(rest) = line.strip_prefix("author-mail ") {
+                    email = rest.trim().trim_matches(['<', '>']).to_string();
                 }
-                if !author.is_empty() {
-                    f.blame = Some(format!("{} <{}> @ {}", author, email, commit));
-                }
+            }
+            if !author.is_empty() {
+                f.blame = Some(format!("{} <{}> @ {}", author, email, commit));
             }
         }
     }

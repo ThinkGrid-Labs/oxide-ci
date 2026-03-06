@@ -222,12 +222,11 @@ fn main() -> anyhow::Result<()> {
             }
 
             // Normal scan path
-            if annotate {
-                if let Some(env) = modules::github::detect_github_env() {
-                    if let Err(e) = modules::github::annotate(&findings, &env) {
-                        eprintln!("oxide-ci: warning: GitHub annotation failed: {}", e);
-                    }
-                }
+            if annotate
+                && let Some(env) = modules::github::detect_github_env()
+                && let Err(e) = modules::github::annotate(&findings, &env)
+            {
+                eprintln!("oxide-ci: warning: GitHub annotation failed: {}", e);
             }
             modules::scanner::emit_findings(&findings, &output_format)?;
         }

@@ -328,7 +328,7 @@ fn cache_dir() -> Option<PathBuf> {
     let base = std::env::var("HOME")
         .ok()
         .map(PathBuf::from)
-        .or_else(|| dirs_home())?;
+        .or_else(dirs_home)?;
     let dir = base.join(".cache").join("oxide-ci").join("osv");
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)

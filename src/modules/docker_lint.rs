@@ -144,7 +144,7 @@ fn check_dockerfile(path: &Path, content: &str) -> Vec<LintIssue> {
             let env_body = trimmed[4..].trim();
             // Supports both `ENV KEY=value` and `ENV KEY value`
             let key = env_body
-                .split(|c: char| c == '=' || c == ' ')
+                .split(['=', ' '])
                 .next()
                 .unwrap_or("")
                 .to_uppercase();

@@ -65,10 +65,10 @@ fn collect_snapshots(dir: &str) -> Result<HashMap<PathBuf, SystemTime>> {
     for entry in walker.flatten() {
         if entry.file_type().is_some_and(|ft| ft.is_file()) {
             let path = entry.into_path();
-            if let Ok(meta) = std::fs::metadata(&path) {
-                if let Ok(mtime) = meta.modified() {
-                    map.insert(path, mtime);
-                }
+            if let Ok(meta) = std::fs::metadata(&path)
+                && let Ok(mtime) = meta.modified()
+            {
+                map.insert(path, mtime);
             }
         }
     }
@@ -81,7 +81,7 @@ fn diff_snapshots(
     new: &HashMap<PathBuf, SystemTime>,
 ) -> Vec<PathBuf> {
     new.iter()
-        .filter(|(path, mtime)| old.get(*path).map_or(true, |prev| *mtime > prev))
+        .filter(|(path, mtime)| old.get(*path).is_none_or(|prev| *mtime > prev))
         .map(|(path, _)| path.clone())
         .collect()
 }
