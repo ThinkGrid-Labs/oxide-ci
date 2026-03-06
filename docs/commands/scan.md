@@ -2,7 +2,7 @@
 
 Recursively scans every file in the current directory for hardcoded secrets, credentials, and PII using 26 built-in regex patterns. Respects `.gitignore` automatically.
 
-For JavaScript, TypeScript, TSX, and JSX files the scanner automatically runs an AST-based SAST pass using tree-sitter. This eliminates false positives from comments and JSX text, and additionally flags dangerous API patterns (XSS sinks, eval, command injection).
+For JavaScript, TypeScript, Python, and Go files the scanner automatically runs an AST-based SAST pass using tree-sitter. This eliminates false positives from comments and string non-literals, and additionally flags dangerous API patterns (XSS sinks, eval, command injection, unsafe deserialization).
 
 ## Usage
 
@@ -10,15 +10,16 @@ For JavaScript, TypeScript, TSX, and JSX files the scanner automatically runs an
 oxide-ci scan [OPTIONS]
 
 Options:
-  --format <FORMAT>    Output format: text (default), json, sarif
+  --format <FORMAT>    Output format: text (default), json, sarif, junit, gitlab
   --staged             Only scan git-staged files (git diff --cached)
   --since <COMMIT>     Only scan files changed since the given commit
   --history            Scan the entire git commit history (slow on large repos)
   --annotate           Post findings as a GitHub Check Run with per-line
-                       annotations and a PR review comment. Requires
+                       annotations and a rich PR summary comment. Requires
                        GITHUB_TOKEN, GITHUB_REPOSITORY, and GITHUB_SHA env vars.
   --update-baseline    Save current findings as the baseline (.oxide-baseline.json)
   --since-baseline     Only fail on findings not present in the saved baseline
+  --blame              Enrich each finding with git blame info (author + commit)
   -h, --help           Print help
 ```
 
@@ -40,16 +41,25 @@ oxide-ci scan --format sarif > results.sarif
 # Output JSON for custom tooling
 oxide-ci scan --format json | jq '.findings[].rule'
 
-# Post findings directly to the GitHub Checks tab
+# JUnit XML for Jenkins / Azure DevOps
+oxide-ci scan --format junit > results.xml
+
+# GitLab SAST Security Scanner JSON
+oxide-ci scan --format gitlab > gl-sast-report.json
+
+# Enrich findings with git blame (author + commit hash)
+oxide-ci scan --blame
+
+# Post findings directly to the GitHub Checks tab + PR summary comment
 GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
 GITHUB_REPOSITORY=owner/repo \
 GITHUB_SHA=${{ github.sha }} \
 oxide-ci scan --annotate
 ```
 
-## AST-Based SAST for JS/TS
+## AST-Based SAST for JS/TS/Python/Go
 
-When scanning `.js`, `.jsx`, `.ts`, or `.tsx` files, oxide-ci uses tree-sitter to parse each file into a real AST. This provides:
+When scanning `.js`, `.jsx`, `.ts`, `.tsx`, `.py`, or `.go` files, oxide-ci uses tree-sitter to parse each file into a real AST. This provides:
 
 **1. String-literal scoping** — secret patterns only fire inside string and template literals, not comments or JSX text:
 
@@ -63,9 +73,9 @@ const key = "AKIAIOSFODNN7EXAMPLE123";  // ← string literal: flagged
 <Input placeholder="name@example.com" /> // ← string attribute: flagged
 ```
 
-**2. Dangerous pattern detection** — 13 structural rules that catch XSS, eval, and command injection regardless of whether arguments are literals. See [SAST Rules](/reference/sast-rules) for the full list.
+**2. Dangerous pattern detection** — structural rules that catch XSS, eval, command injection, unsafe deserialization, and more regardless of whether arguments are literals. See [SAST Rules](/reference/sast-rules) for the full list.
 
-**3. Code smell rules** — flags long functions, too many parameters, and deep nesting. See [SAST Rules](/reference/sast-rules).
+**3. Code smell rules** — flags long functions, too many parameters, and deep nesting (JS/TS only). See [SAST Rules](/reference/sast-rules).
 
 ## Baseline mode
 
@@ -112,9 +122,16 @@ el.innerHTML = sanitizedHtml;                 // oxide-ci: ignore
 ```
 ℹ️  Starting secret and PII scan...
 ℹ️  Running SAST checks...
+ℹ️  SAST: scanning 14 file(s)...
 ⚠️  Found 3 potential issue(s):
-  - [AWS Access Key] src/config.ts:14
-  - [SAST/EvalUsage] src/utils/parser.js:42
-  - [SAST/InnerHTMLAssignment] src/components/Widget.tsx:88
+  - [CRITICAL] [AWS Access Key] src/config.ts:14
+  - [CRITICAL] [SAST/EvalUsage] src/utils/parser.js:42
+  - [HIGH] [SAST/InnerHTMLAssignment] src/components/Widget.tsx:88
 Error: Scan failed: 3 secret(s)/PII found.
+```
+
+With `--blame`:
+```
+  - [CRITICAL] [AWS Access Key] src/config.ts:14
+    blame: Alice Smith <alice@example.com> (abc12345)
 ```

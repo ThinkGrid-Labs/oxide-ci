@@ -302,3 +302,59 @@ pub fn load() -> Config {
     }
     Config::default()
 }
+
+/// Apply a named profile on top of an already-loaded config.
+///
+/// Profiles adjust thresholds without requiring a config file change:
+///   `strict`  — tighter quality gates (higher coverage, lower entropy threshold)
+///   `relaxed` — looser gates (lower coverage, higher entropy threshold)
+///   `ci`      — CI-optimised: strict gates + SAST enabled, no interactive output
+pub fn apply_profile(cfg: &mut Config, profile: &str) {
+    match profile {
+        "strict" => {
+            // Raise coverage threshold to 90 % if not already higher
+            if cfg.coverage.min < 90.0 {
+                cfg.coverage.min = 90.0;
+            }
+            // Lower entropy threshold → more sensitive secret detection
+            if cfg.scan.entropy_threshold > 3.5 {
+                cfg.scan.entropy_threshold = 3.5;
+            }
+            // Ensure SAST is on
+            cfg.sast.enabled = true;
+            // Stricter Lighthouse scores
+            if cfg.lighthouse.min_performance < 90 {
+                cfg.lighthouse.min_performance = 90;
+            }
+            if cfg.lighthouse.min_accessibility < 95 {
+                cfg.lighthouse.min_accessibility = 95;
+            }
+        }
+        "relaxed" => {
+            // Lower coverage threshold to 70 % if not already lower
+            if cfg.coverage.min > 70.0 {
+                cfg.coverage.min = 70.0;
+            }
+            // Raise entropy threshold → fewer false positives
+            if cfg.scan.entropy_threshold < 5.0 {
+                cfg.scan.entropy_threshold = 5.0;
+            }
+        }
+        "ci" => {
+            // Same as strict, but also disable code-smell rules that produce noise in CI
+            if cfg.coverage.min < 80.0 {
+                cfg.coverage.min = 80.0;
+            }
+            cfg.sast.enabled = true;
+            // Code smell rules are optional noise in CI — disable if not already set
+            for rule in &["SMELL/LongFunction", "SMELL/TooManyParameters", "SMELL/DeepNesting"] {
+                if !cfg.sast.disabled_rules.iter().any(|r| r == rule) {
+                    cfg.sast.disabled_rules.push(rule.to_string());
+                }
+            }
+        }
+        other => {
+            eprintln!("⚠️  Unknown profile '{}'. Valid profiles: strict, relaxed, ci", other);
+        }
+    }
+}

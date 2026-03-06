@@ -69,7 +69,24 @@ threshold = 15.0               # maximum regression % before failing
 
 ## Precedence
 
-CLI flag > `.oxideci.toml` > built-in default
+CLI flag > `--profile` override > `.oxideci.toml` > built-in default
+
+## Profiles
+
+Apply a named quality profile on top of your loaded config with the global `--profile` flag:
+
+```bash
+oxide-ci --profile strict scan
+oxide-ci --profile ci scan --staged
+```
+
+| Profile | Effect |
+|---|---|
+| `strict` | Coverage ≥ 90%, entropy threshold 3.5 (more sensitive), Lighthouse performance ≥ 90, accessibility ≥ 95, SAST enabled |
+| `relaxed` | Coverage ≥ 70%, entropy threshold 5.0 (fewer false positives) |
+| `ci` | Coverage ≥ 80%, SAST enabled, code-smell rules (`SMELL/*`) disabled to reduce noise |
+
+Profiles modify the in-memory config only — they never write to `.oxideci.toml`.
 
 ## Inline suppression
 

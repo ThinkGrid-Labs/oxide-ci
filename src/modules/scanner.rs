@@ -99,19 +99,90 @@ const BUILTIN_PATTERNS: &[(&str, &str)] = &[
     ),
 ];
 
+/// Map a rule ID to its severity level: "critical", "high", "medium", or "low".
+pub fn severity_for_rule(rule_id: &str) -> &'static str {
+    match rule_id {
+        "AWS Access Key"
+        | "AWS Secret Key"
+        | "Azure Storage Connection String"
+        | "GCP Service Account Key"
+        | "PEM Private Key"
+        | "HashiCorp Vault Token"
+        | "Stripe Secret Key"
+        | "SendGrid API Key"
+        | "GitHub PAT (classic)"
+        | "GitHub PAT (fine-grained)" => "critical",
+
+        "Google API Key"
+        | "GCP OAuth2 Token"
+        | "Azure SAS Token"
+        | "DigitalOcean PAT"
+        | "Alibaba Cloud Access Key ID"
+        | "Slack Webhook"
+        | "Stripe Publishable Key"
+        | "Mailgun API Key"
+        | "Twilio Account SID"
+        | "Expo Access Token"
+        | "Mapbox Secret Token"
+        | "JWT Token" => "high",
+
+        "Sentry DSN" => "medium",
+
+        "Generic PII (SSN)" | "Generic PII (Email)" => "low",
+
+        r if r.starts_with("SAST/ChildProcess")
+            || r == "SAST/EvalUsage"
+            || r == "SAST/FunctionConstructor"
+            || r == "SAST/PythonEval"
+            || r == "SAST/PythonExec" =>
+        {
+            "critical"
+        }
+        r if r == "SAST/PythonPickle"
+            || r == "SAST/PythonSubprocessShell"
+            || r == "SAST/GoExecCommand" =>
+        {
+            "high"
+        }
+        r if r.starts_with("SAST/") => "high",
+        r if r.starts_with("SMELL/") => "low",
+
+        _ => "medium", // High-entropy strings, custom patterns
+    }
+}
+
 pub struct Finding {
     pub path: PathBuf,
     pub rule_id: String,
     pub line: usize,
     /// Set to the short commit hash when this finding came from a `--history` scan.
     pub commit: Option<String>,
+    /// Severity level: "critical", "high", "medium", or "low"
+    pub severity: String,
+    /// Git blame info (author + commit), populated only with `--blame` flag
+    pub blame: Option<String>,
 }
 
-#[derive(Clone)]
+/// Convenience constructor that auto-derives severity from the rule ID.
+pub(crate) fn make_finding(
+    path: PathBuf,
+    rule_id: String,
+    line: usize,
+    commit: Option<String>,
+) -> Finding {
+    let severity = severity_for_rule(&rule_id).to_string();
+    Finding { path, rule_id, line, commit, severity, blame: None }
+}
+
+#[derive(Clone, PartialEq)]
 pub enum OutputFormat {
     Text,
     Json,
     Sarif,
+    /// JUnit XML — consumed by most CI dashboards (Jenkins, GitLab, etc.)
+    Junit,
+    /// GitLab Security Scanner JSON — uploads to GitLab's vulnerability tab
+    Gitlab,
 }
 
 pub enum DiffMode {
@@ -128,11 +199,11 @@ pub struct ScanOpts<'a> {
     pub sast_config: &'a SastConfig,
 }
 
-/// Returns true for JS/TS source files that the SAST scanner handles.
-pub(crate) fn is_js_ts_file(path: &std::path::Path) -> bool {
+/// Returns true for files handled by the SAST scanner (JS/TS, Python, Go).
+pub(crate) fn is_sast_file(path: &std::path::Path) -> bool {
     matches!(
         path.extension().and_then(|e| e.to_str()),
-        Some("ts" | "tsx" | "js" | "jsx")
+        Some("ts" | "tsx" | "js" | "jsx" | "py" | "go")
     )
 }
 
@@ -316,21 +387,21 @@ fn run_history_scan(opts: &ScanOpts, all_patterns: &[(String, Regex)]) -> Result
 
             for (name, regex) in all_patterns {
                 if regex.is_match(line) {
-                    hits.push(Finding {
-                        path: path.clone(),
-                        rule_id: name.clone(),
-                        line: *line_no,
-                        commit: Some(commit.clone()),
-                    });
+                    hits.push(make_finding(
+                        path.clone(),
+                        name.clone(),
+                        *line_no,
+                        Some(commit.clone()),
+                    ));
                 }
             }
             for rule_id in check_entropy(line, opts.config) {
-                hits.push(Finding {
-                    path: path.clone(),
+                hits.push(make_finding(
+                    path.clone(),
                     rule_id,
-                    line: *line_no,
-                    commit: Some(commit.clone()),
-                });
+                    *line_no,
+                    Some(commit.clone()),
+                ));
             }
 
             if let Some(b) = &bar {
@@ -438,7 +509,7 @@ fn run_regex_scan(
     // When SAST is enabled, skip JS/TS files (SAST Phase 1 handles them with
     // context-aware, string-literal-scoped detection — fewer false positives).
     let scan_files: Vec<&PathBuf> = if opts.sast_config.enabled {
-        files.iter().filter(|p| !is_js_ts_file(p)).collect()
+        files.iter().filter(|p| !is_sast_file(p)).collect()
     } else {
         files.iter().collect()
     };
@@ -460,21 +531,21 @@ fn run_regex_scan(
                     }
                     for (name, regex) in all_patterns {
                         if regex.is_match(line) {
-                            file_findings.push(Finding {
-                                path: path.to_path_buf(),
-                                rule_id: name.clone(),
-                                line: line_no + 1,
-                                commit: None,
-                            });
+                            file_findings.push(make_finding(
+                                path.to_path_buf(),
+                                name.clone(),
+                                line_no + 1,
+                                None,
+                            ));
                         }
                     }
                     for rule_id in check_entropy(line, opts.config) {
-                        file_findings.push(Finding {
-                            path: path.to_path_buf(),
+                        file_findings.push(make_finding(
+                            path.to_path_buf(),
                             rule_id,
-                            line: line_no + 1,
-                            commit: None,
-                        });
+                            line_no + 1,
+                            None,
+                        ));
                     }
                 }
             }
@@ -499,18 +570,30 @@ fn output_json(findings: &[Finding]) -> Result<()> {
         "total": findings.len(),
         "findings": findings.iter().map(|f| {
             let mut entry = json!({
-                "rule": f.rule_id,
-                "file": f.path.to_string_lossy(),
-                "line": f.line,
+                "rule":     f.rule_id,
+                "severity": f.severity,
+                "file":     f.path.to_string_lossy(),
+                "line":     f.line,
             });
             if let Some(ref hash) = f.commit {
                 entry["commit"] = json!(hash);
+            }
+            if let Some(ref blame) = f.blame {
+                entry["blame"] = json!(blame);
             }
             entry
         }).collect::<Vec<_>>()
     });
     println!("{}", serde_json::to_string_pretty(&out)?);
     Ok(())
+}
+
+fn sarif_level(severity: &str) -> &'static str {
+    match severity {
+        "critical" | "high" => "error",
+        "medium" => "warning",
+        _ => "note",
+    }
 }
 
 fn output_sarif(findings: &[Finding]) -> Result<()> {
@@ -538,7 +621,7 @@ fn output_sarif(findings: &[Finding]) -> Result<()> {
             };
             json!({
                 "ruleId": f.rule_id,
-                "level": "error",
+                "level": sarif_level(&f.severity),
                 "message": { "text": msg },
                 "locations": [{
                     "physicalLocation": {
@@ -572,12 +655,109 @@ fn output_sarif(findings: &[Finding]) -> Result<()> {
     Ok(())
 }
 
+fn output_junit(findings: &[Finding]) -> Result<()> {
+    let n = findings.len();
+    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    xml.push_str(&format!(
+        "<testsuites name=\"oxide-ci\" tests=\"{n}\" failures=\"{n}\" errors=\"0\" time=\"0\">\n"
+    ));
+    xml.push_str(&format!(
+        "  <testsuite name=\"secret-and-sast-scan\" tests=\"{n}\" failures=\"{n}\" errors=\"0\" time=\"0\">\n"
+    ));
+    for f in findings {
+        let file = f.path.to_string_lossy();
+        let name = xml_escape(&format!("[{}] {}:{}", f.rule_id, file, f.line));
+        let classname = xml_escape(&file);
+        let msg = xml_escape(&format!(
+            "{} detected at line {} [{}]",
+            f.rule_id, f.line, f.severity
+        ));
+        let body = xml_escape(&format!(
+            "[{}] {}:{} | severity: {}",
+            f.rule_id, file, f.line, f.severity
+        ));
+        xml.push_str(&format!(
+            "    <testcase name=\"{name}\" classname=\"{classname}\">\n"
+        ));
+        xml.push_str(&format!(
+            "      <failure message=\"{msg}\" type=\"{sev}\">{body}</failure>\n",
+            sev = f.severity
+        ));
+        xml.push_str("    </testcase>\n");
+    }
+    xml.push_str("  </testsuite>\n</testsuites>\n");
+    println!("{}", xml);
+    Ok(())
+}
+
+fn output_gitlab(findings: &[Finding]) -> Result<()> {
+    let gitlab_severity = |s: &str| match s {
+        "critical" => "Critical",
+        "high" => "High",
+        "medium" => "Medium",
+        "low" => "Low",
+        _ => "Info",
+    };
+
+    let vulns: Vec<_> = findings
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            json!({
+                "id": format!("oxide-ci-{}", i),
+                "category": "sast",
+                "name": f.rule_id,
+                "description": format!("{} detected", f.rule_id),
+                "severity": gitlab_severity(&f.severity),
+                "confidence": "High",
+                "scanner": { "id": "oxide-ci", "name": "OxideCI" },
+                "location": {
+                    "file": f.path.to_string_lossy(),
+                    "start_line": f.line,
+                    "end_line": f.line
+                },
+                "identifiers": [{
+                    "type": "oxide_ci_rule",
+                    "name": f.rule_id,
+                    "value": f.rule_id
+                }]
+            })
+        })
+        .collect();
+
+    let report = json!({
+        "version": "15.0.6",
+        "vulnerabilities": vulns,
+        "scan": {
+            "scanner": {
+                "id": "oxide-ci",
+                "name": "OxideCI",
+                "version": env!("CARGO_PKG_VERSION")
+            },
+            "type": "sast",
+            "status": if findings.is_empty() { "success" } else { "success" }
+        }
+    });
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(())
+}
+
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
 pub fn emit_findings(findings: &[Finding], format: &OutputFormat) -> Result<()> {
     if findings.is_empty() {
         match format {
             OutputFormat::Text => terminal::success("No secrets or PII found."),
             OutputFormat::Json => output_json(findings)?,
             OutputFormat::Sarif => output_sarif(findings)?,
+            OutputFormat::Junit => output_junit(findings)?,
+            OutputFormat::Gitlab => output_gitlab(findings)?,
         }
         return Ok(());
     }
@@ -591,23 +771,76 @@ pub fn emit_findings(findings: &[Finding], format: &OutputFormat) -> Result<()> 
                     .as_deref()
                     .map(|h| format!(" (commit {})", &h[..8.min(h.len())]))
                     .unwrap_or_default();
+                let blame_note = f
+                    .blame
+                    .as_deref()
+                    .map(|b| format!(" — {}", b))
+                    .unwrap_or_default();
                 eprintln!(
-                    "  - [{}] {}:{}{}",
+                    "  - [{}] [{}] {}:{}{}{}",
+                    f.severity.to_uppercase(),
                     f.rule_id,
                     f.path.display(),
                     f.line,
-                    commit_note
+                    commit_note,
+                    blame_note
                 );
             }
         }
         OutputFormat::Json => output_json(findings)?,
         OutputFormat::Sarif => output_sarif(findings)?,
+        OutputFormat::Junit => output_junit(findings)?,
+        OutputFormat::Gitlab => output_gitlab(findings)?,
     }
 
     anyhow::bail!(
         "Scan failed: {} secret(s)/PII found. Review the findings above.",
         findings.len()
     );
+}
+
+// ── Git blame enrichment ──────────────────────────────────────────────────────
+
+/// Run `git blame` for each finding and populate `finding.blame` with a short
+/// summary: `"Author Name <email> @ abc12345"`. Findings for which blame cannot
+/// be determined are left with `blame: None`.
+pub fn enrich_with_blame(findings: &mut [Finding]) {
+    for f in findings.iter_mut() {
+        if f.path.as_os_str().is_empty() {
+            continue;
+        }
+        let output = Command::new("git")
+            .args([
+                "blame",
+                "-L",
+                &format!("{},{}", f.line, f.line),
+                "--porcelain",
+                "--",
+                &f.path.to_string_lossy(),
+            ])
+            .output();
+
+        if let Ok(out) = output {
+            if out.status.success() {
+                let text = String::from_utf8_lossy(&out.stdout);
+                let mut commit = String::new();
+                let mut author = String::new();
+                let mut email = String::new();
+                for line in text.lines() {
+                    if commit.is_empty() && line.len() >= 8 && line.chars().next().map_or(false, |c| c.is_ascii_hexdigit()) {
+                        commit = line.split_whitespace().next().unwrap_or("").chars().take(8).collect();
+                    } else if let Some(rest) = line.strip_prefix("author ") {
+                        author = rest.trim().to_string();
+                    } else if let Some(rest) = line.strip_prefix("author-mail ") {
+                        email = rest.trim().trim_matches(['<', '>']).to_string();
+                    }
+                }
+                if !author.is_empty() {
+                    f.blame = Some(format!("{} <{}> @ {}", author, email, commit));
+                }
+            }
+        }
+    }
 }
 
 // ── Main entry ────────────────────────────────────────────────────────────────
