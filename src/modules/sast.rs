@@ -1222,8 +1222,9 @@ mod tests {
         let sast = SastConfig {
             custom_rules: vec![CustomSastRule {
                 id: "TEST/NoEval".into(),
-                query: r#"(call_expression function: (identifier) @_fn (#eq? @_fn "eval")) @match"#
-                    .into(),
+                query:
+                    r#"(call_expression function: (identifier) @_fn (#eq? @_fn "eval")) @match"#
+                        .into(),
             }],
             ..Default::default()
         };
@@ -1246,8 +1247,9 @@ mod tests {
         let sast = SastConfig {
             custom_rules: vec![CustomSastRule {
                 id: "TEST/NoEval".into(),
-                query: r#"(call_expression function: (identifier) @_fn (#eq? @_fn "eval")) @match"#
-                    .into(),
+                query:
+                    r#"(call_expression function: (identifier) @_fn (#eq? @_fn "eval")) @match"#
+                        .into(),
             }],
             disabled_rules: vec!["TEST/NoEval".into()],
             ..Default::default()

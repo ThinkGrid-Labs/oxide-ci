@@ -193,7 +193,8 @@ fn build_pr_summary(findings: &[Finding]) -> String {
     let total = findings.len();
 
     if total == 0 {
-        return "## oxide-ci scan results\n\n**No issues found.** All checks passed.\n".to_string();
+        return "## oxide-ci scan results\n\n**No issues found.** All checks passed.\n"
+            .to_string();
     }
 
     let critical = findings.iter().filter(|f| f.severity == "critical").count();

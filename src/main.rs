@@ -272,7 +272,8 @@ fn main() -> anyhow::Result<()> {
                 thresholds: LighthouseThresholds {
                     performance: min_performance.unwrap_or(cfg.lighthouse.min_performance),
                     accessibility: min_accessibility.unwrap_or(cfg.lighthouse.min_accessibility),
-                    best_practices: min_best_practices.unwrap_or(cfg.lighthouse.min_best_practices),
+                    best_practices: min_best_practices
+                        .unwrap_or(cfg.lighthouse.min_best_practices),
                     seo: min_seo.unwrap_or(cfg.lighthouse.min_seo),
                 },
                 api_key: key.or(cfg.lighthouse.api_key),
