@@ -160,11 +160,11 @@ fn main() -> anyhow::Result<()> {
             blame,
         } => {
             let output_format = match format.as_str() {
-                "json"   => OutputFormat::Json,
-                "sarif"  => OutputFormat::Sarif,
-                "junit"  => OutputFormat::Junit,
+                "json" => OutputFormat::Json,
+                "sarif" => OutputFormat::Sarif,
+                "junit" => OutputFormat::Junit,
                 "gitlab" => OutputFormat::Gitlab,
-                _        => OutputFormat::Text,
+                _ => OutputFormat::Text,
             };
             let diff = if history {
                 Some(DiffMode::History)
@@ -273,8 +273,7 @@ fn main() -> anyhow::Result<()> {
                 thresholds: LighthouseThresholds {
                     performance: min_performance.unwrap_or(cfg.lighthouse.min_performance),
                     accessibility: min_accessibility.unwrap_or(cfg.lighthouse.min_accessibility),
-                    best_practices: min_best_practices
-                        .unwrap_or(cfg.lighthouse.min_best_practices),
+                    best_practices: min_best_practices.unwrap_or(cfg.lighthouse.min_best_practices),
                     seo: min_seo.unwrap_or(cfg.lighthouse.min_seo),
                 },
                 api_key: key.or(cfg.lighthouse.api_key),

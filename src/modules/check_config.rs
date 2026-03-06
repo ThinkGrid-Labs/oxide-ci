@@ -35,11 +35,17 @@ pub fn run_check_config() -> Result<()> {
     eprintln!("  entropy             = {}", cfg.scan.entropy);
     eprintln!("  entropy_threshold   = {}", cfg.scan.entropy_threshold);
     eprintln!("  entropy_min_length  = {}", cfg.scan.entropy_min_length);
-    eprintln!("  extra_patterns      = {} custom pattern(s)", cfg.scan.extra_patterns.len());
+    eprintln!(
+        "  extra_patterns      = {} custom pattern(s)",
+        cfg.scan.extra_patterns.len()
+    );
     for p in &cfg.scan.extra_patterns {
         eprintln!("    • {} = {}", p.name, p.regex);
     }
-    eprintln!("  exclude_patterns    = {} pattern(s)", cfg.scan.exclude_patterns.len());
+    eprintln!(
+        "  exclude_patterns    = {} pattern(s)",
+        cfg.scan.exclude_patterns.len()
+    );
     for pat in &cfg.scan.exclude_patterns {
         eprintln!("    • {}", pat);
     }
@@ -51,11 +57,17 @@ pub fn run_check_config() -> Result<()> {
     eprintln!("  max_function_lines  = {}", cfg.sast.max_function_lines);
     eprintln!("  max_parameters      = {}", cfg.sast.max_parameters);
     eprintln!("  max_nesting_depth   = {}", cfg.sast.max_nesting_depth);
-    eprintln!("  disabled_rules      = {} rule(s)", cfg.sast.disabled_rules.len());
+    eprintln!(
+        "  disabled_rules      = {} rule(s)",
+        cfg.sast.disabled_rules.len()
+    );
     for r in &cfg.sast.disabled_rules {
         eprintln!("    • {}", r);
     }
-    eprintln!("  custom_rules        = {} rule(s)", cfg.sast.custom_rules.len());
+    eprintln!(
+        "  custom_rules        = {} rule(s)",
+        cfg.sast.custom_rules.len()
+    );
     for r in &cfg.sast.custom_rules {
         eprintln!("    • {}", r.id);
     }
@@ -85,8 +97,14 @@ pub fn run_check_config() -> Result<()> {
     );
     eprintln!("  strategy            = {}", cfg.lighthouse.strategy);
     eprintln!("  min_performance     = {}", cfg.lighthouse.min_performance);
-    eprintln!("  min_accessibility   = {}", cfg.lighthouse.min_accessibility);
-    eprintln!("  min_best_practices  = {}", cfg.lighthouse.min_best_practices);
+    eprintln!(
+        "  min_accessibility   = {}",
+        cfg.lighthouse.min_accessibility
+    );
+    eprintln!(
+        "  min_best_practices  = {}",
+        cfg.lighthouse.min_best_practices
+    );
     eprintln!("  min_seo             = {}", cfg.lighthouse.min_seo);
 
     // ── Reassure ──────────────────────────────────────────────────────────────
@@ -99,7 +117,10 @@ pub fn run_check_config() -> Result<()> {
     // ── Pipeline ──────────────────────────────────────────────────────────────
     eprintln!();
     eprintln!("[pipeline]");
-    eprintln!("  steps               = {} step(s)", cfg.pipeline.steps.len());
+    eprintln!(
+        "  steps               = {} step(s)",
+        cfg.pipeline.steps.len()
+    );
     for s in &cfg.pipeline.steps {
         eprintln!("    • {}", s);
     }
@@ -113,7 +134,9 @@ fn print_defaults() {
     eprintln!();
     eprintln!("Default values that will be used:");
     eprintln!("  [scan]     entropy=true, threshold=4.5, min_length=20");
-    eprintln!("  [sast]     enabled=true, max_function_lines=50, max_parameters=5, max_nesting_depth=4");
+    eprintln!(
+        "  [sast]     enabled=true, max_function_lines=50, max_parameters=5, max_nesting_depth=4"
+    );
     eprintln!("  [coverage] file=coverage/lcov.info, min=80%");
     eprintln!("  [lint]     target_dir=.");
     eprintln!("  [docker]   dockerfile=Dockerfile");

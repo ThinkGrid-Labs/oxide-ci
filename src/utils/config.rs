@@ -347,14 +347,21 @@ pub fn apply_profile(cfg: &mut Config, profile: &str) {
             }
             cfg.sast.enabled = true;
             // Code smell rules are optional noise in CI — disable if not already set
-            for rule in &["SMELL/LongFunction", "SMELL/TooManyParameters", "SMELL/DeepNesting"] {
+            for rule in &[
+                "SMELL/LongFunction",
+                "SMELL/TooManyParameters",
+                "SMELL/DeepNesting",
+            ] {
                 if !cfg.sast.disabled_rules.iter().any(|r| r == rule) {
                     cfg.sast.disabled_rules.push(rule.to_string());
                 }
             }
         }
         other => {
-            eprintln!("⚠️  Unknown profile '{}'. Valid profiles: strict, relaxed, ci", other);
+            eprintln!(
+                "⚠️  Unknown profile '{}'. Valid profiles: strict, relaxed, ci",
+                other
+            );
         }
     }
 }

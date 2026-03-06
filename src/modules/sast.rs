@@ -452,12 +452,7 @@ fn scan_dangerous_patterns(
                     continue;
                 }
 
-                findings.push(make_finding(
-                    path.to_path_buf(),
-                    id.clone(),
-                    line_no,
-                    None,
-                ));
+                findings.push(make_finding(path.to_path_buf(), id.clone(), line_no, None));
             }
         }
     }
@@ -1007,7 +1002,10 @@ mod tests {
         let (sast, scan) = default_configs();
         let f = write_tmp("md", "# Hello\neval(x)\n");
         let findings = scan_file(f.path(), &sast, &[], &scan, &[]);
-        assert!(findings.is_empty(), "Markdown file should be skipped by SAST");
+        assert!(
+            findings.is_empty(),
+            "Markdown file should be skipped by SAST"
+        );
     }
 
     // ── Python SAST ───────────────────────────────────────────────────────────
@@ -1053,7 +1051,9 @@ mod tests {
         let f = write_tmp("py", "import subprocess\nsubprocess.run(cmd, shell=True)\n");
         let findings = scan_file(f.path(), &sast, &[], &scan, &[]);
         assert!(
-            findings.iter().any(|x| x.rule_id == "SAST/PythonSubprocessShell"),
+            findings
+                .iter()
+                .any(|x| x.rule_id == "SAST/PythonSubprocessShell"),
             "subprocess with shell=True should be flagged, got: {:?}",
             findings.iter().map(|x| &x.rule_id).collect::<Vec<_>>()
         );

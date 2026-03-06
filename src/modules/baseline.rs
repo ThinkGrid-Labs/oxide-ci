@@ -62,8 +62,7 @@ pub fn filter_new_findings<'a>(
     findings: &'a [Finding],
     baseline: &[BaselineEntry],
 ) -> Vec<&'a Finding> {
-    let known: std::collections::HashSet<BaselineEntry> =
-        baseline.iter().cloned().collect();
+    let known: std::collections::HashSet<BaselineEntry> = baseline.iter().cloned().collect();
 
     findings
         .iter()

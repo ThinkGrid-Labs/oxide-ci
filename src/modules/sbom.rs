@@ -25,7 +25,12 @@ fn parse_cargo_lock(content: &str) -> Vec<SbomPackage> {
             let name = pkg.get("name")?.as_str()?.to_string();
             let version = pkg.get("version")?.as_str()?.to_string();
             let purl = format!("pkg:cargo/{}@{}", name, version);
-            Some(SbomPackage { name, version, ecosystem: "crates.io", purl })
+            Some(SbomPackage {
+                name,
+                version,
+                ecosystem: "crates.io",
+                purl,
+            })
         })
         .collect()
 }
@@ -46,7 +51,12 @@ fn parse_package_lock(content: &str) -> Vec<SbomPackage> {
             let name = key.trim_start_matches("node_modules/").to_string();
             let version = val.get("version")?.as_str()?.to_string();
             let purl = format!("pkg:npm/{}@{}", name, version);
-            Some(SbomPackage { name, version, ecosystem: "npm", purl })
+            Some(SbomPackage {
+                name,
+                version,
+                ecosystem: "npm",
+                purl,
+            })
         })
         .collect()
 }
@@ -63,7 +73,12 @@ fn parse_requirements_txt(content: &str) -> Vec<SbomPackage> {
                 let name = line[..idx].trim().to_string();
                 let version = line[idx + 2..].trim().to_string();
                 let purl = format!("pkg:pypi/{}@{}", name.to_lowercase(), version);
-                Some(SbomPackage { name, version, ecosystem: "PyPI", purl })
+                Some(SbomPackage {
+                    name,
+                    version,
+                    ecosystem: "PyPI",
+                    purl,
+                })
             } else {
                 None
             }
@@ -212,8 +227,20 @@ fn format_timestamp(unix: u64) -> String {
         year += 1;
     }
     let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
-    let month_days: [u64; 12] =
-        [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let month_days: [u64; 12] = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut month: u64 = 1;
     for md in &month_days {
         if days < *md {

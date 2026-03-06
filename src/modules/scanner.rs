@@ -171,7 +171,14 @@ pub(crate) fn make_finding(
     commit: Option<String>,
 ) -> Finding {
     let severity = severity_for_rule(&rule_id).to_string();
-    Finding { path, rule_id, line, commit, severity, blame: None }
+    Finding {
+        path,
+        rule_id,
+        line,
+        commit,
+        severity,
+        blame: None,
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -827,8 +834,17 @@ pub fn enrich_with_blame(findings: &mut [Finding]) {
                 let mut author = String::new();
                 let mut email = String::new();
                 for line in text.lines() {
-                    if commit.is_empty() && line.len() >= 8 && line.chars().next().map_or(false, |c| c.is_ascii_hexdigit()) {
-                        commit = line.split_whitespace().next().unwrap_or("").chars().take(8).collect();
+                    if commit.is_empty()
+                        && line.len() >= 8
+                        && line.chars().next().map_or(false, |c| c.is_ascii_hexdigit())
+                    {
+                        commit = line
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or("")
+                            .chars()
+                            .take(8)
+                            .collect();
                     } else if let Some(rest) = line.strip_prefix("author ") {
                         author = rest.trim().to_string();
                     } else if let Some(rest) = line.strip_prefix("author-mail ") {
