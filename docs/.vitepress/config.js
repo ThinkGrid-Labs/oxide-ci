@@ -29,6 +29,7 @@ export default defineConfig({
         items: [
           { text: 'Getting Started', link: '/guide/getting-started' },
           { text: 'CI/CD Integration', link: '/guide/ci-integration' },
+          { text: 'Use Cases & Scenarios', link: '/guide/use-cases' },
           { text: 'Configuration File', link: '/reference/config' },
         ],
       },
