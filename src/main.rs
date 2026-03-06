@@ -8,6 +8,10 @@ mod utils;
 #[command(name = "oxide-ci")]
 #[command(about = "A high-performance DevOps CLI tool in Rust", long_about = None)]
 struct Cli {
+    /// Apply a preset quality profile: strict, relaxed, or ci
+    #[arg(long, global = true)]
+    profile: Option<String>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -16,7 +20,7 @@ struct Cli {
 enum Commands {
     /// Scans the current directory for hardcoded secrets and PII
     Scan {
-        /// Output format: text (default), json, sarif
+        /// Output format: text (default), json, sarif, junit, gitlab
         #[arg(long, default_value = "text")]
         format: String,
         /// Only scan git-staged files (git diff --cached)
@@ -26,7 +30,6 @@ enum Commands {
         #[arg(long)]
         since: Option<String>,
         /// Scan the entire git commit history for secrets (slow on large repos).
-        /// Use `# oxide-ci: ignore` on individual lines to suppress false positives.
         #[arg(long)]
         history: bool,
         /// Post findings as a GitHub Check Run with per-line annotations and a PR review
@@ -40,6 +43,9 @@ enum Commands {
         /// Only fail on findings not present in the saved baseline
         #[arg(long)]
         since_baseline: bool,
+        /// Enrich each finding with git blame info (author + commit)
+        #[arg(long)]
+        blame: bool,
     },
     /// Validates Kubernetes YAML manifests for resource limits and security issues
     Lint {
@@ -53,9 +59,9 @@ enum Commands {
         #[arg(short, long)]
         file: Option<String>,
     },
-    /// Parses an LCOV coverage file and fails if total coverage is below threshold
+    /// Parses an LCOV or Cobertura XML coverage file and fails if below threshold
     Coverage {
-        /// Path to the LCOV file (overrides config)
+        /// Path to the coverage file (overrides config)
         #[arg(short, long)]
         file: Option<String>,
         /// Minimum coverage threshold percentage (overrides config)
@@ -123,11 +129,24 @@ enum Commands {
     },
     /// Runs all pipeline steps defined in .oxideci.toml in order
     Run,
+    /// Validates .oxideci.toml and prints all resolved configuration values
+    CheckConfig,
+    /// Generates a CycloneDX 1.5 SBOM from the project's lock file
+    Sbom {
+        /// Write SBOM to a file instead of stdout
+        #[arg(short, long)]
+        output: Option<String>,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let cfg = utils::config::load();
+    let mut cfg = utils::config::load();
+
+    // Apply profile overrides on top of the loaded config
+    if let Some(ref profile) = cli.profile {
+        utils::config::apply_profile(&mut cfg, profile);
+    }
 
     match cli.command {
         Commands::Scan {
@@ -138,10 +157,13 @@ fn main() -> anyhow::Result<()> {
             annotate,
             update_baseline,
             since_baseline,
+            blame,
         } => {
             let output_format = match format.as_str() {
                 "json" => OutputFormat::Json,
                 "sarif" => OutputFormat::Sarif,
+                "junit" => OutputFormat::Junit,
+                "gitlab" => OutputFormat::Gitlab,
                 _ => OutputFormat::Text,
             };
             let diff = if history {
@@ -158,7 +180,12 @@ fn main() -> anyhow::Result<()> {
                 config: &cfg.scan,
                 sast_config: &cfg.sast,
             };
-            let findings = modules::scanner::collect_findings(&opts)?;
+            let mut findings = modules::scanner::collect_findings(&opts)?;
+
+            // Enrich with git blame if requested
+            if blame {
+                modules::scanner::enrich_with_blame(&mut findings);
+            }
 
             // Baseline: save mode
             if update_baseline {
@@ -185,6 +212,8 @@ fn main() -> anyhow::Result<()> {
                             rule_id: f.rule_id.clone(),
                             line: f.line,
                             commit: f.commit.clone(),
+                            severity: f.severity.clone(),
+                            blame: f.blame.clone(),
                         })
                         .collect();
                     return modules::scanner::emit_findings(&owned, &output_format);
@@ -193,12 +222,11 @@ fn main() -> anyhow::Result<()> {
             }
 
             // Normal scan path
-            if annotate {
-                if let Some(env) = modules::github::detect_github_env() {
-                    if let Err(e) = modules::github::annotate(&findings, &env) {
-                        eprintln!("oxide-ci: warning: GitHub annotation failed: {}", e);
-                    }
-                }
+            if annotate
+                && let Some(env) = modules::github::detect_github_env()
+                && let Err(e) = modules::github::annotate(&findings, &env)
+            {
+                eprintln!("oxide-ci: warning: GitHub annotation failed: {}", e);
             }
             modules::scanner::emit_findings(&findings, &output_format)?;
         }
@@ -285,6 +313,12 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Run => {
             modules::pipeline::run_pipeline(&cfg)?;
+        }
+        Commands::CheckConfig => {
+            modules::check_config::run_check_config()?;
+        }
+        Commands::Sbom { output } => {
+            modules::sbom::run_sbom(output.as_deref())?;
         }
     }
 

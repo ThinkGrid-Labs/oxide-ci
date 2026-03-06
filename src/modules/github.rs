@@ -42,9 +42,7 @@ pub fn annotate(findings: &[Finding], env: &GitHubEnv) -> Result<()> {
 
     complete_check_run(owner, repo, check_id, findings.len(), &env.token)?;
 
-    if !findings.is_empty() {
-        post_pr_summary_comment(owner, repo, &env.sha, findings.len(), &env.token)?;
-    }
+    post_pr_summary_comment(owner, repo, &env.sha, findings, &env.token)?;
 
     Ok(())
 }
@@ -147,7 +145,7 @@ fn post_pr_summary_comment(
     owner: &str,
     repo: &str,
     sha: &str,
-    total: usize,
+    findings: &[Finding],
     token: &str,
 ) -> Result<()> {
     // Look up the PR number associated with this commit SHA.
@@ -177,13 +175,10 @@ fn post_pr_summary_comment(
         "{}/repos/{}/{}/issues/{}/comments",
         API_BASE, owner, repo, pr_number
     );
-    let body = serde_json::json!({
-        "body": format!(
-            "## oxide-ci scan summary\n\n\
-             **{total} finding(s)** detected.\n\n\
-             See the **Checks** tab for per-line annotations."
-        )
-    });
+
+    let markdown = build_pr_summary(findings);
+    let body = serde_json::json!({ "body": markdown });
+
     ureq::post(&comment_url)
         .set("Authorization", &format!("Bearer {}", token))
         .set("Accept", "application/vnd.github+json")
@@ -191,6 +186,51 @@ fn post_pr_summary_comment(
         .send_json(body)
         .map_err(|e| anyhow::anyhow!("GitHub post PR comment: {}", e))?;
     Ok(())
+}
+
+/// Build a rich markdown summary suitable for a GitHub PR comment.
+fn build_pr_summary(findings: &[Finding]) -> String {
+    let total = findings.len();
+
+    if total == 0 {
+        return "## oxide-ci scan results\n\n**No issues found.** All checks passed.\n"
+            .to_string();
+    }
+
+    let critical = findings.iter().filter(|f| f.severity == "critical").count();
+    let high = findings.iter().filter(|f| f.severity == "high").count();
+    let medium = findings.iter().filter(|f| f.severity == "medium").count();
+    let low = findings.iter().filter(|f| f.severity == "low").count();
+
+    let mut md = format!(
+        "## oxide-ci scan results\n\n\
+         **{total} finding(s)** \
+         ({critical} critical, {high} high, {medium} medium, {low} low)\n\n\
+         | File | Line | Rule | Severity |\n\
+         |------|------|------|----------|\n"
+    );
+
+    // Show up to 20 findings in the table; link to the Checks tab for the rest.
+    for f in findings.iter().take(20) {
+        md.push_str(&format!(
+            "| `{}` | {} | `{}` | **{}** |\n",
+            f.path.display(),
+            f.line,
+            f.rule_id,
+            f.severity,
+        ));
+    }
+
+    if total > 20 {
+        md.push_str(&format!(
+            "\n_...and {} more. See the **Checks** tab for all per-line annotations._\n",
+            total - 20
+        ));
+    } else {
+        md.push_str("\n_See the **Checks** tab for per-line annotations._\n");
+    }
+
+    md
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

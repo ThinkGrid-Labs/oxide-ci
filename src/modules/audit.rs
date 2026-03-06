@@ -3,8 +3,11 @@ use anyhow::{Context, Result};
 use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 
 const OSV_BATCH_URL: &str = "https://api.osv.dev/v1/querybatch";
+/// OSV cache lives for 24 hours — enough to avoid repeated CI queries.
+const CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Debug)]
 struct Package {
@@ -310,6 +313,52 @@ fn collect_all_lockfiles(root: &Path) -> Result<Vec<Package>> {
     Ok(all)
 }
 
+// ── OSV disk cache ────────────────────────────────────────────────────────────
+
+/// A simple djb2-style hash to build a cache filename from the query body.
+fn cache_key(body: &str) -> String {
+    let mut h: u64 = 5381;
+    for b in body.bytes() {
+        h = h.wrapping_mul(33).wrapping_add(b as u64);
+    }
+    format!("{:016x}", h)
+}
+
+fn cache_dir() -> Option<PathBuf> {
+    let base = std::env::var("HOME")
+        .ok()
+        .map(PathBuf::from)
+        .or_else(dirs_home)?;
+    let dir = base.join(".cache").join("oxide-ci").join("osv");
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir)
+}
+
+/// Fallback: parse HOME from /etc/passwd on Unix if $HOME is unset.
+fn dirs_home() -> Option<PathBuf> {
+    std::env::var("USERPROFILE").ok().map(PathBuf::from)
+}
+
+fn cache_read(key: &str) -> Option<Value> {
+    let path = cache_dir()?.join(format!("{}.json", key));
+    let metadata = std::fs::metadata(&path).ok()?;
+    let modified = metadata.modified().ok()?;
+    if SystemTime::now().duration_since(modified).ok()? > CACHE_TTL {
+        return None; // expired
+    }
+    let content = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+fn cache_write(key: &str, value: &Value) {
+    if let Some(dir) = cache_dir() {
+        let path = dir.join(format!("{}.json", key));
+        if let Ok(s) = serde_json::to_string(value) {
+            let _ = std::fs::write(path, s);
+        }
+    }
+}
+
 // ── OSV API ───────────────────────────────────────────────────────────────────
 
 fn query_osv(packages: &[Package]) -> Result<Vec<Vulnerability>> {
@@ -327,14 +376,24 @@ fn query_osv(packages: &[Package]) -> Result<Vec<Vulnerability>> {
         .collect();
 
     let body = json!({ "queries": queries });
+    let body_str = serde_json::to_string(&body)?;
+    let key = cache_key(&body_str);
 
-    let response = ureq::post(OSV_BATCH_URL)
-        .set("Content-Type", "application/json")
-        .send_string(&serde_json::to_string(&body)?)
-        .context("Failed to reach OSV API — check your network connection")?;
+    // Return cached result if it exists and is not expired.
+    let result: Value = if let Some(cached) = cache_read(&key) {
+        cached
+    } else {
+        let response = ureq::post(OSV_BATCH_URL)
+            .set("Content-Type", "application/json")
+            .send_string(&body_str)
+            .context("Failed to reach OSV API — check your network connection")?;
 
-    let result: Value = serde_json::from_reader(response.into_reader())
-        .context("Failed to parse OSV API response")?;
+        let parsed: Value = serde_json::from_reader(response.into_reader())
+            .context("Failed to parse OSV API response")?;
+
+        cache_write(&key, &parsed);
+        parsed
+    };
 
     let empty = vec![];
     let results: &Vec<Value> = result

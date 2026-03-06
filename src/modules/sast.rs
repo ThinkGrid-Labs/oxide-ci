@@ -1,4 +1,4 @@
-use crate::modules::scanner::{Finding, check_entropy, is_js_ts_file};
+use crate::modules::scanner::{Finding, check_entropy, is_sast_file, make_finding};
 use crate::utils::{
     config::{SastConfig, ScanConfig},
     terminal,
@@ -17,38 +17,59 @@ fn language_for(path: &Path) -> Option<Language> {
         Some("ts") => Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
         Some("tsx") => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
         Some("js" | "jsx") => Some(tree_sitter_javascript::LANGUAGE.into()),
+        Some("py") => Some(tree_sitter_python::LANGUAGE.into()),
+        Some("go") => Some(tree_sitter_go::LANGUAGE.into()),
         _ => None,
     }
 }
 
 // ── String-literal secret detection ──────────────────────────────────────────
 //
-// The tree-sitter JS/TS grammar stores string content in `string_fragment`
-// child nodes — these contain the raw text, stripped of surrounding quotes
-// and escape sequences. Template literal fragments are also `string_fragment`.
-//
-// Running regex patterns only against `string_fragment` nodes avoids flagging
-// secrets mentioned in:
-//   • comments  (// or /* */)
-//   • JSX text content (<p>user at example.com</p>)
-//   • import/export declarations that aren't string values
+// Scanning only string literal content nodes avoids flagging secrets inside
+// comments, JSX text, or import paths.
 
-const STRING_LITERAL_QUERY: &str = r#"
+/// JS/TS: content lives in `string_fragment` children of `string` and
+/// `template_string` nodes.
+const JS_TS_STRING_QUERY: &str = r#"
     [
         (string (string_fragment) @literal)
         (template_string (string_fragment) @literal)
     ]
 "#;
 
+/// Python: content lives in `string_content` children of `string` nodes.
+const PYTHON_STRING_QUERY: &str = r#"
+    (string (string_content) @literal)
+"#;
+
+/// Go: content lives inside `interpreted_string_literal` and
+/// `raw_string_literal` nodes.
+const GO_STRING_QUERY: &str = r#"
+    [
+        (interpreted_string_literal (interpreted_string_literal_content) @literal)
+        (raw_string_literal (raw_string_literal_content) @literal)
+    ]
+"#;
+
+fn string_query_for(path: &Path) -> Option<&'static str> {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("js" | "jsx" | "ts" | "tsx") => Some(JS_TS_STRING_QUERY),
+        Some("py") => Some(PYTHON_STRING_QUERY),
+        Some("go") => Some(GO_STRING_QUERY),
+        _ => None,
+    }
+}
+
 fn scan_string_literals(
     path: &Path,
     tree: &tree_sitter::Tree,
     source: &[u8],
     lang: &Language,
+    query_src: &str,
     patterns: &[(String, Regex)],
     scan_config: &ScanConfig,
 ) -> Vec<Finding> {
-    let query = match Query::new(lang, STRING_LITERAL_QUERY) {
+    let query = match Query::new(lang, query_src) {
         Ok(q) => q,
         Err(_) => return Vec::new(),
     };
@@ -84,23 +105,18 @@ fn scan_string_literals(
             // Run every secret/PII regex against the string literal value only
             for (name, regex) in patterns {
                 if regex.is_match(text) {
-                    findings.push(Finding {
-                        path: path.to_path_buf(),
-                        rule_id: name.clone(),
-                        line: line_no,
-                        commit: None,
-                    });
+                    findings.push(make_finding(
+                        path.to_path_buf(),
+                        name.clone(),
+                        line_no,
+                        None,
+                    ));
                 }
             }
 
             // Entropy check on the literal value itself
             for rule_id in check_entropy(text, scan_config) {
-                findings.push(Finding {
-                    path: path.to_path_buf(),
-                    rule_id,
-                    line: line_no,
-                    commit: None,
-                });
+                findings.push(make_finding(path.to_path_buf(), rule_id, line_no, None));
             }
         }
     }
@@ -255,6 +271,106 @@ const RULES: &[SastRule] = &[
     },
 ];
 
+// ── Python SAST rules ─────────────────────────────────────────────────────────
+
+const PYTHON_RULES: &[SastRule] = &[
+    SastRule {
+        id: "SAST/PythonEval",
+        query: r#"
+            (call
+              function: (identifier) @_fn
+              (#eq? @_fn "eval")) @match
+        "#,
+    },
+    SastRule {
+        id: "SAST/PythonExec",
+        query: r#"
+            (call
+              function: (identifier) @_fn
+              (#eq? @_fn "exec")) @match
+        "#,
+    },
+    SastRule {
+        id: "SAST/PythonPickle",
+        // pickle.load(f) or pickle.loads(data)
+        query: r#"
+            (call
+              function: (attribute
+                object: (identifier) @_obj
+                attribute: (identifier) @_fn)
+              (#eq? @_obj "pickle")
+              (#match? @_fn "^loads?$")) @match
+        "#,
+    },
+    SastRule {
+        id: "SAST/PythonSubprocessShell",
+        // subprocess.run(..., shell=True) / .call / .Popen / .check_output
+        query: r#"
+            (call
+              arguments: (argument_list
+                (keyword_argument
+                  name: (identifier) @_kw
+                  value: (true)
+                  (#eq? @_kw "shell")))) @match
+        "#,
+    },
+    SastRule {
+        id: "SAST/PythonYamlLoad",
+        // yaml.load(data) without Loader= is unsafe (use yaml.safe_load instead)
+        query: r#"
+            (call
+              function: (attribute
+                object: (identifier) @_obj
+                attribute: (identifier) @_fn)
+              (#eq? @_obj "yaml")
+              (#eq? @_fn "load")) @match
+        "#,
+    },
+];
+
+// ── Go SAST rules ─────────────────────────────────────────────────────────────
+
+const GO_RULES: &[SastRule] = &[
+    SastRule {
+        id: "SAST/GoUnsafe",
+        // import "unsafe" — use of the unsafe package is a memory-safety risk
+        query: r#"
+            (import_spec
+              path: (interpreted_string_literal) @_pkg
+              (#eq? @_pkg "\"unsafe\"")) @match
+        "#,
+    },
+    SastRule {
+        id: "SAST/GoExecCommand",
+        // exec.Command("cmd", args...) — possible command injection
+        query: r#"
+            (call_expression
+              function: (selector_expression
+                operand: (identifier) @_pkg
+                field: (field_identifier) @_fn)
+              (#eq? @_pkg "exec")
+              (#eq? @_fn "Command")) @match
+        "#,
+    },
+    SastRule {
+        id: "SAST/GoPanic",
+        // explicit panic() — unexpected process termination in production code
+        query: r#"
+            (call_expression
+              function: (identifier) @_fn
+              (#eq? @_fn "panic")) @match
+        "#,
+    },
+];
+
+fn rules_for_path(path: &Path) -> &'static [SastRule] {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("py") => PYTHON_RULES,
+        Some("go") => GO_RULES,
+        _ => RULES,
+    }
+}
+
 fn scan_dangerous_patterns(
     path: &Path,
     tree: &tree_sitter::Tree,
@@ -266,7 +382,7 @@ fn scan_dangerous_patterns(
     let mut findings = Vec::new();
 
     // ── Built-in rules ────────────────────────────────────────────────────────
-    for rule in RULES {
+    for rule in rules_for_path(path) {
         if sast_config.disabled_rules.iter().any(|d| d == rule.id) {
             continue;
         }
@@ -298,12 +414,12 @@ fn scan_dangerous_patterns(
                     continue;
                 }
 
-                findings.push(Finding {
-                    path: path.to_path_buf(),
-                    rule_id: rule.id.to_string(),
-                    line: line_no,
-                    commit: None,
-                });
+                findings.push(make_finding(
+                    path.to_path_buf(),
+                    rule.id.to_string(),
+                    line_no,
+                    None,
+                ));
             }
         }
     }
@@ -336,12 +452,7 @@ fn scan_dangerous_patterns(
                     continue;
                 }
 
-                findings.push(Finding {
-                    path: path.to_path_buf(),
-                    rule_id: id.clone(),
-                    line: line_no,
-                    commit: None,
-                });
+                findings.push(make_finding(path.to_path_buf(), id.clone(), line_no, None));
             }
         }
     }
@@ -434,15 +545,11 @@ fn scan_complexity(
                 {
                     let lines = count_function_lines(node);
                     if lines > sast_config.max_function_lines {
-                        findings.push(Finding {
-                            path: path.to_path_buf(),
-                            rule_id: format!(
-                                "SMELL/LongFunction ({} lines, max {})",
-                                lines, sast_config.max_function_lines
-                            ),
-                            line: line_no,
-                            commit: None,
-                        });
+                        let rule_id = format!(
+                            "SMELL/LongFunction ({} lines, max {})",
+                            lines, sast_config.max_function_lines
+                        );
+                        findings.push(make_finding(path.to_path_buf(), rule_id, line_no, None));
                     }
                 }
 
@@ -454,15 +561,11 @@ fn scan_complexity(
                 {
                     let params = count_parameters(node);
                     if params > sast_config.max_parameters {
-                        findings.push(Finding {
-                            path: path.to_path_buf(),
-                            rule_id: format!(
-                                "SMELL/TooManyParameters ({} params, max {})",
-                                params, sast_config.max_parameters
-                            ),
-                            line: line_no,
-                            commit: None,
-                        });
+                        let rule_id = format!(
+                            "SMELL/TooManyParameters ({} params, max {})",
+                            params, sast_config.max_parameters
+                        );
+                        findings.push(make_finding(path.to_path_buf(), rule_id, line_no, None));
                     }
                 }
 
@@ -475,15 +578,11 @@ fn scan_complexity(
                 {
                     let depth = max_nesting_depth_in(body, 0);
                     if depth > sast_config.max_nesting_depth {
-                        findings.push(Finding {
-                            path: path.to_path_buf(),
-                            rule_id: format!(
-                                "SMELL/DeepNesting (depth {}, max {})",
-                                depth, sast_config.max_nesting_depth
-                            ),
-                            line: line_no,
-                            commit: None,
-                        });
+                        let rule_id = format!(
+                            "SMELL/DeepNesting (depth {}, max {})",
+                            depth, sast_config.max_nesting_depth
+                        );
+                        findings.push(make_finding(path.to_path_buf(), rule_id, line_no, None));
                     }
                 }
             }
@@ -518,6 +617,11 @@ fn scan_file(
         None => return Vec::new(),
     };
 
+    let string_query = match string_query_for(path) {
+        Some(q) => q,
+        None => return Vec::new(),
+    };
+
     // Parser is !Send — must be created per closure (per file).
     let mut parser = Parser::new();
     if parser.set_language(&lang).is_err() {
@@ -539,6 +643,7 @@ fn scan_file(
         &tree,
         bytes,
         &lang,
+        string_query,
         secret_patterns,
         scan_config,
     ));
@@ -553,8 +658,11 @@ fn scan_file(
         custom_rule_srcs,
     ));
 
-    // Code smell / complexity rules
-    findings.extend(scan_complexity(path, &tree, bytes, sast_config));
+    // Code smell / complexity rules — JS/TS only (node kinds differ per language)
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    if matches!(ext, "js" | "jsx" | "ts" | "tsx") {
+        findings.extend(scan_complexity(path, &tree, bytes, sast_config));
+    }
 
     findings
 }
@@ -570,14 +678,14 @@ pub fn run_sast_scan(
     scan_config: &ScanConfig,
     is_text: bool,
 ) -> Result<Vec<Finding>> {
-    let js_ts: Vec<&PathBuf> = files.iter().filter(|p| is_js_ts_file(p)).collect();
+    let js_ts: Vec<&PathBuf> = files.iter().filter(|p| is_sast_file(p)).collect();
 
     if js_ts.is_empty() {
         return Ok(Vec::new());
     }
 
     if is_text {
-        terminal::info(&format!("SAST: scanning {} JS/TS file(s)...", js_ts.len()));
+        terminal::info(&format!("SAST: scanning {} file(s)...", js_ts.len()));
     }
 
     let bar = if is_text {
@@ -890,11 +998,97 @@ mod tests {
     }
 
     #[test]
-    fn non_js_ts_file_returns_empty() {
+    fn unsupported_file_type_returns_empty() {
         let (sast, scan) = default_configs();
-        let f = write_tmp("py", "eval(x)\n");
+        let f = write_tmp("md", "# Hello\neval(x)\n");
         let findings = scan_file(f.path(), &sast, &[], &scan, &[]);
-        assert!(findings.is_empty(), "Python file should be skipped by SAST");
+        assert!(
+            findings.is_empty(),
+            "Markdown file should be skipped by SAST"
+        );
+    }
+
+    // ── Python SAST ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn detects_python_eval() {
+        let (sast, scan) = default_configs();
+        let f = write_tmp("py", "result = eval(user_input)\n");
+        let findings = scan_file(f.path(), &sast, &[], &scan, &[]);
+        assert!(
+            findings.iter().any(|x| x.rule_id == "SAST/PythonEval"),
+            "eval() in Python should be flagged, got: {:?}",
+            findings.iter().map(|x| &x.rule_id).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn detects_python_exec() {
+        let (sast, scan) = default_configs();
+        let f = write_tmp("py", "exec(code)\n");
+        let findings = scan_file(f.path(), &sast, &[], &scan, &[]);
+        assert!(
+            findings.iter().any(|x| x.rule_id == "SAST/PythonExec"),
+            "exec() in Python should be flagged"
+        );
+    }
+
+    #[test]
+    fn detects_python_pickle_load() {
+        let (sast, scan) = default_configs();
+        let f = write_tmp("py", "import pickle\ndata = pickle.load(f)\n");
+        let findings = scan_file(f.path(), &sast, &[], &scan, &[]);
+        assert!(
+            findings.iter().any(|x| x.rule_id == "SAST/PythonPickle"),
+            "pickle.load() should be flagged, got: {:?}",
+            findings.iter().map(|x| &x.rule_id).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn detects_python_subprocess_shell_true() {
+        let (sast, scan) = default_configs();
+        let f = write_tmp("py", "import subprocess\nsubprocess.run(cmd, shell=True)\n");
+        let findings = scan_file(f.path(), &sast, &[], &scan, &[]);
+        assert!(
+            findings
+                .iter()
+                .any(|x| x.rule_id == "SAST/PythonSubprocessShell"),
+            "subprocess with shell=True should be flagged, got: {:?}",
+            findings.iter().map(|x| &x.rule_id).collect::<Vec<_>>()
+        );
+    }
+
+    // ── Go SAST ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn detects_go_exec_command() {
+        let (sast, scan) = default_configs();
+        let f = write_tmp(
+            "go",
+            "package main\nimport \"os/exec\"\nfunc main() { exec.Command(\"ls\") }\n",
+        );
+        let findings = scan_file(f.path(), &sast, &[], &scan, &[]);
+        assert!(
+            findings.iter().any(|x| x.rule_id == "SAST/GoExecCommand"),
+            "exec.Command() in Go should be flagged, got: {:?}",
+            findings.iter().map(|x| &x.rule_id).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn detects_go_panic() {
+        let (sast, scan) = default_configs();
+        let f = write_tmp(
+            "go",
+            "package main\nfunc main() { panic(\"fatal error\") }\n",
+        );
+        let findings = scan_file(f.path(), &sast, &[], &scan, &[]);
+        assert!(
+            findings.iter().any(|x| x.rule_id == "SAST/GoPanic"),
+            "panic() in Go should be flagged, got: {:?}",
+            findings.iter().map(|x| &x.rule_id).collect::<Vec<_>>()
+        );
     }
 
     // ── Complexity rules ──────────────────────────────────────────────────────
@@ -1028,8 +1222,9 @@ mod tests {
         let sast = SastConfig {
             custom_rules: vec![CustomSastRule {
                 id: "TEST/NoEval".into(),
-                query: r#"(call_expression function: (identifier) @_fn (#eq? @_fn "eval")) @match"#
-                    .into(),
+                query:
+                    r#"(call_expression function: (identifier) @_fn (#eq? @_fn "eval")) @match"#
+                        .into(),
             }],
             ..Default::default()
         };
@@ -1052,8 +1247,9 @@ mod tests {
         let sast = SastConfig {
             custom_rules: vec![CustomSastRule {
                 id: "TEST/NoEval".into(),
-                query: r#"(call_expression function: (identifier) @_fn (#eq? @_fn "eval")) @match"#
-                    .into(),
+                query:
+                    r#"(call_expression function: (identifier) @_fn (#eq? @_fn "eval")) @match"#
+                        .into(),
             }],
             disabled_rules: vec!["TEST/NoEval".into()],
             ..Default::default()

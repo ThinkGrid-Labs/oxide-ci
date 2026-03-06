@@ -1,6 +1,15 @@
 # SAST Rules Reference
 
-SAST runs automatically when `oxide-ci scan` encounters a `.js`, `.jsx`, `.ts`, or `.tsx` file. It uses tree-sitter to parse the file into an AST before running any checks.
+SAST runs automatically when `oxide-ci scan` encounters a supported source file. It uses tree-sitter to parse each file into a real AST before running any checks.
+
+**Supported languages:**
+
+| Language | Extensions | Features |
+|---|---|---|
+| JavaScript | `.js`, `.jsx` | String-literal scoping, dangerous patterns, code smells |
+| TypeScript | `.ts`, `.tsx` | String-literal scoping, dangerous patterns, code smells |
+| Python | `.py` | String-literal scoping, dangerous patterns |
+| Go | `.go` | String-literal scoping, dangerous patterns |
 
 ## Dangerous pattern rules
 
@@ -22,6 +31,24 @@ These rules fire on specific API calls regardless of whether arguments are strin
 | `SAST/DocumentWrite` | `document.write(expr)` |
 | `SAST/DocumentWriteln` | `document.writeln(expr)` |
 
+## Python rules
+
+| Rule ID | What it flags | Severity |
+|---|---|---|
+| `SAST/PythonEval` | `eval(expr)` — arbitrary code execution | critical |
+| `SAST/PythonExec` | `exec(code)` — arbitrary code execution | critical |
+| `SAST/PythonPickle` | `pickle.load(f)` / `pickle.loads(data)` — unsafe deserialization | high |
+| `SAST/PythonSubprocessShell` | Any call with `shell=True` keyword argument — command injection | high |
+| `SAST/PythonYamlLoad` | `yaml.load(data)` without a `Loader=` — use `yaml.safe_load` instead | high |
+
+## Go rules
+
+| Rule ID | What it flags | Severity |
+|---|---|---|
+| `SAST/GoUnsafe` | `import "unsafe"` — direct memory manipulation bypasses type safety | high |
+| `SAST/GoExecCommand` | `exec.Command(cmd, ...)` — possible command injection | high |
+| `SAST/GoPanic` | `panic(...)` — unexpected process termination in production code | medium |
+
 ## Code smell rules
 
 | Rule ID | Trigger | Default threshold |
@@ -31,6 +58,18 @@ These rules fire on specific API calls regardless of whether arguments are strin
 | `SMELL/DeepNesting` | Control-flow depth exceeds N levels inside a function | 4 levels |
 
 Rule IDs embed the measured value — e.g. `SMELL/LongFunction (63 lines, max 50)` — for immediate context. Thresholds are configurable in `.oxideci.toml`.
+
+## Suppressing findings in Python / Go
+
+Use a same-line comment to suppress a specific finding:
+
+```python
+data = pickle.load(f)  # oxide-ci: ignore
+```
+
+```go
+panic("fatal: unrecoverable state")  // oxide-ci: ignore
+```
 
 ## Custom rules
 

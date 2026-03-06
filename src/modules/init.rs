@@ -9,9 +9,7 @@ pub fn run_init(force: bool) -> Result<()> {
     let config_path = std::path::Path::new(".oxideci.toml");
 
     if config_path.exists() && !force {
-        anyhow::bail!(
-            ".oxideci.toml already exists. Run `oxide-ci init --force` to overwrite."
-        );
+        anyhow::bail!(".oxideci.toml already exists. Run `oxide-ci init --force` to overwrite.");
     }
 
     eprintln!("oxide-ci init — generating .oxideci.toml");

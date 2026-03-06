@@ -2,13 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
   security-events: write
+  checks: write
+  pull-requests: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -54,6 +55,8 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history needed for --history and --blame
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -64,32 +67,121 @@ jobs:
       - name: Build oxide-ci
         run: cargo build --release
 
-      # Secret detection — reads .oxideci.toml to exclude test fixtures and docs
-      # that intentionally contain example/fake patterns.
-      - name: Scan for secrets and PII
+      # ── Config validation ────────────────────────────────────────────────────
+      - name: Validate .oxideci.toml
+        run: ./target/release/oxide-ci check-config
+
+      # ── Secret + SAST scan (JS/TS/Python/Go AST) — human-readable ───────────
+      # Reads .oxideci.toml to exclude test fixtures and docs that
+      # intentionally contain example/fake patterns.
+      - name: Scan for secrets, PII and dangerous patterns
         run: ./target/release/oxide-ci scan
 
-      # Kubernetes lint — exits 0 when no YAML manifests are present
-      - name: Lint Kubernetes manifests
-        run: ./target/release/oxide-ci lint
+      # ── Incremental scan — only staged/changed files ─────────────────────────
+      - name: Scan files changed since last commit
+        run: ./target/release/oxide-ci scan --since HEAD~1 || true
 
-      # Dependency audit — queries OSV database for known CVEs in Cargo.lock
-      - name: Audit dependencies (OSV)
-        run: ./target/release/oxide-ci audit
+      # ── git blame enrichment ─────────────────────────────────────────────────
+      - name: Scan with blame enrichment
+        run: ./target/release/oxide-ci scan --blame || true
 
-      # Upload SARIF report so GitHub annotates PRs with any findings.
-      # Runs even if the scan step above fails (continue-on-error: true).
+      # ── Multi-format output validation ───────────────────────────────────────
       - name: Generate SARIF report
         if: always()
         continue-on-error: true
         run: ./target/release/oxide-ci scan --format sarif > oxide-ci-results.sarif 2>/dev/null || true
 
+      - name: Generate JSON report
+        if: always()
+        continue-on-error: true
+        run: ./target/release/oxide-ci scan --format json > oxide-ci-results.json 2>/dev/null || true
+
+      - name: Generate JUnit XML report
+        if: always()
+        continue-on-error: true
+        run: ./target/release/oxide-ci scan --format junit > oxide-ci-results.xml 2>/dev/null || true
+
+      - name: Generate GitLab SAST report
+        if: always()
+        continue-on-error: true
+        run: ./target/release/oxide-ci scan --format gitlab > gl-sast-report.json 2>/dev/null || true
+
+      # ── Upload scan artifacts ────────────────────────────────────────────────
       - name: Upload SARIF to GitHub Security tab
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: oxide-ci-results.sarif
         continue-on-error: true
+
+      - name: Upload JUnit XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-report
+          path: oxide-ci-results.xml
+        continue-on-error: true
+
+      - name: Upload GitLab SAST report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitlab-sast-report
+          path: gl-sast-report.json
+        continue-on-error: true
+
+      - name: Upload JSON report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: json-report
+          path: oxide-ci-results.json
+        continue-on-error: true
+
+      # ── GitHub Check Run annotations + PR summary comment ────────────────────
+      # Posts per-line annotations to the Checks tab and a rich summary comment
+      # on the PR. Only meaningful on pull_request events.
+      - name: Post GitHub Check Run annotations and PR summary
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: ./target/release/oxide-ci scan --annotate || true
+
+      # ── Baseline workflow ────────────────────────────────────────────────────
+      - name: Save scan baseline (main branch only)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          ./target/release/oxide-ci scan --update-baseline || true
+          git diff --quiet .oxide-baseline.json 2>/dev/null || echo "Baseline updated"
+
+      - name: Gate on new findings only (PRs)
+        if: github.event_name == 'pull_request' && hashFiles('.oxide-baseline.json') != ''
+        run: ./target/release/oxide-ci scan --since-baseline
+
+      # ── Kubernetes lint — exits 0 when no YAML manifests are present ─────────
+      - name: Lint Kubernetes manifests
+        run: ./target/release/oxide-ci lint
+
+      # ── Dependency audit — queries OSV database for known CVEs ───────────────
+      - name: Audit dependencies (OSV)
+        run: ./target/release/oxide-ci audit
+
+      # ── SBOM generation (CycloneDX 1.5) ─────────────────────────────────────
+      - name: Generate SBOM
+        run: ./target/release/oxide-ci sbom --output sbom.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+      # Validate SBOM structure
+      - name: Validate SBOM has expected fields
+        run: |
+          jq -e '.bomFormat == "CycloneDX" and .specVersion == "1.5" and (.components | length > 0)' sbom.json
 
   # ── 4. Performance audit (Lighthouse + Reassure) ─────────────────────────────
   perf:

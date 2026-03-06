@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod baseline;
+pub mod check_config;
 pub mod coverage;
 pub mod docker_lint;
 pub mod github;
@@ -10,5 +11,6 @@ pub mod perf_lighthouse;
 pub mod pipeline;
 pub mod reassure;
 pub mod sast;
+pub mod sbom;
 pub mod scanner;
 pub mod watch;

@@ -20,10 +20,7 @@ pub fn run_pipeline(cfg: &config::Config) -> Result<()> {
         );
     }
 
-    terminal::info(&format!(
-        "Running pipeline: {} step(s)",
-        steps.len()
-    ));
+    terminal::info(&format!("Running pipeline: {} step(s)", steps.len()));
 
     let mut failed = 0usize;
 
@@ -170,7 +167,5 @@ fn dispatch(command: &str, args: &[&str], cfg: &config::Config) -> Result<()> {
 
 /// Extract the value following `--flag value` from an args slice.
 fn flag_value<'a>(args: &[&'a str], flag: &str) -> Option<&'a str> {
-    args.windows(2)
-        .find(|w| w[0] == flag)
-        .map(|w| w[1])
+    args.windows(2).find(|w| w[0] == flag).map(|w| w[1])
 }

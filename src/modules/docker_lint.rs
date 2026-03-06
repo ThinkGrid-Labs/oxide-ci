@@ -84,8 +84,8 @@ fn check_dockerfile(path: &Path, content: &str) -> Vec<LintIssue> {
             };
 
             // "scratch" and "AS <alias>" forms are fine
-            let is_alias = image_token.eq_ignore_ascii_case("AS")
-                || after.to_lowercase().contains(" as ");
+            let is_alias =
+                image_token.eq_ignore_ascii_case("AS") || after.to_lowercase().contains(" as ");
             if image_token != "scratch" && !is_alias {
                 let tag = image_token.split(':').nth(1).unwrap_or("");
                 if tag.is_empty() || tag == "latest" {
@@ -93,10 +93,7 @@ fn check_dockerfile(path: &Path, content: &str) -> Vec<LintIssue> {
                         file: file.clone(),
                         line: lineno,
                         rule: "no-latest-image",
-                        detail: format!(
-                            "FROM '{}' uses an unpinned or :latest tag",
-                            image_token
-                        ),
+                        detail: format!("FROM '{}' uses an unpinned or :latest tag", image_token),
                     });
                 }
             }
@@ -116,7 +113,9 @@ fn check_dockerfile(path: &Path, content: &str) -> Vec<LintIssue> {
                     file: file.clone(),
                     line: lineno,
                     rule: "prefer-copy-over-add",
-                    detail: "Use COPY instead of ADD unless fetching a URL or extracting a tar archive".to_string(),
+                    detail:
+                        "Use COPY instead of ADD unless fetching a URL or extracting a tar archive"
+                            .to_string(),
                 });
             }
         }
@@ -145,7 +144,7 @@ fn check_dockerfile(path: &Path, content: &str) -> Vec<LintIssue> {
             let env_body = trimmed[4..].trim();
             // Supports both `ENV KEY=value` and `ENV KEY value`
             let key = env_body
-                .split(|c: char| c == '=' || c == ' ')
+                .split(['=', ' '])
                 .next()
                 .unwrap_or("")
                 .to_uppercase();
@@ -280,8 +279,7 @@ mod tests {
 
     #[test]
     fn test_add_url_allowed() {
-        let content =
-            "FROM node:20\nADD https://example.com/file.txt /app/\nUSER app\nHEALTHCHECK CMD true\n";
+        let content = "FROM node:20\nADD https://example.com/file.txt /app/\nUSER app\nHEALTHCHECK CMD true\n";
         assert!(!rules(content).contains(&"prefer-copy-over-add"));
     }
 
