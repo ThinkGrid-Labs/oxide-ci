@@ -24,6 +24,16 @@ features:
     details: 26 built-in patterns covering AWS, Azure, GCP, Stripe, GitHub, Twilio, Expo, Sentry, Mapbox, and more.
   - title: Kubernetes Linting
     details: Validates workload manifests for missing resource limits, probes, unpinned images, and root containers.
+  - title: Docker Linting
+    details: Audits Dockerfiles for unpinned base images, ADD instead of COPY, missing USER, missing HEALTHCHECK, exposed dangerous ports, and more.
+  - title: Coverage Gates
+    details: Parses lcov.info and fails the build when line coverage drops below a configurable threshold. Zero external tools required.
+  - title: Dependency Audit
+    details: Queries the OSV vulnerability database for known CVEs in your Cargo.lock. Offline-capable with a local cache.
+  - title: Web Performance
+    details: Lighthouse audits via the PageSpeed Insights API gate on performance, accessibility, best practices, and SEO scores.
+  - title: Reassure Performance
+    details: Compares React Native component render measurements against a baseline and fails when any component regresses beyond a threshold.
   - title: SBOM Generation
     details: Generates CycloneDX 1.5 JSON SBOMs from Cargo.lock, package-lock.json, requirements.txt, and go.sum. No internet access required.
   - title: CI-Native Output
