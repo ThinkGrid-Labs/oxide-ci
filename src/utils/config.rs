@@ -9,11 +9,15 @@ pub struct Config {
     #[serde(default)]
     pub lint: LintConfig,
     #[serde(default)]
+    pub docker: DockerConfig,
+    #[serde(default)]
     pub lighthouse: LighthouseConfig,
     #[serde(default)]
     pub reassure: ReassureConfig,
     #[serde(default)]
     pub sast: SastConfig,
+    #[serde(default)]
+    pub pipeline: PipelineConfig,
 }
 
 /// A user-defined tree-sitter query rule from `.oxideci.toml`.
@@ -248,6 +252,37 @@ fn default_reassure_baseline() -> String {
 }
 fn default_reassure_threshold() -> f64 {
     15.0
+}
+
+// ── Docker config ─────────────────────────────────────────────────────────────
+
+#[derive(Deserialize, Clone)]
+pub struct DockerConfig {
+    /// Path to the Dockerfile to lint (default: "Dockerfile")
+    #[serde(default = "default_dockerfile")]
+    pub dockerfile: String,
+}
+
+impl Default for DockerConfig {
+    fn default() -> Self {
+        Self {
+            dockerfile: default_dockerfile(),
+        }
+    }
+}
+
+fn default_dockerfile() -> String {
+    "Dockerfile".to_string()
+}
+
+// ── Pipeline config ───────────────────────────────────────────────────────────
+
+#[derive(Deserialize, Clone, Default)]
+pub struct PipelineConfig {
+    /// Ordered list of steps to run with `oxide-ci run`.
+    /// Each entry is a command string, e.g. "scan", "coverage --min 80".
+    #[serde(default)]
+    pub steps: Vec<String>,
 }
 
 /// Load `.oxideci.toml` from the current directory, falling back to defaults.

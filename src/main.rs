@@ -34,12 +34,24 @@ enum Commands {
         /// No-op when env vars are absent.
         #[arg(long)]
         annotate: bool,
+        /// Save current findings as the baseline (writes .oxide-baseline.json)
+        #[arg(long)]
+        update_baseline: bool,
+        /// Only fail on findings not present in the saved baseline
+        #[arg(long)]
+        since_baseline: bool,
     },
     /// Validates Kubernetes YAML manifests for resource limits and security issues
     Lint {
         /// Directory to scan for Kubernetes manifests (overrides config)
         #[arg(short, long)]
         dir: Option<String>,
+    },
+    /// Lints a Dockerfile for best-practice violations
+    DockerLint {
+        /// Path to the Dockerfile (overrides config)
+        #[arg(short, long)]
+        file: Option<String>,
     },
     /// Parses an LCOV coverage file and fails if total coverage is below threshold
     Coverage {
@@ -94,6 +106,23 @@ enum Commands {
         #[arg(long)]
         threshold: Option<f64>,
     },
+    /// Interactive wizard that generates a .oxideci.toml config file
+    Init {
+        /// Overwrite an existing .oxideci.toml without prompting
+        #[arg(long)]
+        force: bool,
+    },
+    /// Re-runs scan automatically whenever source files change
+    Watch {
+        /// Only scan git-staged files on each change
+        #[arg(long)]
+        staged: bool,
+        /// Poll interval in milliseconds (default: 2000)
+        #[arg(long, default_value = "2000")]
+        interval: u64,
+    },
+    /// Runs all pipeline steps defined in .oxideci.toml in order
+    Run,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -107,6 +136,8 @@ fn main() -> anyhow::Result<()> {
             since,
             history,
             annotate,
+            update_baseline,
+            since_baseline,
         } => {
             let output_format = match format.as_str() {
                 "json" => OutputFormat::Json,
@@ -120,29 +151,64 @@ fn main() -> anyhow::Result<()> {
             } else {
                 since.map(DiffMode::Since)
             };
-            if annotate && let Some(env) = modules::github::detect_github_env() {
-                let opts = ScanOpts {
-                    format: output_format.clone(),
-                    diff,
-                    config: &cfg.scan,
-                    sast_config: &cfg.sast,
-                };
-                let findings = modules::scanner::collect_findings(&opts)?;
-                if let Err(e) = modules::github::annotate(&findings, &env) {
-                    eprintln!("oxide-ci: warning: GitHub annotation failed: {}", e);
-                }
-                return modules::scanner::emit_findings(&findings, &output_format);
-            }
-            modules::scanner::run_scan(ScanOpts {
-                format: output_format,
+
+            let opts = ScanOpts {
+                format: output_format.clone(),
                 diff,
                 config: &cfg.scan,
                 sast_config: &cfg.sast,
-            })?;
+            };
+            let findings = modules::scanner::collect_findings(&opts)?;
+
+            // Baseline: save mode
+            if update_baseline {
+                modules::baseline::save_baseline(&findings)?;
+                return modules::scanner::emit_findings(&findings, &output_format);
+            }
+
+            // Baseline: compare mode — only fail on new findings
+            if since_baseline {
+                let baseline = modules::baseline::load_baseline()?;
+                let new_findings: Vec<&modules::scanner::Finding> =
+                    modules::baseline::filter_new_findings(&findings, &baseline);
+                let suppressed = findings.len() - new_findings.len();
+                modules::baseline::print_baseline_summary(
+                    findings.len(),
+                    new_findings.len(),
+                    suppressed,
+                );
+                if !new_findings.is_empty() {
+                    let owned: Vec<modules::scanner::Finding> = new_findings
+                        .into_iter()
+                        .map(|f| modules::scanner::Finding {
+                            path: f.path.clone(),
+                            rule_id: f.rule_id.clone(),
+                            line: f.line,
+                            commit: f.commit.clone(),
+                        })
+                        .collect();
+                    return modules::scanner::emit_findings(&owned, &output_format);
+                }
+                return Ok(());
+            }
+
+            // Normal scan path
+            if annotate {
+                if let Some(env) = modules::github::detect_github_env() {
+                    if let Err(e) = modules::github::annotate(&findings, &env) {
+                        eprintln!("oxide-ci: warning: GitHub annotation failed: {}", e);
+                    }
+                }
+            }
+            modules::scanner::emit_findings(&findings, &output_format)?;
         }
         Commands::Lint { dir } => {
             let target = dir.unwrap_or(cfg.lint.target_dir);
             modules::k8s_lint::run_lint(&target)?;
+        }
+        Commands::DockerLint { file } => {
+            let dockerfile = file.unwrap_or(cfg.docker.dockerfile);
+            modules::docker_lint::run_docker_lint(&dockerfile)?;
         }
         Commands::Coverage { file, min } => {
             let lcov_file = file.unwrap_or(cfg.coverage.file);
@@ -178,7 +244,8 @@ fn main() -> anyhow::Result<()> {
                 thresholds: LighthouseThresholds {
                     performance: min_performance.unwrap_or(cfg.lighthouse.min_performance),
                     accessibility: min_accessibility.unwrap_or(cfg.lighthouse.min_accessibility),
-                    best_practices: min_best_practices.unwrap_or(cfg.lighthouse.min_best_practices),
+                    best_practices: min_best_practices
+                        .unwrap_or(cfg.lighthouse.min_best_practices),
                     seo: min_seo.unwrap_or(cfg.lighthouse.min_seo),
                 },
                 api_key: key.or(cfg.lighthouse.api_key),
@@ -195,7 +262,6 @@ fn main() -> anyhow::Result<()> {
             let baseline_path = baseline.unwrap_or(cfg.reassure.baseline);
             let resolved_threshold = threshold.unwrap_or(cfg.reassure.threshold);
 
-            // Only pass baseline if the file actually exists or was explicitly specified
             let baseline_opt = if std::path::Path::new(&baseline_path).exists() {
                 Some(baseline_path.as_str())
             } else {
@@ -207,6 +273,18 @@ fn main() -> anyhow::Result<()> {
                 baseline: baseline_opt,
                 threshold: resolved_threshold,
             })?;
+        }
+        Commands::Init { force } => {
+            modules::init::run_init(force)?;
+        }
+        Commands::Watch { staged, interval } => {
+            modules::watch::run_watch(modules::watch::WatchOpts {
+                staged,
+                interval_ms: interval,
+            })?;
+        }
+        Commands::Run => {
+            modules::pipeline::run_pipeline(&cfg)?;
         }
     }
 

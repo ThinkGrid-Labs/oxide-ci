@@ -1,0 +1,176 @@
+/// `oxide-ci run` — pipeline runner.
+///
+/// Reads `[pipeline] steps = [...]` from `.oxideci.toml` and runs each step
+/// in order. A failing step stops the pipeline and exits non-zero.
+///
+/// Each step is either a bare command name ("scan") or a command with flags
+/// ("coverage --min 80"). The runner dispatches directly to the same module
+/// functions used by the CLI, so no subprocess spawning is needed.
+use crate::modules::scanner::{DiffMode, OutputFormat, ScanOpts};
+use crate::utils::{config, terminal};
+use anyhow::Result;
+
+/// Run the pipeline defined in `.oxideci.toml`.
+pub fn run_pipeline(cfg: &config::Config) -> Result<()> {
+    let steps = &cfg.pipeline.steps;
+
+    if steps.is_empty() {
+        anyhow::bail!(
+            "No pipeline steps defined. Add [pipeline] steps = [\"scan\", ...] to .oxideci.toml"
+        );
+    }
+
+    terminal::info(&format!(
+        "Running pipeline: {} step(s)",
+        steps.len()
+    ));
+
+    let mut failed = 0usize;
+
+    for (i, step_str) in steps.iter().enumerate() {
+        let step_num = i + 1;
+        let parts: Vec<&str> = step_str.split_whitespace().collect();
+        let command = match parts.first() {
+            Some(c) => *c,
+            None => continue,
+        };
+
+        eprintln!();
+        eprintln!(
+            "─── Step {}/{}: {} ───────────────────────────────────",
+            step_num,
+            steps.len(),
+            step_str
+        );
+
+        let result = dispatch(command, &parts[1..], cfg);
+
+        match result {
+            Ok(()) => {
+                terminal::success(&format!("Step '{}' passed.", command));
+            }
+            Err(e) => {
+                eprintln!("✗ Step '{}' FAILED: {}", command, e);
+                failed += 1;
+                // Stop pipeline on first failure
+                break;
+            }
+        }
+    }
+
+    eprintln!();
+    if failed == 0 {
+        terminal::success(&format!("Pipeline passed ({} step(s)).", steps.len()));
+        Ok(())
+    } else {
+        anyhow::bail!("Pipeline failed.");
+    }
+}
+
+// ── Dispatcher ────────────────────────────────────────────────────────────────
+
+fn dispatch(command: &str, args: &[&str], cfg: &config::Config) -> Result<()> {
+    match command {
+        "scan" => {
+            let staged = args.contains(&"--staged");
+            let since = flag_value(args, "--since").map(str::to_string);
+            let history = args.contains(&"--history");
+            let diff = if history {
+                Some(DiffMode::History)
+            } else if staged {
+                Some(DiffMode::Staged)
+            } else {
+                since.map(DiffMode::Since)
+            };
+            crate::modules::scanner::run_scan(ScanOpts {
+                format: OutputFormat::Text,
+                diff,
+                config: &cfg.scan,
+                sast_config: &cfg.sast,
+            })
+        }
+
+        "lint" => {
+            let dir = flag_value(args, "--dir")
+                .unwrap_or(&cfg.lint.target_dir)
+                .to_string();
+            crate::modules::k8s_lint::run_lint(&dir)
+        }
+
+        "docker-lint" => {
+            let dockerfile = flag_value(args, "--file")
+                .unwrap_or(&cfg.docker.dockerfile)
+                .to_string();
+            crate::modules::docker_lint::run_docker_lint(&dockerfile)
+        }
+
+        "coverage" => {
+            let file = flag_value(args, "--file")
+                .unwrap_or(&cfg.coverage.file)
+                .to_string();
+            let min: f64 = flag_value(args, "--min")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(cfg.coverage.min);
+            crate::modules::coverage::run_coverage(&file, min)
+        }
+
+        "audit" => crate::modules::audit::run_audit(),
+
+        "lighthouse" => {
+            use crate::modules::perf_lighthouse::{LighthouseOpts, LighthouseThresholds};
+            let url = flag_value(args, "--url")
+                .map(str::to_string)
+                .or_else(|| cfg.lighthouse.url.clone())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "lighthouse step: no URL. Set [lighthouse] url in .oxideci.toml or pass --url"
+                    )
+                })?;
+            crate::modules::perf_lighthouse::run_lighthouse(LighthouseOpts {
+                url: &url,
+                strategy: &cfg.lighthouse.strategy,
+                thresholds: LighthouseThresholds {
+                    performance: cfg.lighthouse.min_performance,
+                    accessibility: cfg.lighthouse.min_accessibility,
+                    best_practices: cfg.lighthouse.min_best_practices,
+                    seo: cfg.lighthouse.min_seo,
+                },
+                api_key: cfg.lighthouse.api_key.clone(),
+            })
+        }
+
+        "reassure" => {
+            use crate::modules::reassure::ReassureOpts;
+            let current = flag_value(args, "--current")
+                .unwrap_or(&cfg.reassure.current)
+                .to_string();
+            let baseline_path = flag_value(args, "--baseline")
+                .unwrap_or(&cfg.reassure.baseline)
+                .to_string();
+            let baseline_opt = if std::path::Path::new(&baseline_path).exists() {
+                Some(baseline_path.as_str())
+            } else {
+                None
+            };
+            crate::modules::reassure::run_reassure(ReassureOpts {
+                current: &current,
+                baseline: baseline_opt,
+                threshold: cfg.reassure.threshold,
+            })
+        }
+
+        other => {
+            anyhow::bail!(
+                "Unknown pipeline step '{}'. Valid steps: scan, lint, docker-lint, coverage, audit, lighthouse, reassure",
+                other
+            )
+        }
+    }
+}
+
+/// Extract the value following `--flag value` from an args slice.
+fn flag_value<'a>(args: &[&'a str], flag: &str) -> Option<&'a str> {
+    args.windows(2)
+        .find(|w| w[0] == flag)
+        .map(|w| w[1])
+}

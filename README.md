@@ -1,6 +1,6 @@
 # OxideCI — Rust DevOps CLI: Secret Scanner, AST SAST, Kubernetes Linter & CI Quality Gates
 
-> A blazing-fast, language-agnostic DevOps CLI built in Rust — secret scanning, AST-based SAST, Kubernetes linting, coverage gates, dependency auditing, web performance auditing, and React component regression detection in a single zero-dependency binary.
+> A blazing-fast, language-agnostic DevOps CLI built in Rust — secret scanning, AST-based SAST, Kubernetes linting, Dockerfile linting, coverage gates, dependency auditing, web performance auditing, React component regression detection, scan baselines, a pipeline runner, and an interactive setup wizard — in a single zero-dependency binary.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build](https://img.shields.io/github/actions/workflow/status/ThinkGrid-Labs/oxide-ci/ci.yml?branch=main)](https://github.com/ThinkGrid-Labs/oxide-ci/actions)
@@ -22,12 +22,17 @@
   - [scan](#scan--secret--pii-scanning)
     - [SAST for JS/TS](#sast-static-analysis-for-jsts)
     - [GitHub Annotations](#github-check-run-annotations---annotate)
+    - [Baseline mode](#baseline-mode---update-baseline--since-baseline)
   - [lint](#lint--kubernetes-manifest-linting)
+  - [docker-lint](#docker-lint--dockerfile-linting)
   - [coverage](#coverage--coverage-threshold-gate)
   - [audit](#audit--dependency-vulnerability-audit)
   - [install-hooks](#install-hooks--git-pre-commit-hook)
   - [lighthouse](#lighthouse--web-performance-audit)
   - [reassure](#reassure--react-component-performance-gate)
+  - [init](#init--interactive-setup-wizard)
+  - [watch](#watch--live-file-watcher)
+  - [run](#run--pipeline-runner)
 - [Secret Detection Patterns](#secret-detection-patterns)
 - [SAST Rules Reference](#sast-rules-reference)
 - [Suppressing Findings](#suppressing-findings)
@@ -51,11 +56,15 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 | Hardcoded secrets pushed to git | `oxide-ci scan` |
 | XSS, eval, command injection in JS/TS | `oxide-ci scan` (SAST) |
 | Kubernetes manifests missing resource limits | `oxide-ci lint` |
+| Dockerfile best-practice violations | `oxide-ci docker-lint` |
 | Test coverage silently dropping | `oxide-ci coverage` |
 | Vulnerable dependencies shipping to production | `oxide-ci audit` |
 | Secrets committed before anyone notices | `oxide-ci install-hooks` |
 | Web Lighthouse score regressing between deploys | `oxide-ci lighthouse` |
 | React component render performance regressing | `oxide-ci reassure` |
+| Existing findings flooding CI noise | `oxide-ci scan --since-baseline` |
+| Running all gates with one command | `oxide-ci run` |
+| Getting started without reading docs | `oxide-ci init` |
 
 **Key advantages:**
 
@@ -86,11 +95,16 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 | JSON & SARIF 2.1.0 output | ✅ |
 | GitHub Check Run annotations + PR review comment (`--annotate`) | ✅ |
 | Kubernetes manifest linting (7 rules) | ✅ |
+| Dockerfile linting (8 rules) | ✅ |
 | LCOV & Cobertura XML coverage threshold gate | ✅ |
 | Dependency audit via OSV API (6 ecosystems) | ✅ |
 | Git pre-commit hook installer | ✅ |
 | Web performance audit via PageSpeed Insights | ✅ |
 | React component performance gate (Reassure) | ✅ |
+| Scan baseline (suppress known findings in CI) | ✅ |
+| Pipeline runner (`oxide-ci run`) | ✅ |
+| Interactive setup wizard (`oxide-ci init`) | ✅ |
+| Live file watcher (`oxide-ci watch`) | ✅ |
 | `.oxideci.toml` config file | ✅ |
 | Respects `.gitignore` | ✅ |
 
@@ -760,6 +774,128 @@ oxide-ci reassure --threshold 10
 ```
 
 > **Tip:** Store `output/baseline.perf` in your repository (or as a CI artifact) after a confirmed good release. On every PR, oxide-ci compares the freshly measured `current.perf` against it and fails if performance has regressed.
+
+---
+
+## `docker-lint` — Dockerfile Linting
+
+Checks a `Dockerfile` for best-practice violations across 8 rules.
+
+```bash
+oxide-ci docker-lint [--file <path>]
+```
+
+| Rule | What it catches |
+|---|---|
+| `no-latest-image` | `FROM node:latest` or untagged `FROM node` |
+| `prefer-copy-over-add` | `ADD` where `COPY` is sufficient |
+| `no-user-directive` | No `USER` instruction — runs as root by default |
+| `no-root-user` | Explicit `USER root` or `USER 0` |
+| `no-healthcheck` | Missing `HEALTHCHECK` instruction |
+| `secret-in-env` | `ENV API_KEY=…`, `ENV PASSWORD=…` baked into the image layer |
+| `apt-no-recommends` | `apt-get install` without `--no-install-recommends` |
+| `apt-stale-cache` | `apt-get update` and `apt-get install` in separate `RUN` layers |
+
+Configure the default path in `.oxideci.toml`:
+```toml
+[docker]
+dockerfile = "Dockerfile"
+```
+
+---
+
+## Baseline mode — `--update-baseline` / `--since-baseline`
+
+In repositories with existing findings, baseline mode lets CI gate only on **new** findings introduced by a PR — without failing on pre-existing issues the team hasn't fixed yet.
+
+**Step 1: Save a baseline** (run once on your main branch, commit the output)
+
+```bash
+oxide-ci scan --update-baseline
+# writes .oxide-baseline.json
+git add .oxide-baseline.json && git commit -m "chore: add oxide-ci scan baseline"
+```
+
+**Step 2: Use the baseline in CI** (PRs only fail on new findings)
+
+```bash
+oxide-ci scan --since-baseline
+```
+
+The baseline stores `(file, rule, line)` fingerprints. A secret that moves to a different line is treated as a new finding and re-reviewed.
+
+---
+
+## `init` — Interactive Setup Wizard
+
+Generates a tailored `.oxideci.toml` by asking a few questions. The fastest way to get started.
+
+```bash
+oxide-ci init          # guided setup
+oxide-ci init --force  # overwrite existing config
+```
+
+Example session:
+
+```
+oxide-ci init — generating .oxideci.toml
+
+[ Secret & SAST Scanning ]
+  Enable entropy-based secret detection? [Y/n]:
+  Entropy threshold [4.5]:
+
+[ Coverage Gate ]
+  LCOV file path [coverage/lcov.info]:
+  Minimum coverage % [80]:
+
+[ Docker Lint ]
+  Dockerfile path (leave blank to skip) []:
+
+[ Pipeline Runner ]
+  Generate a default pipeline (oxide-ci run)? [Y/n]:
+
+✅ .oxideci.toml written successfully.
+```
+
+---
+
+## `watch` — Live File Watcher
+
+Re-runs the scan automatically every time a source file changes. Useful during active development.
+
+```bash
+oxide-ci watch                    # watch full working tree
+oxide-ci watch --staged           # only scan staged files on change
+oxide-ci watch --interval 500     # poll every 500ms
+```
+
+Unlike CI mode, `watch` **does not exit on findings** — it reports them and keeps watching so you can fix in-place.
+
+---
+
+## `run` — Pipeline Runner
+
+Runs all quality gates in sequence using the steps defined in `.oxideci.toml`. First failure stops the pipeline.
+
+```bash
+oxide-ci run
+```
+
+Define your pipeline:
+
+```toml
+[pipeline]
+steps = [
+  "scan",
+  "audit",
+  "coverage --min 80",
+  "lint --dir ./k8s",
+  "docker-lint",
+  "lighthouse",
+]
+```
+
+Each step maps directly to an `oxide-ci` subcommand. Inline flags override config values for that step. Use `oxide-ci init` to generate a starter pipeline automatically.
 
 ---
 

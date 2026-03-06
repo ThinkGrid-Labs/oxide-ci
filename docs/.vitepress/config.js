@@ -38,11 +38,15 @@ export default defineConfig({
         items: [
           { text: 'scan', link: '/commands/scan' },
           { text: 'lint', link: '/commands/lint' },
+          { text: 'docker-lint', link: '/commands/docker-lint' },
           { text: 'coverage', link: '/commands/coverage' },
           { text: 'audit', link: '/commands/audit' },
           { text: 'install-hooks', link: '/commands/install-hooks' },
           { text: 'lighthouse', link: '/commands/lighthouse' },
           { text: 'reassure', link: '/commands/reassure' },
+          { text: 'init', link: '/commands/init' },
+          { text: 'watch', link: '/commands/watch' },
+          { text: 'run', link: '/commands/run' },
         ],
       },
       {

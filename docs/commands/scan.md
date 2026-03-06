@@ -17,6 +17,8 @@ Options:
   --annotate           Post findings as a GitHub Check Run with per-line
                        annotations and a PR review comment. Requires
                        GITHUB_TOKEN, GITHUB_REPOSITORY, and GITHUB_SHA env vars.
+  --update-baseline    Save current findings as the baseline (.oxide-baseline.json)
+  --since-baseline     Only fail on findings not present in the saved baseline
   -h, --help           Print help
 ```
 
@@ -64,6 +66,37 @@ const key = "AKIAIOSFODNN7EXAMPLE123";  // ← string literal: flagged
 **2. Dangerous pattern detection** — 13 structural rules that catch XSS, eval, and command injection regardless of whether arguments are literals. See [SAST Rules](/reference/sast-rules) for the full list.
 
 **3. Code smell rules** — flags long functions, too many parameters, and deep nesting. See [SAST Rules](/reference/sast-rules).
+
+## Baseline mode
+
+If your repository already has existing findings you can't fix immediately, the baseline workflow lets you suppress known findings and only fail on *new* ones introduced by a PR.
+
+**Step 1: Save a baseline** (typically on your main branch)
+
+```bash
+oxide-ci scan --update-baseline
+# Writes .oxide-baseline.json — commit this file
+```
+
+**Step 2: Gate on new findings only** (in CI, on every PR)
+
+```bash
+oxide-ci scan --since-baseline
+# Only fails if new findings are introduced vs the baseline
+```
+
+The baseline file stores `(file, rule, line)` fingerprints. If a secret moves to a different line, it appears as a new finding and is re-reviewed.
+
+```yaml
+# GitHub Actions example
+- name: Save baseline (main branch only)
+  if: github.ref == 'refs/heads/main'
+  run: oxide-ci scan --update-baseline && git add .oxide-baseline.json
+
+- name: Gate on new secrets only (PRs)
+  if: github.event_name == 'pull_request'
+  run: oxide-ci scan --since-baseline
+```
 
 ## Suppressing findings
 
