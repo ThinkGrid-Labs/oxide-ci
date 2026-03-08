@@ -11,6 +11,37 @@ use std::path::{Path, PathBuf};
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Parser, Query, QueryCursor};
 
+// ── Inline suppression ────────────────────────────────────────────────────────
+
+/// Return `true` if the finding at `row` (0-based) is suppressed.
+///
+/// Checks the matched line itself AND the line immediately after it.
+/// Formatters (Prettier, ESLint) often move `// oxide-ci: ignore` comments
+/// inside object literals to the next line, e.g.:
+/// ```
+///   dangerouslySetInnerHTML={{          ← flagged line (row N)
+///     // oxide-ci: ignore               ← comment on row N+1
+///     __html: sanitized,
+///   }}
+/// ```
+fn is_suppressed(source: &[u8], row: usize) -> bool {
+    let mut lines = source.split(|&b| b == b'\n');
+    // Collect the target line and the one after it.
+    for (i, line) in lines.by_ref().enumerate() {
+        if (i == row || i == row + 1)
+            && std::str::from_utf8(line)
+                .map(|l| l.contains("oxide-ci: ignore"))
+                .unwrap_or(false)
+        {
+            return true;
+        }
+        if i > row + 1 {
+            break;
+        }
+    }
+    false
+}
+
 // ── Language dispatch ─────────────────────────────────────────────────────────
 
 fn language_for(path: &Path) -> Option<Language> {
@@ -94,12 +125,7 @@ fn scan_string_literals(
             let line_no = node.start_position().row + 1; // 1-based
 
             // Inline suppression on the source line
-            let source_line = source
-                .split(|&b| b == b'\n')
-                .nth(node.start_position().row)
-                .and_then(|l| std::str::from_utf8(l).ok())
-                .unwrap_or("");
-            if source_line.contains("oxide-ci: ignore") {
+            if is_suppressed(source, node.start_position().row) {
                 continue;
             }
 
@@ -589,12 +615,7 @@ fn scan_dangerous_patterns(
             if let Some(cap) = m.captures.iter().find(|c| c.index == match_idx) {
                 let line_no = cap.node.start_position().row + 1;
 
-                let source_line = source
-                    .split(|&b| b == b'\n')
-                    .nth(cap.node.start_position().row)
-                    .and_then(|l| std::str::from_utf8(l).ok())
-                    .unwrap_or("");
-                if source_line.contains("oxide-ci: ignore") {
+                if is_suppressed(source, cap.node.start_position().row) {
                     continue;
                 }
 
@@ -723,12 +744,7 @@ fn scan_dangerous_patterns(
             if let Some(cap) = m.captures.iter().find(|c| c.index == match_idx) {
                 let line_no = cap.node.start_position().row + 1;
 
-                let source_line = source
-                    .split(|&b| b == b'\n')
-                    .nth(cap.node.start_position().row)
-                    .and_then(|l| std::str::from_utf8(l).ok())
-                    .unwrap_or("");
-                if source_line.contains("oxide-ci: ignore") {
+                if is_suppressed(source, cap.node.start_position().row) {
                     continue;
                 }
 
@@ -809,14 +825,7 @@ fn scan_complexity(
             let line_no = node.start_position().row + 1;
 
             // Inline suppression
-            let suppressed = source
-                .split(|&b| b == b'\n')
-                .nth(node.start_position().row)
-                .and_then(|l| std::str::from_utf8(l).ok())
-                .map(|l| l.contains("oxide-ci: ignore"))
-                .unwrap_or(false);
-
-            if !suppressed {
+            if !is_suppressed(source, node.start_position().row) {
                 // SMELL/LongFunction
                 if !sast_config
                     .disabled_rules
