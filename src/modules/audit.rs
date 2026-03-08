@@ -24,6 +24,9 @@ pub struct Vulnerability {
     pub version: String,
     pub vuln_id: String,
     pub summary: String,
+    pub severity: Option<String>,
+    pub fixed_in: Option<String>,
+    pub reference_url: Option<String>,
     pub source_file: PathBuf,
 }
 
@@ -361,6 +364,99 @@ fn cache_write(key: &str, value: &Value) {
 
 // ── OSV API ───────────────────────────────────────────────────────────────────
 
+struct VulnDetails {
+    summary: String,
+    severity: Option<String>,
+    fixed_in: Option<String>,
+    reference_url: Option<String>,
+}
+
+/// Fetch full vulnerability details from `/v1/vulns/{id}`.
+///
+/// The batch querybatch API only returns `id`, `modified`, and `aliases` — not
+/// `summary`, `severity`, `affected`, or `references`. This fetches and caches
+/// the full record so the displayed output shows meaningful context.
+fn fetch_vuln_details(id: &str) -> VulnDetails {
+    let cache_key_str = format!("vuln-{}", id);
+
+    let parsed: Value = if let Some(cached) = cache_read(&cache_key_str) {
+        cached
+    } else {
+        let url = format!("https://api.osv.dev/v1/vulns/{}", id);
+        let Ok(response) = ureq::get(&url).call() else {
+            return VulnDetails {
+                summary: "No summary available".to_string(),
+                severity: None,
+                fixed_in: None,
+                reference_url: None,
+            };
+        };
+        let Ok(v) = serde_json::from_reader::<_, Value>(response.into_reader()) else {
+            return VulnDetails {
+                summary: "No summary available".to_string(),
+                severity: None,
+                fixed_in: None,
+                reference_url: None,
+            };
+        };
+        cache_write(&cache_key_str, &v);
+        v
+    };
+
+    let summary = parsed
+        .get("summary")
+        .and_then(|v| v.as_str())
+        .unwrap_or("No summary available")
+        .to_string();
+
+    // Severity: prefer database_specific.severity (e.g. "CRITICAL"), fall back to CVSS score
+    let severity = parsed
+        .get("database_specific")
+        .and_then(|d| d.get("severity"))
+        .and_then(|s| s.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    // Fixed version: first `fixed` event across all affected ranges
+    let fixed_in = parsed
+        .get("affected")
+        .and_then(|a| a.as_array())
+        .and_then(|affected| {
+            affected.iter().find_map(|entry| {
+                entry
+                    .get("ranges")
+                    .and_then(|r| r.as_array())
+                    .and_then(|ranges| {
+                        ranges.iter().find_map(|range| {
+                            range
+                                .get("events")
+                                .and_then(|ev| ev.as_array())
+                                .and_then(|events| {
+                                    events.iter().find_map(|e| {
+                                        e.get("fixed").and_then(|f| f.as_str()).map(|s| s.to_string())
+                                    })
+                                })
+                        })
+                    })
+            })
+        });
+
+    // Reference: prefer ADVISORY type, then first URL
+    let reference_url = parsed
+        .get("references")
+        .and_then(|r| r.as_array())
+        .and_then(|refs| {
+            refs.iter()
+                .find(|r| r.get("type").and_then(|t| t.as_str()) == Some("ADVISORY"))
+                .or_else(|| refs.first())
+        })
+        .and_then(|r| r.get("url"))
+        .and_then(|u| u.as_str())
+        .map(|s| s.to_string());
+
+    VulnDetails { summary, severity, fixed_in, reference_url }
+}
+
 fn query_osv(packages: &[Package]) -> Result<Vec<Vulnerability>> {
     let queries: Vec<Value> = packages
         .iter()
@@ -415,16 +511,16 @@ fn query_osv(packages: &[Package]) -> Result<Vec<Vulnerability>> {
                 .and_then(|v: &Value| v.as_str())
                 .unwrap_or("UNKNOWN")
                 .to_string();
-            let summary = vuln
-                .get("summary")
-                .and_then(|v: &Value| v.as_str())
-                .unwrap_or("No summary available")
-                .to_string();
+            // OSV querybatch only returns id/modified/aliases — fetch full record for details.
+            let details = fetch_vuln_details(&id);
             vulns.push(Vulnerability {
                 package: pkg.name.clone(),
                 version: pkg.version.clone(),
                 vuln_id: id,
-                summary,
+                summary: details.summary,
+                severity: details.severity,
+                fixed_in: details.fixed_in,
+                reference_url: details.reference_url,
                 source_file: pkg.source_file.clone(),
             });
         }
@@ -519,9 +615,10 @@ pub fn run_audit() -> Result<()> {
             suppressed.len()
         ));
         for v in &suppressed {
+            let sev = v.severity.as_deref().unwrap_or("?");
             eprintln!(
-                "  [suppressed] [{}] {}@{} — {}",
-                v.vuln_id, v.package, v.version, v.summary
+                "  [suppressed] [{}] [{}] {}@{} — {}",
+                v.vuln_id, sev, v.package, v.version, v.summary
             );
         }
     }
@@ -540,14 +637,16 @@ pub fn run_audit() -> Result<()> {
         unique.len()
     ));
     for v in &actionable {
-        eprintln!(
-            "  [{}] {}@{} (from {}) — {}",
-            v.vuln_id,
-            v.package,
-            v.version,
-            v.source_file.display(),
-            v.summary
-        );
+        let sev = v.severity.as_deref().unwrap_or("UNKNOWN");
+        eprintln!("  [{}] [{}] {}@{}", v.vuln_id, sev, v.package, v.version);
+        eprintln!("    {}", v.summary);
+        if let Some(fix) = &v.fixed_in {
+            eprintln!("    Fix: upgrade to >= {}", fix);
+        }
+        if let Some(url) = &v.reference_url {
+            eprintln!("    Ref: {}", url);
+        }
+        eprintln!("    Source: {}", v.source_file.display());
     }
 
     anyhow::bail!(
