@@ -18,6 +18,18 @@ pub struct Config {
     pub sast: SastConfig,
     #[serde(default)]
     pub pipeline: PipelineConfig,
+    #[serde(default)]
+    pub audit: AuditConfig,
+}
+
+/// Audit settings loaded from `.oxideci.toml` under `[audit]`.
+#[derive(Deserialize, Default, Clone)]
+pub struct AuditConfig {
+    /// GHSA/CVE IDs to suppress — use for known-acceptable transitive dep
+    /// vulnerabilities that cannot be fixed by upgrading a direct dependency.
+    /// Document WHY each entry is acceptable in a comment above the list.
+    #[serde(default)]
+    pub ignore_advisories: Vec<String>,
 }
 
 /// A user-defined tree-sitter query rule from `.oxideci.toml`.
