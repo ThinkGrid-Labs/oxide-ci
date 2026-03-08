@@ -683,12 +683,10 @@ fn scan_dangerous_patterns(
                         "SAST/DangerouslySetInnerHTML"
                             | "SAST/InnerHTMLAssignment"
                             | "SAST/OuterHTMLAssignment"
-                    ) {
-                        if let Some(val) = html_value_node(rule.id, cap.node, source) {
-                            if is_safe_html_value(val, source) {
-                                continue;
-                            }
-                        }
+                    ) && let Some(val) = html_value_node(rule.id, cap.node, source)
+                        && is_safe_html_value(val, source)
+                    {
+                        continue;
                     }
 
                     if rule.id == "SAST/ChildProcessExec" && exec_is_non_shell(cap.node, source) {

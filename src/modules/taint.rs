@@ -213,12 +213,12 @@ fn collect_assignments<'a>(node: Node<'a>, source: &[u8], out: &mut Vec<(String,
                 node.child_by_field_name("name"),
                 node.child_by_field_name("value"),
             ) {
-                if name_node.kind() == "identifier" {
-                    if let Ok(name) = name_node.utf8_text(source) {
-                        out.push((name.to_string(), val_node));
-                    }
-                }
                 // For destructuring patterns we skip for now — Tier 2 concern.
+                if name_node.kind() == "identifier"
+                    && let Ok(name) = name_node.utf8_text(source)
+                {
+                    out.push((name.to_string(), val_node));
+                }
             }
             return; // do not descend further; value is already captured
         }
@@ -227,12 +227,10 @@ fn collect_assignments<'a>(node: Node<'a>, source: &[u8], out: &mut Vec<(String,
             if let (Some(lhs), Some(rhs)) = (
                 node.child_by_field_name("left"),
                 node.child_by_field_name("right"),
-            ) {
-                if lhs.kind() == "identifier" {
-                    if let Ok(name) = lhs.utf8_text(source) {
-                        out.push((name.to_string(), rhs));
-                    }
-                }
+            ) && lhs.kind() == "identifier"
+                && let Ok(name) = lhs.utf8_text(source)
+            {
+                out.push((name.to_string(), rhs));
             }
             // Descend into RHS but NOT into LHS.
             if let Some(rhs) = node.child_by_field_name("right") {
