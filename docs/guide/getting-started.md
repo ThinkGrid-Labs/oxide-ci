@@ -24,6 +24,13 @@ curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxi
   -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
 ```
 
+**Windows (x64) — PowerShell:**
+```powershell
+Invoke-WebRequest -Uri "https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-windows-amd64.exe" `
+  -OutFile "$env:USERPROFILE\.local\bin\oxide-ci.exe"
+# Add $env:USERPROFILE\.local\bin to your PATH if not already present
+```
+
 ### Build from source (requires Rust 1.85+)
 
 ```bash
@@ -34,7 +41,7 @@ cargo install --git https://github.com/ThinkGrid-Labs/oxide-ci
 
 ```bash
 oxide-ci --version
-# oxide-ci 0.2.4
+# oxide-ci 0.2.6
 ```
 
 ## Quick Start
