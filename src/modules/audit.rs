@@ -433,7 +433,9 @@ fn fetch_vuln_details(id: &str) -> VulnDetails {
                                 .and_then(|ev| ev.as_array())
                                 .and_then(|events| {
                                     events.iter().find_map(|e| {
-                                        e.get("fixed").and_then(|f| f.as_str()).map(|s| s.to_string())
+                                        e.get("fixed")
+                                            .and_then(|f| f.as_str())
+                                            .map(|s| s.to_string())
                                     })
                                 })
                         })
@@ -454,7 +456,12 @@ fn fetch_vuln_details(id: &str) -> VulnDetails {
         .and_then(|u| u.as_str())
         .map(|s| s.to_string());
 
-    VulnDetails { summary, severity, fixed_in, reference_url }
+    VulnDetails {
+        summary,
+        severity,
+        fixed_in,
+        reference_url,
+    }
 }
 
 fn query_osv(packages: &[Package]) -> Result<Vec<Vulnerability>> {
