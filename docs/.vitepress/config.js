@@ -56,6 +56,7 @@ export default defineConfig({
           { text: 'SAST Rules', link: '/reference/sast-rules' },
           { text: 'Exit Codes', link: '/reference/exit-codes' },
           { text: 'Output Formats', link: '/reference/output-formats' },
+          { text: 'Limitations', link: '/reference/limitations' },
         ],
       },
     ],

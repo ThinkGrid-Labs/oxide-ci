@@ -510,7 +510,7 @@ fn exec_is_non_shell(matched: tree_sitter::Node, source: &[u8]) -> bool {
                     | "collection"
                     | "model"
                     | "promise"
-                    | "cmd"  // not conclusive but very rarely child_process in modern code
+                    | "cmd" // not conclusive but very rarely child_process in modern code
             )
         }
         // new RegExp(...).exec(str)
@@ -650,23 +650,20 @@ fn scan_dangerous_patterns(
                         continue;
                     }
                     // No value resolved — fall through to normal emit below.
-
                 } else if TAINT_LABEL_RULES.contains(&rule.id) {
                     // exec() non-shell receiver suppression (regex.exec, db.exec, …)
-                    if rule.id == "SAST/ChildProcessExec"
-                        && exec_is_non_shell(cap.node, source)
-                    {
+                    if rule.id == "SAST/ChildProcessExec" && exec_is_non_shell(cap.node, source) {
                         continue;
                     }
 
                     // Label as [tainted] when the first argument is tainted.
-                    let tainted = cap.node
+                    let tainted = cap
+                        .node
                         .child_by_field_name("arguments")
                         .and_then(|args| args.named_child(0))
                         .map(|first_arg| {
-                            let tctx = taint_for_sink(
-                                cap.node, file_root, source, &mut taint_cache,
-                            );
+                            let tctx =
+                                taint_for_sink(cap.node, file_root, source, &mut taint_cache);
                             tctx.node_is_tainted(first_arg, source)
                         })
                         .unwrap_or(false);
@@ -678,7 +675,6 @@ fn scan_dangerous_patterns(
                     };
                     findings.push(make_finding(path.to_path_buf(), rule_id, line_no, None));
                     continue;
-
                 } else {
                     // All other rules: keep the existing sanitizer suppression
                     // for any XSS rules not listed in TAINT_SUPPRESS_RULES.
@@ -695,9 +691,7 @@ fn scan_dangerous_patterns(
                         }
                     }
 
-                    if rule.id == "SAST/ChildProcessExec"
-                        && exec_is_non_shell(cap.node, source)
-                    {
+                    if rule.id == "SAST/ChildProcessExec" && exec_is_non_shell(cap.node, source) {
                         continue;
                     }
                 }

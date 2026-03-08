@@ -6,10 +6,71 @@ SAST runs automatically when `oxide-ci scan` encounters a supported source file.
 
 | Language | Extensions | Features |
 |---|---|---|
-| JavaScript | `.js`, `.jsx` | String-literal scoping, dangerous patterns, code smells |
-| TypeScript | `.ts`, `.tsx` | String-literal scoping, dangerous patterns, code smells |
+| JavaScript | `.js`, `.jsx` | String-literal scoping, dangerous patterns, code smells, taint tracking |
+| TypeScript | `.ts`, `.tsx` | String-literal scoping, dangerous patterns, code smells, taint tracking |
 | Python | `.py` | String-literal scoping, dangerous patterns |
 | Go | `.go` | String-literal scoping, dangerous patterns |
+
+## Tier-1 intra-procedural taint tracking
+
+OxideCI performs **intra-procedural taint tracking** for JS/TS to reduce both false positives and false negatives. For every XSS and command-injection sink, the engine resolves where the value came from within the enclosing function body.
+
+### How it works
+
+1. **Source seeding** — variables assigned from known user-controlled sources are marked tainted:
+
+   | Source pattern | Example |
+   |---|---|
+   | `req.body.*`, `req.query.*`, `req.params.*` | Express route handlers |
+   | `request.body.*`, `request.headers.*` | Fastify / Koa |
+   | `searchParams.get(...)` | URL search parameters |
+   | `localStorage.getItem(...)`, `sessionStorage.getItem(...)` | Browser storage |
+   | `document.cookie`, `location.hash`, `location.search` | Browser globals |
+   | `event.data` | `postMessage` / worker events |
+   | `process.env` | Node.js environment variables |
+
+2. **Fixpoint propagation** — taint flows through assignments, template literals, and `+` concatenation until no new variables are classified.
+
+3. **Safe set** — variables assigned from static string/number literals or calls to known sanitizers (`DOMPurify.sanitize`, `JSON.stringify`, `he.encode`, `sanitizeHtml`, etc.) are marked safe.
+
+### Effect on findings
+
+| Sink value | Result |
+|---|---|
+| Variable in **tainted** set | Rule ID gains a `[tainted]` label — e.g. `SAST/InnerHTMLAssignment [tainted]` — indicating high-confidence confirmed injection |
+| Variable in **safe** set | Finding is **suppressed** — value is provably sanitised or static |
+| Unknown variable | Finding emitted at normal confidence (unchanged behaviour) |
+| Static string literal (inline) | Finding is **suppressed** |
+| Call to known sanitizer (inline) | Finding is **suppressed** |
+
+### Suppression rules vs. label-only rules
+
+| Strategy | Rules |
+|---|---|
+| **Suppress if safe, label if tainted** | `SAST/DangerouslySetInnerHTML`, `SAST/InnerHTMLAssignment`, `SAST/OuterHTMLAssignment`, `SAST/DocumentWrite`, `SAST/DocumentWriteln`, `SAST/EvalUsage` |
+| **Label if tainted, never suppress** | `SAST/ChildProcessExec`, `SAST/ChildProcessExecSync`, `SAST/ChildProcessSpawn`, `SAST/ChildProcessExecFile` — a static command name like `"bash"` is safe by itself but the arguments array may still carry user input |
+
+### Example
+
+```js
+// Multi-hop taint chain — detected even across intermediate variables
+const raw   = req.body.comment;           // taint source
+const html  = `<div>${raw}</div>`;        // propagated: html is tainted
+el.innerHTML = html;
+// → SAST/InnerHTMLAssignment [tainted]  (high confidence)
+
+// Sanitizer suppresses the finding
+const clean = DOMPurify.sanitize(raw);    // clean is marked safe
+el.innerHTML = clean;
+// → suppressed (provably safe)
+
+// Static variable suppresses the finding
+const label = "Enter your name:";
+el.innerHTML = label;
+// → suppressed (provably safe)
+```
+
+> **Scope:** Tier-1 tracking is intra-procedural only — taint does not follow calls into other functions. See [Limitations](/reference/limitations) for details.
 
 ## Dangerous pattern rules
 

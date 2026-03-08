@@ -31,47 +31,43 @@ use tree_sitter::Node;
 /// `object.property` member accesses that carry user-controlled data.
 const MEMBER_TAINT_SOURCES: &[(&str, &str)] = &[
     // Express / Fastify / Koa request objects
-    ("req",     "body"),
-    ("req",     "query"),
-    ("req",     "params"),
-    ("req",     "headers"),
-    ("req",     "cookies"),
+    ("req", "body"),
+    ("req", "query"),
+    ("req", "params"),
+    ("req", "headers"),
+    ("req", "cookies"),
     ("request", "body"),
     ("request", "query"),
     ("request", "params"),
     ("request", "headers"),
     // Browser globals
-    ("document","cookie"),
-    ("location","hash"),
-    ("location","search"),
-    ("location","pathname"),
-    ("window",  "name"),
+    ("document", "cookie"),
+    ("location", "hash"),
+    ("location", "search"),
+    ("location", "pathname"),
+    ("window", "name"),
     // postMessage / worker events
-    ("event",   "data"),
-    ("e",       "data"),
-    ("msg",     "data"),
+    ("event", "data"),
+    ("e", "data"),
+    ("msg", "data"),
     // Node.js environment
     ("process", "env"),
 ];
 
 /// `object.method(...)` call expressions that return user-controlled data.
 const CALL_TAINT_SOURCES: &[(&str, &str)] = &[
-    ("searchParams",  "get"),
-    ("params",        "get"),
-    ("localStorage",  "getItem"),
-    ("sessionStorage","getItem"),
-    ("cookies",       "get"),
-    ("cookie",        "get"),
-    ("headers",       "get"),
-    ("url",           "searchParams"),
+    ("searchParams", "get"),
+    ("params", "get"),
+    ("localStorage", "getItem"),
+    ("sessionStorage", "getItem"),
+    ("cookies", "get"),
+    ("cookie", "get"),
+    ("headers", "get"),
+    ("url", "searchParams"),
 ];
 
 /// Bare function calls that return user-controlled data.
-const BARE_TAINT_CALLS: &[&str] = &[
-    "getQueryParam",
-    "getUserInput",
-    "readInput",
-];
+const BARE_TAINT_CALLS: &[&str] = &["getQueryParam", "getUserInput", "readInput"];
 
 // ── Known safe call targets ───────────────────────────────────────────────────
 
@@ -103,7 +99,7 @@ const SAFE_MEMBER_CALLS: &[&str] = &[
 /// to the existing pattern-match behaviour (flag the finding).
 pub struct TaintContext {
     pub tainted: HashSet<String>,
-    pub safe:    HashSet<String>,
+    pub safe: HashSet<String>,
 }
 
 #[allow(dead_code)] // pub API used in tests; not all methods called from sast.rs
@@ -116,7 +112,7 @@ impl TaintContext {
         collect_assignments(scope_root, source, &mut assignments);
 
         let mut tainted: HashSet<String> = HashSet::new();
-        let mut safe:    HashSet<String> = HashSet::new();
+        let mut safe: HashSet<String> = HashSet::new();
 
         // Seed: direct taint sources and direct safe values.
         for (name, val) in &assignments {
@@ -195,9 +191,7 @@ pub fn find_enclosing_scope<'a>(node: Node<'a>, root: Node<'a>) -> Node<'a> {
             if FUNCTION_KINDS.contains(&parent.kind()) {
                 // Return the body of the function so we don't accidentally
                 // recurse into nested function parameters or names.
-                return parent
-                    .child_by_field_name("body")
-                    .unwrap_or(parent);
+                return parent.child_by_field_name("body").unwrap_or(parent);
             }
             current = parent;
         } else {
@@ -211,11 +205,7 @@ pub fn find_enclosing_scope<'a>(node: Node<'a>, root: Node<'a>) -> Node<'a> {
 /// Recursively collect every `(variable_name, value_node)` assignment within
 /// `node`.  Descends into all children *except* nested function bodies so that
 /// inner functions do not pollute the outer function's symbol table.
-fn collect_assignments<'a>(
-    node: Node<'a>,
-    source: &[u8],
-    out: &mut Vec<(String, Node<'a>)>,
-) {
+fn collect_assignments<'a>(node: Node<'a>, source: &[u8], out: &mut Vec<(String, Node<'a>)>) {
     match node.kind() {
         // const/let x = expr;  or  const { x } = expr; (destructuring skipped)
         "variable_declarator" => {
@@ -275,24 +265,33 @@ fn collect_assignments<'a>(
 pub fn is_direct_taint_source(node: Node, source: &[u8]) -> bool {
     match node.kind() {
         "member_expression" => {
-            let obj  = node.child_by_field_name("object")
-                          .and_then(|n| n.utf8_text(source).ok())
-                          .unwrap_or("");
-            let prop = node.child_by_field_name("property")
-                          .and_then(|n| n.utf8_text(source).ok())
-                          .unwrap_or("");
-            MEMBER_TAINT_SOURCES.iter().any(|(o, p)| *o == obj && *p == prop)
+            let obj = node
+                .child_by_field_name("object")
+                .and_then(|n| n.utf8_text(source).ok())
+                .unwrap_or("");
+            let prop = node
+                .child_by_field_name("property")
+                .and_then(|n| n.utf8_text(source).ok())
+                .unwrap_or("");
+            MEMBER_TAINT_SOURCES
+                .iter()
+                .any(|(o, p)| *o == obj && *p == prop)
         }
         "call_expression" => {
             if let Some(func) = node.child_by_field_name("function") {
                 if func.kind() == "member_expression" {
-                    let obj  = func.child_by_field_name("object")
-                                   .and_then(|n| n.utf8_text(source).ok())
-                                   .unwrap_or("");
-                    let prop = func.child_by_field_name("property")
-                                   .and_then(|n| n.utf8_text(source).ok())
-                                   .unwrap_or("");
-                    if CALL_TAINT_SOURCES.iter().any(|(o, p)| *o == obj && *p == prop) {
+                    let obj = func
+                        .child_by_field_name("object")
+                        .and_then(|n| n.utf8_text(source).ok())
+                        .unwrap_or("");
+                    let prop = func
+                        .child_by_field_name("property")
+                        .and_then(|n| n.utf8_text(source).ok())
+                        .unwrap_or("");
+                    if CALL_TAINT_SOURCES
+                        .iter()
+                        .any(|(o, p)| *o == obj && *p == prop)
+                    {
                         return true;
                     }
                 } else if func.kind() == "identifier" {
@@ -344,7 +343,7 @@ pub fn is_direct_safe_value(node: Node, source: &[u8], safe: &HashSet<String>) -
             subs.iter().all(|sub| {
                 let mut sc = sub.walk();
                 sub.named_children(&mut sc)
-                   .all(|c| is_direct_safe_value(c, source, safe))
+                    .all(|c| is_direct_safe_value(c, source, safe))
             })
         }
         // Call to a known sanitizer
@@ -356,9 +355,10 @@ pub fn is_direct_safe_value(node: Node, source: &[u8], safe: &HashSet<String>) -
                         return SAFE_MEMBER_CALLS.contains(&n);
                     }
                     "member_expression" => {
-                        let prop = func.child_by_field_name("property")
-                                       .and_then(|p| p.utf8_text(source).ok())
-                                       .unwrap_or("");
+                        let prop = func
+                            .child_by_field_name("property")
+                            .and_then(|p| p.utf8_text(source).ok())
+                            .unwrap_or("");
                         return SAFE_MEMBER_CALLS.contains(&prop);
                     }
                     _ => {}
@@ -373,7 +373,7 @@ pub fn is_direct_safe_value(node: Node, source: &[u8], safe: &HashSet<String>) -
         }
         // Binary expression (+ concatenation) — safe if both sides are safe
         "binary_expression" => {
-            let left  = node.child_by_field_name("left");
+            let left = node.child_by_field_name("left");
             let right = node.child_by_field_name("right");
             matches!((left, right), (Some(l), Some(r))
                 if is_direct_safe_value(l, source, safe)
@@ -394,11 +394,7 @@ pub fn is_direct_safe_value(node: Node, source: &[u8], safe: &HashSet<String>) -
 
 /// Returns `true` if `node` (or any sub-expression) references a variable in
 /// `tainted`, or is itself a direct taint source.
-pub fn node_contains_tainted_var(
-    node: Node,
-    source: &[u8],
-    tainted: &HashSet<String>,
-) -> bool {
+pub fn node_contains_tainted_var(node: Node, source: &[u8], tainted: &HashSet<String>) -> bool {
     if is_direct_taint_source(node, source) {
         return true;
     }
@@ -427,10 +423,13 @@ pub fn node_contains_tainted_var(
                 .any(|c| node_contains_tainted_var(c, source, tainted))
         }
         "binary_expression" => {
-            let left  = node.child_by_field_name("left");
+            let left = node.child_by_field_name("left");
             let right = node.child_by_field_name("right");
-            left .map(|n| node_contains_tainted_var(n, source, tainted)).unwrap_or(false)
-            || right.map(|n| node_contains_tainted_var(n, source, tainted)).unwrap_or(false)
+            left.map(|n| node_contains_tainted_var(n, source, tainted))
+                .unwrap_or(false)
+                || right
+                    .map(|n| node_contains_tainted_var(n, source, tainted))
+                    .unwrap_or(false)
         }
         "call_expression" => {
             // args of a call may be tainted; the call itself may be a sanitizer
@@ -474,8 +473,10 @@ pub fn taint_for_sink<'a, 'c>(
     cache: &'c mut TaintCache,
 ) -> &'c TaintContext {
     let scope = find_enclosing_scope(sink_node, file_root);
-    let key   = (scope.start_byte(), scope.end_byte());
-    cache.entry(key).or_insert_with(|| TaintContext::build(scope, source))
+    let key = (scope.start_byte(), scope.end_byte());
+    cache
+        .entry(key)
+        .or_insert_with(|| TaintContext::build(scope, source))
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -511,7 +512,10 @@ mod tests {
         let (tree, src) = parse_js(code);
         let ctx = TaintContext::build(tree.root_node(), &src);
         assert!(ctx.is_tainted("input"));
-        assert!(ctx.is_tainted("html"), "html should be tainted via template literal");
+        assert!(
+            ctx.is_tainted("html"),
+            "html should be tainted via template literal"
+        );
     }
 
     #[test]
@@ -523,7 +527,10 @@ mod tests {
         let (tree, src) = parse_js(code);
         let ctx = TaintContext::build(tree.root_node(), &src);
         assert!(ctx.is_tainted("raw"));
-        assert!(ctx.is_tainted("cmd"), "cmd should be tainted via + concatenation");
+        assert!(
+            ctx.is_tainted("cmd"),
+            "cmd should be tainted via + concatenation"
+        );
     }
 
     #[test]
@@ -536,7 +543,10 @@ mod tests {
         let ctx = TaintContext::build(tree.root_node(), &src);
         assert!(ctx.is_tainted("dirty"));
         // `clean` went through DOMPurify.sanitize → safe
-        assert!(ctx.is_safe("clean"), "clean should be safe after sanitization");
+        assert!(
+            ctx.is_safe("clean"),
+            "clean should be safe after sanitization"
+        );
         assert!(!ctx.is_tainted("clean"));
     }
 
@@ -545,7 +555,10 @@ mod tests {
         let code = r#"const content = "<b>hello</b>";"#;
         let (tree, src) = parse_js(code);
         let ctx = TaintContext::build(tree.root_node(), &src);
-        assert!(ctx.is_safe("content"), "static string literal should be safe");
+        assert!(
+            ctx.is_safe("content"),
+            "static string literal should be safe"
+        );
         assert!(!ctx.is_tainted("content"));
     }
 

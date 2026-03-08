@@ -93,6 +93,9 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 | AST-based SAST for JS/TS/TSX/JSX | ✅ |
 | AST-based SAST for Python (eval, exec, pickle, subprocess, yaml.load) | ✅ |
 | AST-based SAST for Go (unsafe, exec.Command, panic) | ✅ |
+| Tier-1 intra-procedural taint tracking for JS/TS | ✅ |
+| Sanitizer-aware XSS suppression (DOMPurify, he, JSON.stringify, …) | ✅ |
+| Confirmed taint findings labelled `[tainted]` for high-confidence triage | ✅ |
 | String-literal scoping (no comment / JSX-text noise) | ✅ |
 | Dangerous pattern detection (XSS, eval, command injection) | ✅ |
 | Code smell / complexity rules (long functions, deep nesting, too many params) | ✅ |
@@ -108,6 +111,7 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 | Dockerfile linting (8 rules) | ✅ |
 | LCOV & Cobertura XML coverage threshold gate | ✅ |
 | Dependency audit via OSV API (6 ecosystems) | ✅ |
+| Suppress known-acceptable advisories via `ignore_advisories` | ✅ |
 | Offline OSV audit cache (24-hour TTL, air-gap friendly) | ✅ |
 | CycloneDX 1.5 SBOM generation (`oxide-ci sbom`) | ✅ |
 | Git pre-commit hook installer | ✅ |
@@ -319,9 +323,28 @@ const msg = `Contact us at admin@example.com`;  // ← template literal: flagged
 <Input placeholder="name@example.com" />  // ← string attribute: flagged ⚠️
 ```
 
-**2. Dangerous pattern detection**
+**2. Dangerous pattern detection with Tier-1 taint tracking**
 
-SAST also runs structural rules that detect dangerous API calls regardless of whether their arguments are string literals. These catch XSS sinks, code injection, command injection, and unsafe deserialization patterns that no regex can reliably find.
+SAST runs structural rules that detect dangerous API calls regardless of whether their arguments are string literals. For JS/TS, these rules are enhanced by **intra-procedural taint tracking** — the engine traces where each sink value originates within the enclosing function body, then:
+
+- **Suppresses** findings where the value is provably safe (static string/number literal, or flows through a known sanitizer like `DOMPurify.sanitize`, `JSON.stringify`, `he.encode`).
+- **Labels** confirmed taint chains with `[tainted]` — e.g. `SAST/InnerHTMLAssignment [tainted]` — for high-confidence triage.
+- **Emits normally** when the origin is unknown (unchanged conservative behaviour).
+
+```js
+const raw   = req.body.comment;         // taint source
+const html  = `<div>${raw}</div>`;      // propagated through template literal
+el.innerHTML = html;
+// → SAST/InnerHTMLAssignment [tainted]  (confirmed injection path)
+
+const clean = DOMPurify.sanitize(raw);  // sanitizer call
+el.innerHTML = clean;
+// → suppressed (provably safe)
+
+const label = "Enter your name:";       // static literal
+el.innerHTML = label;
+// → suppressed (provably safe)
+```
 
 *JavaScript / TypeScript:*
 
@@ -615,13 +638,28 @@ oxide-ci audit
 **Sample output:**
 ```
 ℹ️  Auditing 312 packages from Cargo.lock (crates.io) via OSV...
-⚠️  Found 2 vulnerability/-ies in 312 packages:
+⚠️  [suppressed] GHSA-2G4F-4PWH-QVX6 — ajv 6.12.6 (known acceptable transitive dep)
+⚠️  Found 2 actionable vulnerability/-ies in 312 packages:
   [GHSA-jfh8-c2jp-hdmh] openssl@0.10.55 — Use-after-free in X.509 certificate verification
   [CVE-2023-26964]       h2@0.3.15 — Denial of Service via CONTINUATION frames
 Error: Audit failed: 2 known vulnerability/-ies found.
 ```
 
 > **Note:** Results are cached to `~/.cache/oxide-ci/osv/` with a 24-hour TTL. Subsequent runs reuse the cached response, making the audit fast and air-gap friendly after the first run. On network errors oxide-ci warns and exits 0, so it won't block CI pipelines with no outbound access.
+
+**Suppressing unfixable transitive advisories:**
+
+Some transitive dependency CVEs cannot be fixed because the vulnerable package is pulled in by a build tool (webpack, jest, turbo) that has not yet released a compatible upgrade. Rather than disabling the audit entirely, suppress individual advisory IDs in `.oxideci.toml`:
+
+```toml
+[audit]
+ignore_advisories = [
+  # ajv@6.x — used internally by webpack. No direct dep; upgrade blocked.
+  "GHSA-2G4F-4PWH-QVX6",
+]
+```
+
+Suppressed advisories appear as `[suppressed]` warnings — not errors — so new advisories still fail the build.
 
 ---
 
