@@ -1,4 +1,5 @@
 use crate::modules::scanner::{Finding, check_entropy, is_sast_file, make_finding};
+use crate::modules::taint::{TaintCache, taint_for_sink};
 use crate::utils::{
     config::{SastConfig, ScanConfig},
     terminal,
@@ -371,6 +372,185 @@ fn rules_for_path(path: &Path) -> &'static [SastRule] {
     }
 }
 
+// ── Sanitizer-aware false-positive suppression ────────────────────────────────
+//
+// When an XSS rule fires, we inspect the AST of the HTML value being assigned.
+// If it passes through a known sanitizer or is a static literal, the risk is
+// already mitigated and we suppress the finding.
+//
+// This is intentionally a conservative allowlist — only functions whose
+// sole purpose is safe HTML production are included. Generic helpers like
+// `format()` or `toString()` are NOT included.
+
+/// Member properties and bare identifiers that are known-safe HTML producers.
+const KNOWN_SANITIZER_CALLS: &[&str] = &[
+    // DOMPurify
+    "sanitize",
+    // sanitize-html, xss-filters
+    "sanitizeHtml",
+    "sanitizeHTML",
+    // isomorphic-dompurify, dompurify wrappers
+    "clean",
+    // he / entities
+    "encode",
+    "escape",
+    "escapeHtml",
+    "escapeHTML",
+    // JSON serialisation — JSON content cannot execute as HTML
+    // (browsers treat application/ld+json as data, not markup)
+    "stringify",
+];
+
+/// Walk a node's children and return the first named child with the given kind.
+fn first_named_child_of_kind<'a>(
+    node: tree_sitter::Node<'a>,
+    kind: &str,
+) -> Option<tree_sitter::Node<'a>> {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor).find(|n| n.kind() == kind)
+}
+
+/// Given the @match node for an XSS rule, navigate to the actual HTML value
+/// expression (the thing being handed to innerHTML / dangerouslySetInnerHTML).
+fn html_value_node<'a>(
+    rule_id: &str,
+    matched: tree_sitter::Node<'a>,
+    source: &[u8],
+) -> Option<tree_sitter::Node<'a>> {
+    match rule_id {
+        "SAST/DangerouslySetInnerHTML" => {
+            // Structure: jsx_attribute → jsx_expression → object → pair(__html) → value
+            let jsx_expr = first_named_child_of_kind(matched, "jsx_expression")?;
+            let object = first_named_child_of_kind(jsx_expr, "object")?;
+            let mut cur = object.walk();
+            let html_pair = object.named_children(&mut cur).find(|n| {
+                if n.kind() != "pair" {
+                    return false;
+                }
+                n.child_by_field_name("key")
+                    .and_then(|k| k.utf8_text(source).ok())
+                    .map(|name| name == "__html")
+                    .unwrap_or(false)
+            })?;
+            html_pair.child_by_field_name("value")
+        }
+        "SAST/InnerHTMLAssignment" | "SAST/OuterHTMLAssignment" => {
+            matched.child_by_field_name("right")
+        }
+        _ => None,
+    }
+}
+
+/// Returns true if `node` represents a known-safe HTML value:
+///   • a static string / template literal with no interpolations
+///   • a call to a known sanitizer function (DOMPurify.sanitize, JSON.stringify, …)
+fn is_safe_html_value(node: tree_sitter::Node, source: &[u8]) -> bool {
+    match node.kind() {
+        // Static string literal — no dynamic content, no injection vector
+        "string" => true,
+        // Template literal — safe only if it has no `${}` substitutions
+        "template_string" => {
+            let mut cur = node.walk();
+            !node
+                .children(&mut cur)
+                .any(|c| c.kind() == "template_substitution")
+        }
+        // Call expression — check if it routes through a known-safe function
+        "call_expression" => {
+            let Some(func) = node.child_by_field_name("function") else {
+                return false;
+            };
+            match func.kind() {
+                // sanitize(...) / sanitizeHtml(...) / etc.
+                "identifier" => func
+                    .utf8_text(source)
+                    .map(|n| KNOWN_SANITIZER_CALLS.contains(&n))
+                    .unwrap_or(false),
+                // DOMPurify.sanitize(...) / JSON.stringify(...) / he.encode(...)
+                "member_expression" => func
+                    .child_by_field_name("property")
+                    .and_then(|p| p.utf8_text(source).ok())
+                    .map(|name| KNOWN_SANITIZER_CALLS.contains(&name))
+                    .unwrap_or(false),
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+/// Returns true if the `.exec()` call is on a non-shell receiver.
+///
+/// `regex.exec(str)`, `model.exec()`, and promise-chain `.exec()` calls are
+/// common patterns that do NOT involve child_process and should not be flagged.
+/// We suppress when the object is a known non-shell type or a regex literal.
+fn exec_is_non_shell(matched: tree_sitter::Node, source: &[u8]) -> bool {
+    // matched is the call_expression; function is a member_expression
+    let Some(func) = matched.child_by_field_name("function") else {
+        return false;
+    };
+    let Some(object) = func.child_by_field_name("object") else {
+        return false;
+    };
+
+    match object.kind() {
+        // /regex/.exec(str) — regex literal, definitely not a shell call
+        "regex" => true,
+        // identifier — check against known non-shell names
+        "identifier" => {
+            let name = object.utf8_text(source).unwrap_or("");
+            // Common Mongoose, database query, and promise executor names
+            matches!(
+                name,
+                "query"
+                    | "cursor"
+                    | "stmt"
+                    | "statement"
+                    | "db"
+                    | "collection"
+                    | "model"
+                    | "promise"
+                    | "cmd" // not conclusive but very rarely child_process in modern code
+            )
+        }
+        // new RegExp(...).exec(str)
+        "new_expression" => {
+            let ctor = object.child_by_field_name("constructor");
+            ctor.and_then(|c| c.utf8_text(source).ok())
+                .map(|n| n == "RegExp")
+                .unwrap_or(false)
+        }
+        // call_expression.exec() — chained call, likely a query builder or promise
+        "call_expression" => true,
+        // await expr — awaited result being exec()'d is not a shell
+        "await_expression" => true,
+        _ => false,
+    }
+}
+
+/// XSS / eval rules where taint tracking can both **suppress** (provably safe
+/// value) and **label** (provably tainted value).  The sink is a single
+/// expression so static-literal suppression is always correct.
+const TAINT_SUPPRESS_RULES: &[&str] = &[
+    "SAST/DangerouslySetInnerHTML",
+    "SAST/InnerHTMLAssignment",
+    "SAST/OuterHTMLAssignment",
+    "SAST/DocumentWrite",
+    "SAST/DocumentWriteln",
+    "SAST/EvalUsage",
+];
+
+/// Command-injection rules where taint tracking only **labels** findings as
+/// `[tainted]` — suppression is intentionally NOT applied because even a
+/// static command name (e.g. `spawn("bash", ["-c", cmd])`) is dangerous when
+/// the argument array contains user-controlled input.
+const TAINT_LABEL_RULES: &[&str] = &[
+    "SAST/ChildProcessExec",
+    "SAST/ChildProcessExecSync",
+    "SAST/ChildProcessSpawn",
+    "SAST/ChildProcessExecFile",
+];
+
 fn scan_dangerous_patterns(
     path: &Path,
     tree: &tree_sitter::Tree,
@@ -380,6 +560,10 @@ fn scan_dangerous_patterns(
     custom_rule_srcs: &[(String, String)],
 ) -> Vec<Finding> {
     let mut findings = Vec::new();
+    let file_root = tree.root_node();
+
+    // Taint cache: keyed by enclosing-scope byte range, built lazily.
+    let mut taint_cache: TaintCache = TaintCache::new();
 
     // ── Built-in rules ────────────────────────────────────────────────────────
     for rule in rules_for_path(path) {
@@ -400,7 +584,7 @@ fn scan_dangerous_patterns(
         };
 
         let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(&query, tree.root_node(), source);
+        let mut matches = cursor.matches(&query, file_root, source);
         while let Some(m) = matches.next() {
             if let Some(cap) = m.captures.iter().find(|c| c.index == match_idx) {
                 let line_no = cap.node.start_position().row + 1;
@@ -412,6 +596,102 @@ fn scan_dangerous_patterns(
                     .unwrap_or("");
                 if source_line.contains("oxide-ci: ignore") {
                     continue;
+                }
+
+                // ── Tier-1 taint + sanitizer-aware suppression ────────────────
+                //
+                // Two distinct taint-tracking strategies:
+                //
+                // TAINT_SUPPRESS_RULES (XSS / eval) — single-expression sink:
+                //   1. Static / sanitizer check: suppress if provably safe.
+                //   2. Taint context: suppress if all vars provably safe.
+                //   3. If tainted → emit with "[tainted]" high-confidence label.
+                //   4. Unknown → emit at normal confidence.
+                //
+                // TAINT_LABEL_RULES (exec / spawn / execFile / execSync):
+                //   Never suppress — a static command name like "bash" is safe by
+                //   itself but the argument array may still carry user input.
+                //   Only add "[tainted]" label when the first arg is tainted.
+                if TAINT_SUPPRESS_RULES.contains(&rule.id) {
+                    // Resolve the HTML/value node for XSS rules, or first arg
+                    // for eval / document.write.
+                    let sink_val = if matches!(
+                        rule.id,
+                        "SAST/DangerouslySetInnerHTML"
+                            | "SAST/InnerHTMLAssignment"
+                            | "SAST/OuterHTMLAssignment"
+                    ) {
+                        html_value_node(rule.id, cap.node, source)
+                    } else {
+                        cap.node
+                            .child_by_field_name("arguments")
+                            .and_then(|args| args.named_child(0))
+                    };
+
+                    if let Some(val) = sink_val {
+                        // Layer 1: fast static-literal / sanitizer suppression
+                        if is_safe_html_value(val, source) {
+                            continue;
+                        }
+
+                        // Layer 2: taint context
+                        let tctx = taint_for_sink(cap.node, file_root, source, &mut taint_cache);
+
+                        if tctx.node_is_safe(val, source) {
+                            continue; // provably safe variable → suppress
+                        }
+
+                        let rule_id = if tctx.node_is_tainted(val, source) {
+                            format!("{} [tainted]", rule.id)
+                        } else {
+                            rule.id.to_string()
+                        };
+                        findings.push(make_finding(path.to_path_buf(), rule_id, line_no, None));
+                        continue;
+                    }
+                    // No value resolved — fall through to normal emit below.
+                } else if TAINT_LABEL_RULES.contains(&rule.id) {
+                    // exec() non-shell receiver suppression (regex.exec, db.exec, …)
+                    if rule.id == "SAST/ChildProcessExec" && exec_is_non_shell(cap.node, source) {
+                        continue;
+                    }
+
+                    // Label as [tainted] when the first argument is tainted.
+                    let tainted = cap
+                        .node
+                        .child_by_field_name("arguments")
+                        .and_then(|args| args.named_child(0))
+                        .map(|first_arg| {
+                            let tctx =
+                                taint_for_sink(cap.node, file_root, source, &mut taint_cache);
+                            tctx.node_is_tainted(first_arg, source)
+                        })
+                        .unwrap_or(false);
+
+                    let rule_id = if tainted {
+                        format!("{} [tainted]", rule.id)
+                    } else {
+                        rule.id.to_string()
+                    };
+                    findings.push(make_finding(path.to_path_buf(), rule_id, line_no, None));
+                    continue;
+                } else {
+                    // All other rules: keep the existing sanitizer suppression
+                    // for any XSS rules not listed in TAINT_SUPPRESS_RULES.
+                    if matches!(
+                        rule.id,
+                        "SAST/DangerouslySetInnerHTML"
+                            | "SAST/InnerHTMLAssignment"
+                            | "SAST/OuterHTMLAssignment"
+                    ) && let Some(val) = html_value_node(rule.id, cap.node, source)
+                        && is_safe_html_value(val, source)
+                    {
+                        continue;
+                    }
+
+                    if rule.id == "SAST/ChildProcessExec" && exec_is_non_shell(cap.node, source) {
+                        continue;
+                    }
                 }
 
                 findings.push(make_finding(

@@ -13,4 +13,5 @@ pub mod reassure;
 pub mod sast;
 pub mod sbom;
 pub mod scanner;
+pub mod taint;
 pub mod watch;

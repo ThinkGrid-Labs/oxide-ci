@@ -65,6 +65,15 @@ min_seo          = 80
 current   = "output/current.perf"
 baseline  = "output/baseline.perf"
 threshold = 15.0               # maximum regression % before failing
+
+[audit]
+# GHSA/CVE advisory IDs to suppress — use for known-acceptable transitive
+# dependency vulnerabilities that cannot be fixed by upgrading a direct dep.
+# Always document WHY each entry is acceptable in a comment above the ID.
+# Re-evaluate when upstream tools release new major versions.
+ignore_advisories = [
+  # "GHSA-xxxx-yyyy-zzzz",   # affected-package — reason suppressed
+]
 ```
 
 ## Precedence

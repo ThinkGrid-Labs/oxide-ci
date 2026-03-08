@@ -16,8 +16,8 @@ hero:
 features:
   - title: Zero Runtime Dependencies
     details: Drop a single compiled Rust binary into any CI pipeline, Docker image, or developer machine. No Node, Python, or JVM required.
-  - title: AST-Based SAST
-    details: tree-sitter parses JS/TS/TSX/JSX, Python, and Go into a real AST before pattern matching, eliminating comment and false-positive noise. Detects eval, exec, pickle, subprocess, unsafe imports, and more.
+  - title: AST-Based SAST + Taint Tracking
+    details: tree-sitter parses JS/TS/TSX/JSX, Python, and Go into a real AST. For JS/TS, Tier-1 intra-procedural taint tracking traces user-controlled input through variable assignments to XSS and injection sinks. Confirmed chains are labelled [tainted]; sanitizer-backed values are suppressed automatically.
   - title: Blazing Fast
     details: Parallel file scanning via rayon across all CPU cores. Typical repositories scan in under a second.
   - title: Secret & PII Detection
@@ -29,7 +29,7 @@ features:
   - title: Coverage Gates
     details: Parses lcov.info and fails the build when line coverage drops below a configurable threshold. Zero external tools required.
   - title: Dependency Audit
-    details: Queries the OSV vulnerability database for known CVEs in your Cargo.lock. Offline-capable with a local cache.
+    details: Queries the OSV vulnerability database for known CVEs across 6 ecosystems. Offline-capable with a local cache. Suppress known-acceptable transitive advisories per-ID via ignore_advisories in .oxideci.toml.
   - title: Web Performance
     details: Lighthouse audits via the PageSpeed Insights API gate on performance, accessibility, best practices, and SEO scores.
   - title: Reassure Performance
