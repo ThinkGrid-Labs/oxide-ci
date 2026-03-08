@@ -1,4 +1,4 @@
-use crate::utils::{files, terminal};
+use crate::utils::{config, files, terminal};
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -436,6 +436,21 @@ fn query_osv(packages: &[Package]) -> Result<Vec<Vulnerability>> {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 pub fn run_audit() -> Result<()> {
+    let cfg = config::load();
+    let ignored: std::collections::HashSet<String> = cfg
+        .audit
+        .ignore_advisories
+        .iter()
+        .map(|id| id.to_uppercase())
+        .collect();
+
+    if !ignored.is_empty() {
+        terminal::info(&format!(
+            "Ignoring {} suppressed advisory/-ies from .oxideci.toml",
+            ignored.len()
+        ));
+    }
+
     let root = std::path::Path::new(".");
 
     // Walk the entire repo for all supported lock files
@@ -493,9 +508,27 @@ pub fn run_audit() -> Result<()> {
 
     bar.finish_and_clear();
 
-    if all_vulns.is_empty() {
+    // Split into suppressed vs. actionable
+    let (suppressed, actionable): (Vec<_>, Vec<_>) = all_vulns
+        .into_iter()
+        .partition(|v| ignored.contains(&v.vuln_id.to_uppercase()));
+
+    if !suppressed.is_empty() {
+        terminal::warn(&format!(
+            "Suppressed {} advisory/-ies (listed in .oxideci.toml [audit] ignore_advisories):",
+            suppressed.len()
+        ));
+        for v in &suppressed {
+            eprintln!(
+                "  [suppressed] [{}] {}@{} — {}",
+                v.vuln_id, v.package, v.version, v.summary
+            );
+        }
+    }
+
+    if actionable.is_empty() {
         terminal::success(&format!(
-            "No known vulnerabilities found in {} unique package(s).",
+            "No actionable vulnerabilities found in {} unique package(s).",
             unique.len()
         ));
         return Ok(());
@@ -503,10 +536,10 @@ pub fn run_audit() -> Result<()> {
 
     terminal::warn(&format!(
         "Found {} vulnerability/-ies across {} unique package(s):",
-        all_vulns.len(),
+        actionable.len(),
         unique.len()
     ));
-    for v in &all_vulns {
+    for v in &actionable {
         eprintln!(
             "  [{}] {}@{} (from {}) — {}",
             v.vuln_id,
@@ -519,7 +552,7 @@ pub fn run_audit() -> Result<()> {
 
     anyhow::bail!(
         "Audit failed: {} known vulnerability/-ies found.",
-        all_vulns.len()
+        actionable.len()
     );
 }
 
