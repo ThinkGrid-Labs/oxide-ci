@@ -176,13 +176,13 @@ pub fn run_sbom(output_file: Option<&str>) -> Result<()> {
     let sbom = json!({
         "bomFormat": "CycloneDX",
         "specVersion": "1.5",
-        "serialNumber": format!("urn:uuid:oxide-ci-{}", now),
+        "serialNumber": format!("urn:uuid:greengate-{}", now),
         "version": 1,
         "metadata": {
             "timestamp": format_timestamp(now),
             "tools": [{
                 "vendor": "ThinkGrid Labs",
-                "name": "oxide-ci",
+                "name": "greengate",
                 "version": env!("CARGO_PKG_VERSION")
             }]
         },

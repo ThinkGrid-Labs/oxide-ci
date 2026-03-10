@@ -12,7 +12,7 @@ Two formats are supported and auto-detected:
 ## Usage
 
 ```
-oxide-ci coverage [OPTIONS]
+greengate coverage [OPTIONS]
 
 Options:
   -f, --file <FILE>    Path to the coverage file [default: coverage/lcov.info]
@@ -24,16 +24,16 @@ Options:
 
 ```bash
 # LCOV (Rust, Jest, pytest, Go)
-oxide-ci coverage --file coverage/lcov.info --min 80
+greengate coverage --file coverage/lcov.info --min 80
 
 # Cobertura XML (Python coverage.py, JaCoCo)
-oxide-ci coverage --file coverage.xml --min 80
+greengate coverage --file coverage.xml --min 80
 
 # Stricter 90% gate
-oxide-ci coverage --file coverage/lcov.info --min 90
+greengate coverage --file coverage/lcov.info --min 90
 
-# Use defaults from .oxideci.toml
-oxide-ci coverage
+# Use defaults from .greengate.toml
+greengate coverage
 ```
 
 ## Generating coverage reports

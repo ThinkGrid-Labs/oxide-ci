@@ -1,6 +1,6 @@
 # Use Cases & Scenarios
 
-Real-world examples of how oxide-ci fits into different team workflows.
+Real-world examples of how greengate fits into different team workflows.
 
 ---
 
@@ -23,16 +23,16 @@ jobs:
     needs: deploy                  # waits for deploy to finish
     runs-on: ubuntu-latest
     steps:
-      - name: Install oxide-ci
+      - name: Install greengate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
-            -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
+          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+            -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
       - name: Lighthouse post-deploy audit
         env:
           PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
         run: |
-          oxide-ci lighthouse \
+          greengate lighthouse \
             --url https://yourapp.com \
             --min-performance 85 \
             --min-accessibility 90
@@ -67,16 +67,16 @@ jobs:
     needs: deploy-staging
     runs-on: ubuntu-latest
     steps:
-      - name: Install oxide-ci
+      - name: Install greengate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
-            -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
+          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+            -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
       - name: Lighthouse pre-merge gate
         env:
           PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
         run: |
-          oxide-ci lighthouse \
+          greengate lighthouse \
             --url "${{ needs.deploy-staging.outputs.url }}" \
             --strategy mobile \
             --min-performance 80 \
@@ -95,7 +95,7 @@ jobs:
 
 ```bash
 # Layer 1: catch it locally before git push
-oxide-ci install-hooks
+greengate install-hooks
 ```
 
 This installs a pre-commit hook that scans staged files on every `git commit`. It fails the commit if a secret is detected.
@@ -103,7 +103,7 @@ This installs a pre-commit hook that scans staged files on every `git commit`. I
 ```yaml
 # Layer 2: catch it in CI as a safety net
 - name: Secret scan
-  run: oxide-ci scan
+  run: greengate scan
 ```
 
 **What it catches:** AWS keys, Stripe secrets, GitHub tokens, GCP service account JSON, `.env` values, high-entropy strings — 26 built-in patterns.
@@ -116,10 +116,10 @@ This installs a pre-commit hook that scans staged files on every `git commit`. I
 
 ```yaml
 - name: Lint Kubernetes manifests
-  run: oxide-ci lint --dir ./k8s
+  run: greengate lint --dir ./k8s
 ```
 
-**With `.oxideci.toml`:**
+**With `.greengate.toml`:**
 
 ```toml
 [lint]
@@ -127,7 +127,7 @@ target_dir = "./k8s"
 ```
 
 ```bash
-oxide-ci lint   # reads config automatically
+greengate lint   # reads config automatically
 ```
 
 **What it catches:** Missing `resources.limits`, missing `livenessProbe`/`readinessProbe`, `image: nginx:latest` (unpinned), containers running as root.
@@ -140,17 +140,17 @@ oxide-ci lint   # reads config automatically
 
 ```yaml
 - name: Secret & SAST scan
-  run: oxide-ci scan --annotate   # annotates PRs via GitHub Check Runs
+  run: greengate scan --annotate   # annotates PRs via GitHub Check Runs
 
 - name: Dependency audit (OSV)
-  run: oxide-ci audit             # checks Cargo.lock / package-lock.json
+  run: greengate audit             # checks Cargo.lock / package-lock.json
 
 - name: Coverage gate
-  run: oxide-ci coverage --file coverage/lcov.info --min 80
+  run: greengate coverage --file coverage/lcov.info --min 80
 
 - name: React perf regression gate
   if: hashFiles('output/current.perf') != ''
-  run: oxide-ci reassure
+  run: greengate reassure
 ```
 
 **What it catches across the pipeline:**
@@ -168,7 +168,7 @@ oxide-ci lint   # reads config automatically
 
 **Situation:** You're shipping solo, no staging environment. You want the basics without overhead.
 
-**`.oxideci.toml`:**
+**`.greengate.toml`:**
 ```toml
 [scan]
 entropy = true
@@ -181,24 +181,24 @@ min = 70.0
 
 **GitHub Actions:**
 ```yaml
-- name: Install oxide-ci
+- name: Install greengate
   run: |
-    curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
-      -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
+    curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+      -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
 - name: Scan
-  run: oxide-ci scan
+  run: greengate scan
 
 - name: Audit
-  run: oxide-ci audit
+  run: greengate audit
 
 - name: Coverage
-  run: oxide-ci coverage
+  run: greengate coverage
 ```
 
 **Locally:**
 ```bash
-oxide-ci install-hooks   # catch secrets before they leave your machine
+greengate install-hooks   # catch secrets before they leave your machine
 ```
 
 ---

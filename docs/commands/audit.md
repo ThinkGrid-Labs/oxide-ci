@@ -16,7 +16,7 @@ Audits project dependencies for known vulnerabilities by querying the [OSV datab
 ## Usage
 
 ```
-oxide-ci audit [OPTIONS]
+greengate audit [OPTIONS]
 
 Options:
   -h, --help    Print help
@@ -26,7 +26,7 @@ Options:
 
 Some transitive dependency vulnerabilities cannot be fixed by upgrading a direct dependency — the affected package is pulled in by a tool (webpack, jest, turbo) that has not yet released a compatible upgrade. Blanket-suppressing entire packages is too broad; instead, suppress individual advisory IDs so that new advisories still fail the build.
 
-Add an `[audit]` section to `.oxideci.toml`:
+Add an `[audit]` section to `.greengate.toml`:
 
 ```toml
 [audit]
@@ -55,7 +55,7 @@ Suppressed advisories are shown as warnings (`[suppressed]`) in the output but d
 
 ```bash
 # Audit from the current directory (auto-detects manifest)
-oxide-ci audit
+greengate audit
 ```
 
 ## Sample output — findings present
@@ -80,16 +80,16 @@ Error: Audit failed: 2 vulnerability/ies found.
 
 ```yaml
 - name: Dependency Audit
-  run: oxide-ci audit
+  run: greengate audit
 ```
 
 Exits `0` when no actionable vulnerabilities are found, `1` otherwise.
 
 ## Workflow: handling unfixable transitive dependencies
 
-1. Run `oxide-ci audit` and note the advisory IDs that fail.
+1. Run `greengate audit` and note the advisory IDs that fail.
 2. For each failing advisory, check whether you control the affected package directly (i.e., it appears in your top-level `package.json` / `Cargo.toml`).
    - **Yes** — upgrade or pin to a patched version.
    - **No (transitive)** — check whether upgrading any *direct* dependency removes the transitive dep. If not, add the advisory ID to `ignore_advisories` with a comment explaining why.
-3. Re-run `oxide-ci audit` to confirm only suppressed advisories remain.
+3. Re-run `greengate audit` to confirm only suppressed advisories remain.
 4. Set a calendar reminder to re-evaluate suppressed advisories when the upstream tool releases a new major version.

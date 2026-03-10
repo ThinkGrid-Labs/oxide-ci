@@ -23,16 +23,16 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            asset_name: oxide-ci-linux-amd64
+            asset_name: greengate-linux-amd64
           - os: macos-latest
             target: aarch64-apple-darwin
-            asset_name: oxide-ci-macos-arm64
+            asset_name: greengate-macos-arm64
           - os: macos-latest
             target: x86_64-apple-darwin
-            asset_name: oxide-ci-macos-amd64
+            asset_name: greengate-macos-amd64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            asset_name: oxide-ci-windows-amd64.exe
+            asset_name: greengate-windows-amd64.exe
 
     steps:
       - name: Checkout repository
@@ -70,12 +70,12 @@ jobs:
 
       - name: Rename binary (Unix)
         if: matrix.os != 'windows-latest'
-        run: mv target/${{ matrix.target }}/release/oxide-ci ${{ matrix.asset_name }}
+        run: mv target/${{ matrix.target }}/release/greengate ${{ matrix.asset_name }}
 
       - name: Rename binary (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
-        run: Move-Item target/${{ matrix.target }}/release/oxide-ci.exe ${{ matrix.asset_name }}
+        run: Move-Item target/${{ matrix.target }}/release/greengate.exe ${{ matrix.asset_name }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -107,7 +107,7 @@ jobs:
         with:
           # tag_name is inferred from the triggering tag (e.g. v0.2.0)
           # Each tag produces a separate, permanent release entry.
-          name: oxide-ci ${{ github.ref_name }}
+          name: GreenGate ${{ github.ref_name }}
           files: release_assets/*
           generate_release_notes: true
           fail_on_unmatched_files: true

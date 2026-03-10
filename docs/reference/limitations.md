@@ -1,12 +1,12 @@
 # Limitations
 
-This page documents the known boundaries of OxideCI's analysis. Understanding these limitations helps you set accurate expectations and decide where additional tooling may be warranted.
+This page documents the known boundaries of GreenGate's analysis. Understanding these limitations helps you set accurate expectations and decide where additional tooling may be warranted.
 
 ---
 
 ## SAST — taint tracking scope
 
-OxideCI implements **Tier-1 intra-procedural taint tracking** for JS/TS. This means:
+GreenGate implements **Tier-1 intra-procedural taint tracking** for JS/TS. This means:
 
 ### What IS covered
 
@@ -24,7 +24,7 @@ OxideCI implements **Tier-1 intra-procedural taint tracking** for JS/TS. This me
 
 | Gap | Reason | Workaround |
 |---|---|---|
-| **Inter-procedural taint** — taint flowing through a user-defined function call | Requires building a call graph across functions, which is Tier 2 | Add `// oxide-ci: ignore` on the call site, or use a purpose-built SAST tool (Semgrep, Snyk Code) for this pattern |
+| **Inter-procedural taint** — taint flowing through a user-defined function call | Requires building a call graph across functions, which is Tier 2 | Add `// greengate: ignore` on the call site, or use a purpose-built SAST tool (Semgrep, Snyk Code) for this pattern |
 | **Cross-file taint** — taint flowing through `import`/`require` across modules | Requires a whole-project analysis pass; not practical in a single-file scanner | Same as above |
 | **Object/array destructuring propagation** | `const { name } = req.body` — destructured properties are not yet tracked | Assign to an intermediate variable before the sink |
 | **Conditional taint** — value is tainted only on certain branches | Flow-sensitive analysis (not implemented) | Unlikely to matter in practice for most XSS/injection sinks |
@@ -39,21 +39,21 @@ function getInput() {
   return req.body.data;   // taint source inside a helper
 }
 
-el.innerHTML = getInput();  // oxide-ci sees an unknown call — flags normally
+el.innerHTML = getInput();  // greengate sees an unknown call — flags normally
 ```
 
-…is **still flagged** at normal confidence because OxideCI does not know `getInput()` is safe. The false negative scenario is the opposite: a sanitizer wrapped in a function will NOT suppress the finding:
+…is **still flagged** at normal confidence because GreenGate does not know `getInput()` is safe. The false negative scenario is the opposite: a sanitizer wrapped in a function will NOT suppress the finding:
 
 ```js
 function safeHtml(input) {
   return DOMPurify.sanitize(input);  // safe inside function
 }
 
-el.innerHTML = safeHtml(raw);  // oxide-ci does not know safeHtml() is safe
+el.innerHTML = safeHtml(raw);  // greengate does not know safeHtml() is safe
                                // → flagged (false positive)
 ```
 
-For this case, use `// oxide-ci: ignore` on the assignment line, or add `safeHtml` to a custom-safe list via a custom SAST rule.
+For this case, use `// greengate: ignore` on the assignment line, or add `safeHtml` to a custom-safe list via a custom SAST rule.
 
 ---
 
@@ -73,7 +73,7 @@ Python and Go SAST uses pattern-only matching (no taint tracking). Taint trackin
 
 ## SAST — no TypeScript type information
 
-OxideCI uses [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for AST parsing. tree-sitter is a syntax parser — it does **not** have access to TypeScript's type checker. This means:
+GreenGate uses [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for AST parsing. tree-sitter is a syntax parser — it does **not** have access to TypeScript's type checker. This means:
 
 - The engine cannot know the declared type of a variable (e.g. it cannot tell whether a `string` came from `HTMLElement.innerHTML` or a user-defined getter).
 - Generic suppression decisions (is this `exec()` a child_process call or a DB query builder call?) are made by inspecting the receiver's **name** and AST shape, not its type.
@@ -84,12 +84,12 @@ For higher-fidelity type-aware analysis, Semgrep Pro or a dedicated type-aware l
 
 ## Dependency audit — OSV API dependency
 
-`oxide-ci audit` queries the [OSV database](https://osv.dev). In environments without outbound internet access:
+`greengate audit` queries the [OSV database](https://osv.dev). In environments without outbound internet access:
 
 - Audit results are cached locally for **24 hours** (offline-friendly for most CI scenarios).
-- If the cache is stale and the network is unavailable, `oxide-ci audit` exits with a warning rather than a hard failure, so it does not break air-gapped builds.
+- If the cache is stale and the network is unavailable, `greengate audit` exits with a warning rather than a hard failure, so it does not break air-gapped builds.
 
-`ignore_advisories` in `.oxideci.toml` suppresses specific GHSA/CVE IDs without disabling the audit entirely. See the [audit command docs](/commands/audit) for details.
+`ignore_advisories` in `.greengate.toml` suppresses specific GHSA/CVE IDs without disabling the audit entirely. See the [audit command docs](/commands/audit) for details.
 
 ---
 
@@ -107,13 +107,13 @@ Raising `entropy_threshold` (e.g. to `5.0`) reduces false positives but may miss
 
 ## Baseline mode
 
-`--since-baseline` compares findings against `.oxide-baseline.json`. Findings are matched by **file path + rule ID + line number**. If a secret moves to a different line (e.g. after a rebase or auto-formatter pass), it will re-appear as a new finding. Commit `.oxide-baseline.json` to version control and regenerate it with `--update-baseline` whenever baseline findings are intentionally resolved.
+`--since-baseline` compares findings against `.greengate-baseline.json`. Findings are matched by **file path + rule ID + line number**. If a secret moves to a different line (e.g. after a rebase or auto-formatter pass), it will re-appear as a new finding. Commit `.greengate-baseline.json` to version control and regenerate it with `--update-baseline` whenever baseline findings are intentionally resolved.
 
 ---
 
 ## No inter-process or runtime analysis
 
-OxideCI is a **static** analysis tool. It cannot:
+GreenGate is a **static** analysis tool. It cannot:
 
 - Detect secrets injected at runtime via environment variables (those are generally safe — use env vars instead of hardcoding).
 - Detect vulnerabilities that only manifest under specific runtime conditions (race conditions, logic bugs, SSRF depending on user-controlled URLs at runtime).

@@ -1,7 +1,7 @@
 use std::process::Command;
 
 fn binary() -> std::path::PathBuf {
-    env!("CARGO_BIN_EXE_oxide-ci").into()
+    env!("CARGO_BIN_EXE_greengate").into()
 }
 
 // ── scan ──────────────────────────────────────────────────────────────────────
@@ -212,7 +212,7 @@ fn scan_suppressed_line_is_not_flagged() {
     // AWS key on a line marked with the suppression comment — must not be flagged
     std::fs::write(
         dir.path().join("config.env"),
-        "AWS_KEY=AKIAIOSFODNN7EXAMPLEKEY1  # oxide-ci: ignore\n",
+        "AWS_KEY=AKIAIOSFODNN7EXAMPLEKEY1  # greengate: ignore\n",
     )
     .unwrap();
 
@@ -235,7 +235,7 @@ fn scan_suppression_only_on_marked_line() {
     std::fs::write(
         dir.path().join("config.env"),
         format!(
-            "SAFE=AKIAIOSFODNN7EXAMPLEKEY1  # oxide-ci: ignore\n{}\n",
+            "SAFE=AKIAIOSFODNN7EXAMPLEKEY1  # greengate: ignore\n{}\n",
             "REAL=AKIAIOSFODNN7EXAMPLEKEY1"
         ),
     )
@@ -298,7 +298,7 @@ fn scan_detects_high_entropy_string() {
 
 #[test]
 fn scan_history_flag_accepted() {
-    // Run in oxide-ci's own repo — guaranteed to be a git repository.
+    // Run in greengate's own repo — guaranteed to be a git repository.
     // Check only that the flag is recognised and any output is valid JSON.
     let output = Command::new(binary())
         .args(["scan", "--history", "--format", "json"])
@@ -463,8 +463,8 @@ fn install_hooks_creates_hook_file() {
 
     let content = std::fs::read_to_string(&hook_path).unwrap();
     assert!(
-        content.contains("oxide-ci scan --staged"),
-        "hook must invoke oxide-ci scan --staged"
+        content.contains("greengate scan --staged"),
+        "hook must invoke greengate scan --staged"
     );
 }
 
@@ -647,7 +647,7 @@ fn sast_disabled_via_config_skips_scan() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("app.js"), "eval(x);\n").unwrap();
     std::fs::write(
-        dir.path().join(".oxideci.toml"),
+        dir.path().join(".greengate.toml"),
         "[sast]\nenabled = false\n",
     )
     .unwrap();
@@ -666,7 +666,7 @@ fn sast_specific_rule_disabled_via_config() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("app.js"), "eval(x);\n").unwrap();
     std::fs::write(
-        dir.path().join(".oxideci.toml"),
+        dir.path().join(".greengate.toml"),
         "[sast]\ndisabled_rules = [\"SAST/EvalUsage\"]\n",
     )
     .unwrap();

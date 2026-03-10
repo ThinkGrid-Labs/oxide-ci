@@ -1,25 +1,25 @@
 # init
 
-Interactive wizard that generates a `.oxideci.toml` configuration file for your project.
+Interactive wizard that generates a `.greengate.toml` configuration file for your project.
 
 ## Usage
 
 ```bash
-oxide-ci init [--force]
+greengate init [--force]
 ```
 
 ## Options
 
 | Flag | Description |
 |---|---|
-| `--force` | Overwrite an existing `.oxideci.toml` without prompting |
+| `--force` | Overwrite an existing `.greengate.toml` without prompting |
 
 ## What it does
 
-Asks a series of short questions about your project and writes a tailored `.oxideci.toml`. Press Enter to accept the default shown in `[brackets]`.
+Asks a series of short questions about your project and writes a tailored `.greengate.toml`. Press Enter to accept the default shown in `[brackets]`.
 
 ```
-oxide-ci init — generating .oxideci.toml
+greengate init — generating .greengate.toml
 
 [ Secret & SAST Scanning ]
   Enable entropy-based secret detection? [Y/n]:
@@ -40,9 +40,9 @@ oxide-ci init — generating .oxideci.toml
   ...
 
 [ Pipeline Runner ]
-  Generate a default pipeline (oxide-ci run)? [Y/n]:
+  Generate a default pipeline (greengate run)? [Y/n]:
 
-✅ .oxideci.toml written successfully.
+✅ .greengate.toml written successfully.
 ```
 
 ## Generated config
@@ -85,17 +85,17 @@ steps = [
 ## Updating an existing config
 
 ```bash
-# Will fail if .oxideci.toml already exists
-oxide-ci init
+# Will fail if .greengate.toml already exists
+greengate init
 
 # Overwrite without prompting
-oxide-ci init --force
+greengate init --force
 ```
 
 ## Next steps after init
 
-Once `.oxideci.toml` exists, every subsequent `oxide-ci` invocation reads it automatically. Run the full pipeline with:
+Once `.greengate.toml` exists, every subsequent `greengate` invocation reads it automatically. Run the full pipeline with:
 
 ```bash
-oxide-ci run
+greengate run
 ```

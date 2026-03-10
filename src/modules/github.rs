@@ -54,7 +54,7 @@ const API_BASE: &str = "https://api.github.com";
 fn create_check_run(owner: &str, repo: &str, sha: &str, token: &str) -> Result<u64> {
     let url = format!("{}/repos/{}/{}/check-runs", API_BASE, owner, repo);
     let body = serde_json::json!({
-        "name": "oxide-ci",
+        "name": "greengate",
         "head_sha": sha,
         "status": "in_progress",
     });
@@ -98,7 +98,7 @@ fn update_check_run_annotations(
         .collect();
     let body = serde_json::json!({
         "output": {
-            "title": "oxide-ci scan",
+            "title": "greengate scan",
             "summary": format!("{} finding(s)", chunk.len()),
             "annotations": annotations,
         }
@@ -128,8 +128,8 @@ fn complete_check_run(
         "status": "completed",
         "conclusion": conclusion,
         "output": {
-            "title": "oxide-ci scan",
-            "summary": format!("oxide-ci found {} issue(s).", total),
+            "title": "greengate scan",
+            "summary": format!("greengate found {} issue(s).", total),
         }
     });
     ureq::request("PATCH", &url)
@@ -193,7 +193,7 @@ fn build_pr_summary(findings: &[Finding]) -> String {
     let total = findings.len();
 
     if total == 0 {
-        return "## oxide-ci scan results\n\n**No issues found.** All checks passed.\n"
+        return "## greengate scan results\n\n**No issues found.** All checks passed.\n"
             .to_string();
     }
 
@@ -203,7 +203,7 @@ fn build_pr_summary(findings: &[Finding]) -> String {
     let low = findings.iter().filter(|f| f.severity == "low").count();
 
     let mut md = format!(
-        "## oxide-ci scan results\n\n\
+        "## greengate scan results\n\n\
          **{total} finding(s)** \
          ({critical} critical, {high} high, {medium} medium, {low} low)\n\n\
          | File | Line | Rule | Severity |\n\

@@ -1,6 +1,6 @@
 # Exit Codes
 
-All oxide-ci commands follow a simple two-code convention. CI pipelines can rely on the exit code directly — no output parsing required.
+All greengate commands follow a simple two-code convention. CI pipelines can rely on the exit code directly — no output parsing required.
 
 | Code | Meaning |
 |---|---|
@@ -11,7 +11,7 @@ All oxide-ci commands follow a simple two-code convention. CI pipelines can rely
 
 ```yaml
 - name: Secret Scan
-  run: oxide-ci scan
+  run: greengate scan
   # Step fails automatically when exit code is 1
 ```
 
@@ -19,7 +19,7 @@ To continue the pipeline after a failure (e.g. to upload SARIF even when issues 
 
 ```yaml
 - name: Secret Scan
-  run: oxide-ci scan --format sarif > results.sarif
+  run: greengate scan --format sarif > results.sarif
   continue-on-error: true
 
 - name: Upload SARIF

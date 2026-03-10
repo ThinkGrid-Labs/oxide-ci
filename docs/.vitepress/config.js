@@ -1,26 +1,26 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'OxideCI',
+  title: 'GreenGate',
   description: 'Rust DevOps CLI: secret scanning, AST-based SAST, Kubernetes linting, coverage gates, dependency auditing, and web performance — single zero-dependency binary.',
-  base: '/oxide-ci/',
+  base: '/greengate/',
 
   head: [
-    ['meta', { name: 'og:title', content: 'OxideCI — Rust DevOps CLI' }],
+    ['meta', { name: 'og:title', content: 'GreenGate — Rust DevOps CLI' }],
     ['meta', { name: 'og:description', content: 'Secret scanning, SAST, Kubernetes linting, coverage gates, dependency auditing in a single Rust binary.' }],
     ['meta', { name: 'og:type', content: 'website' }],
-    ['link', { rel: 'icon', href: '/oxide-ci/favicon.ico' }],
+    ['link', { rel: 'icon', href: '/greengate/favicon.ico' }],
   ],
 
   themeConfig: {
     logo: null,
-    siteTitle: 'OxideCI',
+    siteTitle: 'GreenGate',
 
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Commands', link: '/commands/scan' },
       { text: 'Reference', link: '/reference/config' },
-      { text: 'GitHub', link: 'https://github.com/ThinkGrid-Labs/oxide-ci' },
+      { text: 'GitHub', link: 'https://github.com/ThinkGrid-Labs/greengate' },
     ],
 
     sidebar: [
@@ -62,7 +62,7 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/ThinkGrid-Labs/oxide-ci' },
+      { icon: 'github', link: 'https://github.com/ThinkGrid-Labs/greengate' },
     ],
 
     footer: {
@@ -75,7 +75,7 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: 'https://github.com/ThinkGrid-Labs/oxide-ci/edit/main/docs/:path',
+      pattern: 'https://github.com/ThinkGrid-Labs/greengate/edit/main/docs/:path',
       text: 'Edit this page on GitHub',
     },
   },

@@ -1,6 +1,6 @@
-# Configuration File (.oxideci.toml)
+# Configuration File (.greengate.toml)
 
-Place `.oxideci.toml` in the root of your repository. CLI flags always override config file values. All fields are optional — omitted values fall back to built-in defaults.
+Place `.greengate.toml` in the root of your repository. CLI flags always override config file values. All fields are optional — omitted values fall back to built-in defaults.
 
 ## Full reference
 
@@ -78,15 +78,15 @@ ignore_advisories = [
 
 ## Precedence
 
-CLI flag > `--profile` override > `.oxideci.toml` > built-in default
+CLI flag > `--profile` override > `.greengate.toml` > built-in default
 
 ## Profiles
 
 Apply a named quality profile on top of your loaded config with the global `--profile` flag:
 
 ```bash
-oxide-ci --profile strict scan
-oxide-ci --profile ci scan --staged
+greengate --profile strict scan
+greengate --profile ci scan --staged
 ```
 
 | Profile | Effect |
@@ -95,15 +95,15 @@ oxide-ci --profile ci scan --staged
 | `relaxed` | Coverage ≥ 70%, entropy threshold 5.0 (fewer false positives) |
 | `ci` | Coverage ≥ 80%, SAST enabled, code-smell rules (`SMELL/*`) disabled to reduce noise |
 
-Profiles modify the in-memory config only — they never write to `.oxideci.toml`.
+Profiles modify the in-memory config only — they never write to `.greengate.toml`.
 
 ## Inline suppression
 
 Suppress a finding on a specific line using a comment:
 
 ```ts
-const key = "AKIAIOSFODNN7EXAMPLE123"; // oxide-ci: ignore
-el.innerHTML = sanitizedHtml;           // oxide-ci: ignore
+const key = "AKIAIOSFODNN7EXAMPLE123"; // greengate: ignore
+el.innerHTML = sanitizedHtml;           // greengate: ignore
 ```
 
 Works for both secret/PII and SAST findings.

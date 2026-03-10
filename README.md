@@ -1,20 +1,20 @@
-# OxideCI — Rust DevOps CLI: Secret Scanner, AST SAST, Kubernetes Linter & CI Quality Gates
+# GreenGate — Rust DevOps CLI: Secret Scanner, AST SAST, Kubernetes Linter & CI Quality Gates
 
 > A blazing-fast DevOps CLI built in Rust — secret scanning, AST-based SAST for JS/TS/Python/Go, Kubernetes linting, Dockerfile linting, coverage gates, dependency auditing with offline cache, web performance auditing, React component regression detection, CycloneDX SBOM generation, scan baselines, a pipeline runner, config profiles, and an interactive setup wizard — in a single zero-dependency binary.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Build](https://img.shields.io/github/actions/workflow/status/ThinkGrid-Labs/oxide-ci/ci.yml?branch=main)](https://github.com/ThinkGrid-Labs/oxide-ci/actions)
-[![GitHub release](https://img.shields.io/github/v/release/ThinkGrid-Labs/oxide-ci)](https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest)
-[![Crates.io](https://img.shields.io/crates/v/oxide-ci)](https://crates.io/crates/oxide-ci)
-[![Downloads](https://img.shields.io/crates/d/oxide-ci)](https://crates.io/crates/oxide-ci)
+[![Build](https://img.shields.io/github/actions/workflow/status/ThinkGrid-Labs/greengate/ci.yml?branch=main)](https://github.com/ThinkGrid-Labs/greengate/actions)
+[![GitHub release](https://img.shields.io/github/v/release/ThinkGrid-Labs/greengate)](https://github.com/ThinkGrid-Labs/greengate/releases/latest)
+[![Crates.io](https://img.shields.io/crates/v/greengate)](https://crates.io/crates/greengate)
+[![Downloads](https://img.shields.io/crates/d/greengate)](https://crates.io/crates/greengate)
 [![MSRV](https://img.shields.io/badge/MSRV-1.85-orange)](https://www.rust-lang.org)
-[![GitHub Stars](https://img.shields.io/github/stars/ThinkGrid-Labs/oxide-ci?style=social)](https://github.com/ThinkGrid-Labs/oxide-ci/stargazers)
+[![GitHub Stars](https://img.shields.io/github/stars/ThinkGrid-Labs/greengate?style=social)](https://github.com/ThinkGrid-Labs/greengate/stargazers)
 
 ---
 
 ## Table of Contents
 
-- [Why OxideCI?](#why-oxideci)
+- [Why GreenGate?](#why-greengate)
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -38,7 +38,7 @@
 - [Secret Detection Patterns](#secret-detection-patterns)
 - [SAST Rules Reference](#sast-rules-reference)
 - [Suppressing Findings](#suppressing-findings)
-- [Configuration File](#configuration-file-oxidecitorml)
+- [Configuration File](#configuration-file-greengatetorml)
 - [Config Profiles](#config-profiles)
 - [Output Formats](#output-formats)
 - [Exit Codes](#exit-codes)
@@ -50,27 +50,27 @@
 
 ---
 
-## Why OxideCI?
+## Why GreenGate?
 
-Most DevOps quality tools are either slow, require a runtime (Node, Python, Java), or solve only one problem. OxideCI packages essential CI gates into a single compiled Rust binary:
+Most DevOps quality tools are either slow, require a runtime (Node, Python, Java), or solve only one problem. GreenGate packages essential CI gates into a single compiled Rust binary:
 
-| Problem | OxideCI command |
+| Problem | GreenGate command |
 |---|---|
-| Hardcoded secrets pushed to git | `oxide-ci scan` |
-| XSS, eval, command injection in JS/TS/Python/Go | `oxide-ci scan` (SAST) |
-| Kubernetes manifests missing resource limits | `oxide-ci lint` |
-| Dockerfile best-practice violations | `oxide-ci docker-lint` |
-| Test coverage silently dropping | `oxide-ci coverage` |
-| Vulnerable dependencies shipping to production | `oxide-ci audit` |
-| Secrets committed before anyone notices | `oxide-ci install-hooks` |
-| Web Lighthouse score regressing between deploys | `oxide-ci lighthouse` |
-| React component render performance regressing | `oxide-ci reassure` |
-| Existing findings flooding CI noise | `oxide-ci scan --since-baseline` |
-| Unknown who introduced a secret | `oxide-ci scan --blame` |
-| Need an SBOM for compliance | `oxide-ci sbom` |
-| Config file has a syntax error | `oxide-ci check-config` |
-| Running all gates with one command | `oxide-ci run` |
-| Getting started without reading docs | `oxide-ci init` |
+| Hardcoded secrets pushed to git | `greengate scan` |
+| XSS, eval, command injection in JS/TS/Python/Go | `greengate scan` (SAST) |
+| Kubernetes manifests missing resource limits | `greengate lint` |
+| Dockerfile best-practice violations | `greengate docker-lint` |
+| Test coverage silently dropping | `greengate coverage` |
+| Vulnerable dependencies shipping to production | `greengate audit` |
+| Secrets committed before anyone notices | `greengate install-hooks` |
+| Web Lighthouse score regressing between deploys | `greengate lighthouse` |
+| React component render performance regressing | `greengate reassure` |
+| Existing findings flooding CI noise | `greengate scan --since-baseline` |
+| Unknown who introduced a secret | `greengate scan --blame` |
+| Need an SBOM for compliance | `greengate sbom` |
+| Config file has a syntax error | `greengate check-config` |
+| Running all gates with one command | `greengate run` |
+| Getting started without reading docs | `greengate init` |
 
 **Key advantages:**
 
@@ -80,7 +80,7 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 - **Cloud-provider agnostic** — detects secrets across AWS, Azure, GCP, DigitalOcean, Alibaba Cloud, Stripe, GitHub, Twilio, Expo, Sentry, Mapbox, and more.
 - **gitignore-aware** — uses the `ignore` crate to automatically skip files in `.gitignore`, so you never scan `node_modules/` or `target/` by accident.
 - **CI-native output** — `--format sarif` produces SARIF 2.1.0 output that GitHub Advanced Security displays as inline PR annotations with zero extra config.
-- **Configurable** — a single `.oxideci.toml` file sets defaults for all commands; CLI flags always override it.
+- **Configurable** — a single `.greengate.toml` file sets defaults for all commands; CLI flags always override it.
 
 ---
 
@@ -102,7 +102,7 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 | Custom SAST rules via config (tree-sitter S-expression queries) | ✅ |
 | Custom extra patterns via config | ✅ |
 | Exclude paths via glob patterns | ✅ |
-| Inline suppression (`// oxide-ci: ignore`) | ✅ |
+| Inline suppression (`// greengate: ignore`) | ✅ |
 | Git diff / staged-only / full history scanning | ✅ |
 | Git blame enrichment (`--blame`) | ✅ |
 | JSON, SARIF 2.1.0, JUnit XML, GitLab SAST output formats | ✅ |
@@ -113,17 +113,17 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 | Dependency audit via OSV API (6 ecosystems) | ✅ |
 | Suppress known-acceptable advisories via `ignore_advisories` | ✅ |
 | Offline OSV audit cache (24-hour TTL, air-gap friendly) | ✅ |
-| CycloneDX 1.5 SBOM generation (`oxide-ci sbom`) | ✅ |
+| CycloneDX 1.5 SBOM generation (`greengate sbom`) | ✅ |
 | Git pre-commit hook installer | ✅ |
 | Web performance audit via PageSpeed Insights | ✅ |
 | React component performance gate (Reassure) | ✅ |
 | Scan baseline (suppress known findings in CI) | ✅ |
 | Config profiles (`--profile strict\|relaxed\|ci`) | ✅ |
-| Config validation (`oxide-ci check-config`) | ✅ |
-| Pipeline runner (`oxide-ci run`) | ✅ |
-| Interactive setup wizard (`oxide-ci init`) | ✅ |
-| Live file watcher (`oxide-ci watch`) | ✅ |
-| `.oxideci.toml` config file | ✅ |
+| Config validation (`greengate check-config`) | ✅ |
+| Pipeline runner (`greengate run`) | ✅ |
+| Interactive setup wizard (`greengate init`) | ✅ |
+| Live file watcher (`greengate watch`) | ✅ |
+| `.greengate.toml` config file | ✅ |
 | Respects `.gitignore` | ✅ |
 
 ---
@@ -134,43 +134,43 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 
 **macOS (Apple Silicon / M1+):**
 ```bash
-curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-macos-arm64 \
-  -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
+curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-macos-arm64 \
+  -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **macOS (Intel):**
 ```bash
-curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-macos-amd64 \
-  -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
+curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-macos-amd64 \
+  -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Linux (x64):**
 ```bash
-curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
-  -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
+curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+  -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Windows (x64) — PowerShell:**
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-windows-amd64.exe" `
-  -OutFile "$env:USERPROFILE\.local\bin\oxide-ci.exe"
+Invoke-WebRequest -Uri "https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-windows-amd64.exe" `
+  -OutFile "$env:USERPROFILE\.local\bin\greengate.exe"
 # Add $env:USERPROFILE\.local\bin to your PATH if not already present
 ```
 
 ### Build from source (requires Rust 1.85+)
 ```bash
-cargo install --git https://github.com/ThinkGrid-Labs/oxide-ci
+cargo install --git https://github.com/ThinkGrid-Labs/greengate
 ```
 
 ### Verify installation
 ```
-$ oxide-ci --version
-oxide-ci 0.2.6
+$ greengate --version
+greengate 0.2.6
 
-$ oxide-ci --help
+$ greengate --help
 A high-performance DevOps CLI tool in Rust
 
-Usage: oxide-ci [--profile <PROFILE>] <COMMAND>
+Usage: greengate [--profile <PROFILE>] <COMMAND>
 
 Commands:
   scan           Scans the current directory for hardcoded secrets and PII
@@ -178,14 +178,14 @@ Commands:
   docker-lint    Lints a Dockerfile for best-practice violations
   coverage       Parses an LCOV or Cobertura XML coverage file and fails if below threshold
   audit          Audits project dependencies for known vulnerabilities via the OSV database
-  install-hooks  Installs oxide-ci as a git pre-commit hook
+  install-hooks  Installs greengate as a git pre-commit hook
   lighthouse     Audits web performance via Google PageSpeed Insights (Lighthouse)
   reassure       Parses a Reassure performance report and gates on regressions
   sbom           Generates a CycloneDX 1.5 SBOM from the project's lock file
-  check-config   Validates .oxideci.toml and prints all resolved configuration values
-  init           Interactive wizard that generates a .oxideci.toml config file
+  check-config   Validates .greengate.toml and prints all resolved configuration values
+  init           Interactive wizard that generates a .greengate.toml config file
   watch          Re-runs scan automatically whenever source files change
-  run            Runs all pipeline steps defined in .oxideci.toml in order
+  run            Runs all pipeline steps defined in .greengate.toml in order
   help           Print this message or the help of the given subcommand(s)
 ```
 
@@ -195,25 +195,25 @@ Commands:
 
 ```bash
 # Scan for secrets in current repo (includes SAST for JS/TS files)
-oxide-ci scan
+greengate scan
 
 # Lint all Kubernetes YAML files
-oxide-ci lint --dir ./k8s
+greengate lint --dir ./k8s
 
 # Enforce 80% minimum coverage
-oxide-ci coverage --file coverage/lcov.info --min 80
+greengate coverage --file coverage/lcov.info --min 80
 
 # Audit dependencies for CVEs
-oxide-ci audit
+greengate audit
 
 # Install as a git hook (runs on every commit)
-oxide-ci install-hooks
+greengate install-hooks
 
 # Gate on Lighthouse web performance scores
-oxide-ci lighthouse --url https://yourapp.com
+greengate lighthouse --url https://yourapp.com
 
 # Gate on React component performance regressions (after `reassure measure`)
-oxide-ci reassure
+greengate reassure
 ```
 
 ---
@@ -227,7 +227,7 @@ Recursively scans every file in the current directory for hardcoded secrets, cre
 For JavaScript, TypeScript, Python, and Go files the scanner automatically uses an AST-based pass (SAST) instead of plain regex. This eliminates false positives from comments and non-string content, and additionally flags dangerous API patterns. See [SAST for JS/TS/Python/Go](#sast-static-analysis-for-jstspythongo) below.
 
 ```
-oxide-ci scan [OPTIONS]
+greengate scan [OPTIONS]
 
 Options:
   --format <FORMAT>    Output format: text (default), json, sarif, junit, gitlab
@@ -237,7 +237,7 @@ Options:
   --annotate           Post findings as a GitHub Check Run with per-line annotations
                        and a rich PR summary comment. Requires GITHUB_TOKEN,
                        GITHUB_REPOSITORY, and GITHUB_SHA env vars. No-op when absent.
-  --update-baseline    Save current findings as the baseline (.oxide-baseline.json)
+  --update-baseline    Save current findings as the baseline (.greengate-baseline.json)
   --since-baseline     Only fail on findings not present in the saved baseline
   --blame              Enrich each finding with git blame info (author + commit)
   -h, --help           Print help
@@ -247,34 +247,34 @@ Options:
 
 ```bash
 # Full scan, human-readable output
-oxide-ci scan
+greengate scan
 
 # Only scan what you're about to commit (fast, perfect for pre-commit)
-oxide-ci scan --staged
+greengate scan --staged
 
 # Only scan files changed in the last commit
-oxide-ci scan --since HEAD~1
+greengate scan --since HEAD~1
 
 # Output SARIF for GitHub Advanced Security PR annotations
-oxide-ci scan --format sarif > results.sarif
+greengate scan --format sarif > results.sarif
 
 # JUnit XML for Jenkins / Azure DevOps
-oxide-ci scan --format junit > results.xml
+greengate scan --format junit > results.xml
 
 # GitLab SAST Security Scanner JSON
-oxide-ci scan --format gitlab > gl-sast-report.json
+greengate scan --format gitlab > gl-sast-report.json
 
 # Output JSON for custom tooling
-oxide-ci scan --format json | jq '.findings[].rule'
+greengate scan --format json | jq '.findings[].rule'
 
 # Enrich findings with git blame info (author + commit)
-oxide-ci scan --blame
+greengate scan --blame
 
 # Post findings directly to the GitHub Checks tab and a rich PR summary comment
 GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
 GITHUB_REPOSITORY=owner/repo \
 GITHUB_SHA=${{ github.sha }} \
-oxide-ci scan --annotate
+greengate scan --annotate
 ```
 
 **Sample output (text):**
@@ -305,7 +305,7 @@ Error: Scan failed: 3 secret(s)/PII found. Review the findings above.
 
 #### SAST: Static Analysis for JS/TS/Python/Go
 
-When scanning `.js`, `.jsx`, `.ts`, `.tsx`, `.py`, or `.go` files, oxide-ci uses [tree-sitter](https://tree-sitter.github.io/tree-sitter/) to parse each file into an AST before running any checks. This gives two important improvements over plain regex:
+When scanning `.js`, `.jsx`, `.ts`, `.tsx`, `.py`, or `.go` files, greengate uses [tree-sitter](https://tree-sitter.github.io/tree-sitter/) to parse each file into an AST before running any checks. This gives two important improvements over plain regex:
 
 **1. String-literal scoping for secrets**
 
@@ -392,7 +392,7 @@ Three additional rules flag maintainability issues at the function level:
 | `SMELL/TooManyParameters` | Function has more than `max_parameters` parameters | 5 params |
 | `SMELL/DeepNesting` | Control-flow depth exceeds `max_nesting_depth` inside a function | 4 levels |
 
-Rule IDs include the measured value for immediate context — e.g. `SMELL/LongFunction (63 lines, max 50)`. Thresholds are configurable in `.oxideci.toml`:
+Rule IDs include the measured value for immediate context — e.g. `SMELL/LongFunction (63 lines, max 50)`. Thresholds are configurable in `.greengate.toml`:
 
 ```toml
 [sast]
@@ -416,14 +416,14 @@ custom_rules = [
 ]
 ```
 
-Custom rules are validated at startup — invalid queries are skipped with a warning and never cause `oxide-ci scan` to crash. Custom rule IDs can be disabled with `disabled_rules` like any built-in rule.
+Custom rules are validated at startup — invalid queries are skipped with a warning and never cause `greengate scan` to crash. Custom rule IDs can be disabled with `disabled_rules` like any built-in rule.
 
-> **Note:** SAST runs automatically when `oxide-ci scan` encounters a supported file — there is no separate command. Unsupported file types (`.rs`, `.yaml`, `.env`, etc.) use the regex scanner.
+> **Note:** SAST runs automatically when `greengate scan` encounters a supported file — there is no separate command. Unsupported file types (`.rs`, `.yaml`, `.env`, etc.) use the regex scanner.
 
 **Disabling SAST or individual rules:**
 
 ```toml
-# .oxideci.toml
+# .greengate.toml
 
 [sast]
 # Set to false to disable SAST entirely and fall back to regex for all files
@@ -440,13 +440,13 @@ disabled_rules = [
 
 **GitHub Check Run annotations + PR summary (`--annotate`):**
 
-When running in GitHub Actions, pass `--annotate` to have oxide-ci post findings directly to the Checks tab with per-line annotations and a rich markdown summary comment on the pull request. The comment includes a severity breakdown and a per-finding table (capped at 20 rows). No SARIF upload step required.
+When running in GitHub Actions, pass `--annotate` to have greengate post findings directly to the Checks tab with per-line annotations and a rich markdown summary comment on the pull request. The comment includes a severity breakdown and a per-finding table (capped at 20 rows). No SARIF upload step required.
 
 ```yaml
 - name: Secret, PII & SAST Scan
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  run: oxide-ci scan --annotate
+  run: greengate scan --annotate
 ```
 
 Required env vars (automatically set in GitHub Actions): `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `GITHUB_SHA`. When any env var is absent, `--annotate` is a no-op and the scan runs normally. A clean scan (no findings) posts a "No issues found" pass comment.
@@ -458,7 +458,7 @@ Required env vars (automatically set in GitHub Actions): `GITHUB_TOKEN`, `GITHUB
 Validates Kubernetes workload YAML files (`Deployment`, `DaemonSet`, `StatefulSet`, `Job`, `CronJob`) against security and reliability best practices. Supports multi-document YAML files (`---` separator).
 
 ```
-oxide-ci lint [OPTIONS]
+greengate lint [OPTIONS]
 
 Options:
   -d, --dir <DIR>    Directory to scan for Kubernetes manifests [default: . or lint.target_dir from config]
@@ -483,10 +483,10 @@ Options:
 
 ```bash
 # Lint manifests in the current directory
-oxide-ci lint
+greengate lint
 
 # Lint a specific directory
-oxide-ci lint --dir ./infrastructure/k8s
+greengate lint --dir ./infrastructure/k8s
 ```
 
 **Sample output:**
@@ -539,7 +539,7 @@ Two formats are supported and auto-detected by file extension (or by peeking at 
 | **Cobertura XML** | `.xml` | Python (coverage.py), Java (JaCoCo), .NET |
 
 ```
-oxide-ci coverage [OPTIONS]
+greengate coverage [OPTIONS]
 
 Options:
   -f, --file <FILE>    Path to the coverage file [default: coverage/lcov.info or coverage.file from config]
@@ -551,16 +551,16 @@ Options:
 
 ```bash
 # LCOV (Rust, Jest, pytest)
-oxide-ci coverage --file coverage/lcov.info --min 80
+greengate coverage --file coverage/lcov.info --min 80
 
 # Cobertura XML (Python coverage.py, JaCoCo)
-oxide-ci coverage --file coverage.xml --min 80
+greengate coverage --file coverage.xml --min 80
 
 # Enforce a stricter 90% gate
-oxide-ci coverage --file coverage/lcov.info --min 90
+greengate coverage --file coverage/lcov.info --min 90
 
-# Read defaults from .oxideci.toml
-oxide-ci coverage
+# Read defaults from .greengate.toml
+greengate coverage
 ```
 
 **Generating coverage reports by language:**
@@ -602,7 +602,7 @@ Error: Coverage gate failed: 74.8% < 80.0%
 Automatically detects your project's lock file, parses all pinned dependencies, and queries the [OSV (Open Source Vulnerabilities)](https://osv.dev) database in a single batch request. Works across six ecosystems.
 
 ```
-oxide-ci audit
+greengate audit
 
 Options:
   -h, --help    Print help
@@ -623,16 +623,16 @@ Options:
 
 ```bash
 # Rust project
-oxide-ci audit
+greengate audit
 
 # Node.js project (npm, yarn, or pnpm — auto-detected)
-oxide-ci audit
+greengate audit
 
 # Python project (auto-detected)
-oxide-ci audit
+greengate audit
 
 # Go project (auto-detected)
-oxide-ci audit
+greengate audit
 ```
 
 **Sample output:**
@@ -645,11 +645,11 @@ oxide-ci audit
 Error: Audit failed: 2 known vulnerability/-ies found.
 ```
 
-> **Note:** Results are cached to `~/.cache/oxide-ci/osv/` with a 24-hour TTL. Subsequent runs reuse the cached response, making the audit fast and air-gap friendly after the first run. On network errors oxide-ci warns and exits 0, so it won't block CI pipelines with no outbound access.
+> **Note:** Results are cached to `~/.cache/greengate/osv/` with a 24-hour TTL. Subsequent runs reuse the cached response, making the audit fast and air-gap friendly after the first run. On network errors greengate warns and exits 0, so it won't block CI pipelines with no outbound access.
 
 **Suppressing unfixable transitive advisories:**
 
-Some transitive dependency CVEs cannot be fixed because the vulnerable package is pulled in by a build tool (webpack, jest, turbo) that has not yet released a compatible upgrade. Rather than disabling the audit entirely, suppress individual advisory IDs in `.oxideci.toml`:
+Some transitive dependency CVEs cannot be fixed because the vulnerable package is pulled in by a build tool (webpack, jest, turbo) that has not yet released a compatible upgrade. Rather than disabling the audit entirely, suppress individual advisory IDs in `.greengate.toml`:
 
 ```toml
 [audit]
@@ -665,10 +665,10 @@ Suppressed advisories appear as `[suppressed]` warnings — not errors — so ne
 
 ### `install-hooks` — Git Pre-commit Hook
 
-Installs oxide-ci as a git pre-commit hook that automatically runs `scan --staged` before every `git commit`, catching secrets before they ever reach the remote.
+Installs greengate as a git pre-commit hook that automatically runs `scan --staged` before every `git commit`, catching secrets before they ever reach the remote.
 
 ```
-oxide-ci install-hooks [OPTIONS]
+greengate install-hooks [OPTIONS]
 
 Options:
   --force    Overwrite an existing hook without prompting
@@ -678,28 +678,28 @@ Options:
 **What it installs** (written to `.git/hooks/pre-commit`):
 ```sh
 #!/bin/sh
-# oxide-ci pre-commit hook (auto-installed)
+# greengate pre-commit hook (auto-installed)
 # Scans only staged files for secrets and PII before every commit.
-oxide-ci scan --staged
+greengate scan --staged
 ```
 
 **Examples:**
 
 ```bash
 # Install (safe — will not overwrite an existing hook)
-oxide-ci install-hooks
+greengate install-hooks
 
 # Overwrite an existing hook
-oxide-ci install-hooks --force
+greengate install-hooks --force
 ```
 
 **Sample output:**
 ```
 ✅ Pre-commit hook installed at /your/repo/.git/hooks/pre-commit
-ℹ️  oxide-ci scan --staged will now run before every commit.
+ℹ️  greengate scan --staged will now run before every commit.
 ```
 
-> **Tip:** Combine with `oxide-ci scan --staged` in CI for a two-layer defence: developers catch issues locally before pushing, and CI catches anything that slips through.
+> **Tip:** Combine with `greengate scan --staged` in CI for a two-layer defence: developers catch issues locally before pushing, and CI catches anything that slips through.
 
 ---
 
@@ -708,7 +708,7 @@ oxide-ci install-hooks --force
 Fetches your deployed URL from the [Google PageSpeed Insights API v5](https://developers.google.com/speed/docs/insights/v5/get-started) (which runs a real Lighthouse audit server-side) and gates on scores for four categories: Performance, Accessibility, Best Practices, and SEO. No Node.js required — it's a pure HTTPS call via the same HTTP client used by `audit`.
 
 ```
-oxide-ci lighthouse [OPTIONS]
+greengate lighthouse [OPTIONS]
 
 Options:
   --url <URL>                  URL to audit (overrides config)
@@ -725,23 +725,23 @@ Options:
 
 ```bash
 # Audit with default thresholds (mobile strategy)
-oxide-ci lighthouse --url https://yourapp.com
+greengate lighthouse --url https://yourapp.com
 
 # Desktop audit with a stricter performance threshold
-oxide-ci lighthouse --url https://yourapp.com --strategy desktop --min-performance 90
+greengate lighthouse --url https://yourapp.com --strategy desktop --min-performance 90
 
 # Use an API key for higher quota (unauthenticated quota: a few requests/day)
-oxide-ci lighthouse --url https://yourapp.com --key AIza...
+greengate lighthouse --url https://yourapp.com --key AIza...
 
-# Read URL and thresholds from .oxideci.toml
-oxide-ci lighthouse
+# Read URL and thresholds from .greengate.toml
+greengate lighthouse
 ```
 
 **API key:** The PageSpeed Insights API works without a key for occasional runs (development, infrequent CI). For production CI pipelines that run on every PR, create a free key in the [Google Cloud Console](https://console.cloud.google.com/apis/library/pagespeedonline.googleapis.com) and pass it via the `PAGESPEED_API_KEY` environment variable:
 
 ```bash
 export PAGESPEED_API_KEY=AIza...
-oxide-ci lighthouse --url https://yourapp.com
+greengate lighthouse --url https://yourapp.com
 ```
 
 **Sample output:**
@@ -756,7 +756,7 @@ oxide-ci lighthouse --url https://yourapp.com
 Error: Lighthouse failed: 1 category/-ies below threshold.
 ```
 
-**Configuration (`.oxideci.toml`):**
+**Configuration (`.greengate.toml`):**
 
 ```toml
 [lighthouse]
@@ -777,10 +777,10 @@ min_seo = 80
 
 Parses the JSON performance report produced by [Reassure](https://github.com/callstack/reassure) (`reassure measure`) and fails CI if any component's mean render time regresses beyond a configurable threshold, or if the number of renders increases.
 
-Reassure measures real component performance by running each test scenario many times (default 10 iterations × 5 runs). The output is a `.perf` JSON file that oxide-ci reads directly — no Node.js required at gate time.
+Reassure measures real component performance by running each test scenario many times (default 10 iterations × 5 runs). The output is a `.perf` JSON file that greengate reads directly — no Node.js required at gate time.
 
 ```
-oxide-ci reassure [OPTIONS]
+greengate reassure [OPTIONS]
 
 Options:
   --current <PATH>    Path to current.perf file [default: output/current.perf]
@@ -795,12 +795,12 @@ Options:
 # 1. In your frontend project, run Reassure to produce current.perf
 npx reassure measure
 
-# 2. Gate on regressions with oxide-ci
-oxide-ci reassure
+# 2. Gate on regressions with greengate
+greengate reassure
 
 # 3. To compare against a saved baseline, first save it:
 cp output/current.perf output/baseline.perf   # after a known-good run
-# Then on subsequent runs, oxide-ci compares current vs baseline automatically
+# Then on subsequent runs, greengate compares current vs baseline automatically
 ```
 
 **Regression rules:**
@@ -841,7 +841,7 @@ Error: Reassure failed: 1 component(s) exceed the 15.0% regression threshold.
 ℹ️  No baseline provided — metrics reported above (no gating applied).
 ```
 
-**Configuration (`.oxideci.toml`):**
+**Configuration (`.greengate.toml`):**
 
 ```toml
 [reassure]
@@ -867,11 +867,11 @@ test('ProductList render', async () => {
 # Run measurement (generates output/current.perf)
 npx reassure measure
 
-# Then gate with oxide-ci
-oxide-ci reassure --threshold 10
+# Then gate with greengate
+greengate reassure --threshold 10
 ```
 
-> **Tip:** Store `output/baseline.perf` in your repository (or as a CI artifact) after a confirmed good release. On every PR, oxide-ci compares the freshly measured `current.perf` against it and fails if performance has regressed.
+> **Tip:** Store `output/baseline.perf` in your repository (or as a CI artifact) after a confirmed good release. On every PR, greengate compares the freshly measured `current.perf` against it and fails if performance has regressed.
 
 ---
 
@@ -880,7 +880,7 @@ oxide-ci reassure --threshold 10
 Generates a [CycloneDX 1.5](https://cyclonedx.org/specification/overview/) Software Bill of Materials from your project's lock file. No internet access required.
 
 ```
-oxide-ci sbom [OPTIONS]
+greengate sbom [OPTIONS]
 
 Options:
   -o, --output <FILE>    Write SBOM to a file instead of stdout
@@ -890,10 +890,10 @@ Options:
 
 ```bash
 # Print to stdout
-oxide-ci sbom
+greengate sbom
 
 # Write to a file
-oxide-ci sbom --output sbom.json
+greengate sbom --output sbom.json
 ```
 
 Each component includes `name`, `version`, `purl` (Package URL), and `scope: required`. CycloneDX SBOMs are accepted by Dependency-Track, FOSSA, Grype, Trivy, and most enterprise compliance platforms.
@@ -902,13 +902,13 @@ Each component includes `name`, `version`, `purl` (Package URL), and `scope: req
 
 ### `check-config` — Validate Configuration
 
-Reads `.oxideci.toml`, validates it, and prints all resolved configuration values. Useful before running CI to confirm that overrides are applied correctly.
+Reads `.greengate.toml`, validates it, and prints all resolved configuration values. Useful before running CI to confirm that overrides are applied correctly.
 
 ```bash
-oxide-ci check-config
+greengate check-config
 
 # Preview merged values with a profile applied
-oxide-ci --profile strict check-config
+greengate --profile strict check-config
 ```
 
 Exits 0 on valid config (or when no file exists, printing built-in defaults). Exits 1 if the file has a parse error.
@@ -920,7 +920,7 @@ Exits 0 on valid config (or when no file exists, printing built-in defaults). Ex
 Checks a `Dockerfile` for best-practice violations across 8 rules.
 
 ```bash
-oxide-ci docker-lint [--file <path>]
+greengate docker-lint [--file <path>]
 ```
 
 | Rule | What it catches |
@@ -934,7 +934,7 @@ oxide-ci docker-lint [--file <path>]
 | `apt-no-recommends` | `apt-get install` without `--no-install-recommends` |
 | `apt-stale-cache` | `apt-get update` and `apt-get install` in separate `RUN` layers |
 
-Configure the default path in `.oxideci.toml`:
+Configure the default path in `.greengate.toml`:
 ```toml
 [docker]
 dockerfile = "Dockerfile"
@@ -949,15 +949,15 @@ In repositories with existing findings, baseline mode lets CI gate only on **new
 **Step 1: Save a baseline** (run once on your main branch, commit the output)
 
 ```bash
-oxide-ci scan --update-baseline
-# writes .oxide-baseline.json
-git add .oxide-baseline.json && git commit -m "chore: add oxide-ci scan baseline"
+greengate scan --update-baseline
+# writes .greengate-baseline.json
+git add .greengate-baseline.json && git commit -m "chore: add greengate scan baseline"
 ```
 
 **Step 2: Use the baseline in CI** (PRs only fail on new findings)
 
 ```bash
-oxide-ci scan --since-baseline
+greengate scan --since-baseline
 ```
 
 The baseline stores `(file, rule, line)` fingerprints. A secret that moves to a different line is treated as a new finding and re-reviewed.
@@ -966,17 +966,17 @@ The baseline stores `(file, rule, line)` fingerprints. A secret that moves to a 
 
 ## `init` — Interactive Setup Wizard
 
-Generates a tailored `.oxideci.toml` by asking a few questions. The fastest way to get started.
+Generates a tailored `.greengate.toml` by asking a few questions. The fastest way to get started.
 
 ```bash
-oxide-ci init          # guided setup
-oxide-ci init --force  # overwrite existing config
+greengate init          # guided setup
+greengate init --force  # overwrite existing config
 ```
 
 Example session:
 
 ```
-oxide-ci init — generating .oxideci.toml
+greengate init — generating .greengate.toml
 
 [ Secret & SAST Scanning ]
   Enable entropy-based secret detection? [Y/n]:
@@ -990,9 +990,9 @@ oxide-ci init — generating .oxideci.toml
   Dockerfile path (leave blank to skip) []:
 
 [ Pipeline Runner ]
-  Generate a default pipeline (oxide-ci run)? [Y/n]:
+  Generate a default pipeline (greengate run)? [Y/n]:
 
-✅ .oxideci.toml written successfully.
+✅ .greengate.toml written successfully.
 ```
 
 ---
@@ -1002,9 +1002,9 @@ oxide-ci init — generating .oxideci.toml
 Re-runs the scan automatically every time a source file changes. Useful during active development.
 
 ```bash
-oxide-ci watch                    # watch full working tree
-oxide-ci watch --staged           # only scan staged files on change
-oxide-ci watch --interval 500     # poll every 500ms
+greengate watch                    # watch full working tree
+greengate watch --staged           # only scan staged files on change
+greengate watch --interval 500     # poll every 500ms
 ```
 
 Unlike CI mode, `watch` **does not exit on findings** — it reports them and keeps watching so you can fix in-place.
@@ -1013,10 +1013,10 @@ Unlike CI mode, `watch` **does not exit on findings** — it reports them and ke
 
 ## `run` — Pipeline Runner
 
-Runs all quality gates in sequence using the steps defined in `.oxideci.toml`. First failure stops the pipeline.
+Runs all quality gates in sequence using the steps defined in `.greengate.toml`. First failure stops the pipeline.
 
 ```bash
-oxide-ci run
+greengate run
 ```
 
 Define your pipeline:
@@ -1033,13 +1033,13 @@ steps = [
 ]
 ```
 
-Each step maps directly to an `oxide-ci` subcommand. Inline flags override config values for that step. Use `oxide-ci init` to generate a starter pipeline automatically.
+Each step maps directly to an `greengate` subcommand. Inline flags override config values for that step. Use `greengate init` to generate a starter pipeline automatically.
 
 ---
 
 ## Secret Detection Patterns
 
-OxideCI ships with 26 built-in patterns covering the most common cloud providers and services. All patterns are applied per-line for non-JS/TS files, and scoped to string literals for JS/TS/TSX/JSX files (no comment noise).
+GreenGate ships with 26 built-in patterns covering the most common cloud providers and services. All patterns are applied per-line for non-JS/TS files, and scoped to string literals for JS/TS/TSX/JSX files (no comment noise).
 
 ### AWS
 | Rule ID | What it detects |
@@ -1108,7 +1108,7 @@ OxideCI ships with 26 built-in patterns covering the most common cloud providers
 
 ### Shannon entropy detection
 
-In addition to the named patterns, oxide-ci flags high-entropy tokens that don't match any known pattern — catching unrecognised API keys, random secrets, and opaque credentials:
+In addition to the named patterns, greengate flags high-entropy tokens that don't match any known pattern — catching unrecognised API keys, random secrets, and opaque credentials:
 
 ```toml
 [scan]
@@ -1119,7 +1119,7 @@ entropy_min_length = 20    # minimum token length before entropy is checked (def
 
 ### Adding custom patterns
 
-Use `extra_patterns` in `.oxideci.toml` to add your own patterns without forking:
+Use `extra_patterns` in `.greengate.toml` to add your own patterns without forking:
 
 ```toml
 [scan]
@@ -1193,27 +1193,27 @@ Rules are checked on `.js`, `.jsx`, `.ts`, `.tsx`, `.py`, and `.go` files using 
 | `SMELL/TooManyParameters` | Function has more than `max_parameters` parameters | 5 params |
 | `SMELL/DeepNesting` | Control-flow nesting depth exceeds `max_nesting_depth` | 4 levels |
 
-Rule IDs embed the measured value — e.g. `SMELL/LongFunction (63 lines, max 50)` — so findings are self-explanatory without additional context. Thresholds are configurable per project in `.oxideci.toml`. See [Configuration File](#configuration-file-oxidecitorml) for details.
+Rule IDs embed the measured value — e.g. `SMELL/LongFunction (63 lines, max 50)` — so findings are self-explanatory without additional context. Thresholds are configurable per project in `.greengate.toml`. See [Configuration File](#configuration-file-greengatetorml) for details.
 
 ---
 
 ## Suppressing Findings
 
-Add `// oxide-ci: ignore` on the same line as a finding to suppress it:
+Add `// greengate: ignore` on the same line as a finding to suppress it:
 
 ```ts
-const legacyKey = "AKIAIOSFODNN7EXAMPLE123"; // oxide-ci: ignore
-el.innerHTML = sanitizedHtml;                 // oxide-ci: ignore
-eval(trustedAdminScript);                     // oxide-ci: ignore
+const legacyKey = "AKIAIOSFODNN7EXAMPLE123"; // greengate: ignore
+el.innerHTML = sanitizedHtml;                 // greengate: ignore
+eval(trustedAdminScript);                     // greengate: ignore
 ```
 
 Suppression works for both secret/PII findings and SAST dangerous-pattern findings. It is applied per-line — only the finding on that exact line is suppressed.
 
 ---
 
-## Configuration File (`.oxideci.toml`)
+## Configuration File (`.greengate.toml`)
 
-Place `.oxideci.toml` in the root of your repository. CLI flags always override config file values.
+Place `.greengate.toml` in the root of your repository. CLI flags always override config file values.
 
 ```toml
 [scan]
@@ -1284,7 +1284,7 @@ min_seo = 80
 # Path to Reassure current measurement file (overridden by --current)
 current = "output/current.perf"
 # Path to Reassure baseline file (overridden by --baseline)
-# If absent, oxide-ci runs in report-only mode (no failure)
+# If absent, greengate runs in report-only mode (no failure)
 baseline = "output/baseline.perf"
 # Maximum mean-time regression % before failing (overridden by --threshold)
 threshold = 15.0
@@ -1322,14 +1322,14 @@ Machine-readable JSON written to stdout. Includes `severity` field on every find
 SARIF 2.1.0 JSON written to stdout. Upload directly to GitHub Advanced Security for inline PR annotations.
 
 ```bash
-oxide-ci scan --format sarif > results.sarif
+greengate scan --format sarif > results.sarif
 ```
 
 ### `junit`
 JUnit XML written to stdout. Compatible with Jenkins, Azure DevOps, and CircleCI test report parsers.
 
 ```bash
-oxide-ci scan --format junit > results.xml
+greengate scan --format junit > results.xml
 ```
 
 ### `gitlab`
@@ -1338,7 +1338,7 @@ GitLab SAST Security Scanner JSON (schema v15.0.6) written to stdout. Use as a G
 ```yaml
 # .gitlab-ci.yml
 secret-scan:
-  script: oxide-ci scan --format gitlab > gl-sast-report.json
+  script: greengate scan --format gitlab > gl-sast-report.json
   artifacts:
     reports:
       sast: gl-sast-report.json
@@ -1348,12 +1348,12 @@ secret-scan:
 
 ## Config Profiles
 
-Apply a named quality profile on top of your loaded config without editing `.oxideci.toml`. Pass `--profile` as a global flag before the subcommand:
+Apply a named quality profile on top of your loaded config without editing `.greengate.toml`. Pass `--profile` as a global flag before the subcommand:
 
 ```bash
-oxide-ci --profile strict scan
-oxide-ci --profile ci scan --staged
-oxide-ci --profile relaxed coverage
+greengate --profile strict scan
+greengate --profile ci scan --staged
+greengate --profile relaxed coverage
 ```
 
 | Profile | Effect |
@@ -1362,7 +1362,7 @@ oxide-ci --profile relaxed coverage
 | `relaxed` | Coverage ≥ 70%, entropy threshold 5.0 (fewer false positives) |
 | `ci` | Coverage ≥ 80%, SAST enabled, `SMELL/*` rules disabled to reduce noise in CI |
 
-Profiles only modify the in-memory config — they never write to `.oxideci.toml`.
+Profiles only modify the in-memory config — they never write to `.greengate.toml`.
 
 ---
 
@@ -1382,7 +1382,7 @@ Profiles only modify the in-memory config — they never write to `.oxideci.toml
 ### GitHub Actions — Full pipeline
 
 ```yaml
-name: OxideCI Quality Gate
+name: GreenGate Quality Gate
 
 on: [push, pull_request]
 
@@ -1394,26 +1394,26 @@ permissions:
 
 jobs:
   # ── Security & code-quality gates ──────────────────────────────────────────
-  oxide-ci:
+  greengate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install OxideCI
+      - name: Install GreenGate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
-            -o /usr/local/bin/oxide-ci
-          chmod +x /usr/local/bin/oxide-ci
+          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+            -o /usr/local/bin/greengate
+          chmod +x /usr/local/bin/greengate
 
       # Option A: Native GitHub Check Run annotations (no SARIF upload step needed)
       - name: Secret, PII & SAST Scan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: oxide-ci scan --annotate
+        run: greengate scan --annotate
 
       # Option B: SARIF upload to GitHub Advanced Security (alternative to --annotate)
       # - name: Scan (SARIF for PR annotations)
-      #   run: oxide-ci scan --format sarif > results.sarif
+      #   run: greengate scan --format sarif > results.sarif
       #   if: always()
       #   continue-on-error: true
       # - name: Upload SARIF
@@ -1424,13 +1424,13 @@ jobs:
       #   continue-on-error: true
 
       - name: Kubernetes Lint
-        run: oxide-ci lint --dir ./k8s
+        run: greengate lint --dir ./k8s
 
       - name: Coverage Gate
-        run: oxide-ci coverage --file coverage/lcov.info --min 80
+        run: greengate coverage --file coverage/lcov.info --min 80
 
       - name: Dependency Audit
-        run: oxide-ci audit
+        run: greengate audit
 
   # ── Performance gates (post-deploy) ────────────────────────────────────────
   perf:
@@ -1439,11 +1439,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install OxideCI
+      - name: Install GreenGate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
-            -o /usr/local/bin/oxide-ci
-          chmod +x /usr/local/bin/oxide-ci
+          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+            -o /usr/local/bin/greengate
+          chmod +x /usr/local/bin/greengate
 
       # Lighthouse — gates on PageSpeed scores for the deployed URL.
       # Set LIGHTHOUSE_URL as a repository variable (Settings → Variables).
@@ -1453,7 +1453,7 @@ jobs:
         env:
           PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
         run: |
-          oxide-ci lighthouse \
+          greengate lighthouse \
             --url "${{ vars.LIGHTHOUSE_URL }}" \
             --strategy mobile \
             --min-performance 80 \
@@ -1471,7 +1471,7 @@ jobs:
 
       - name: Reassure performance gate
         if: hashFiles('output/current.perf') != ''
-        run: oxide-ci reassure --threshold 15
+        run: greengate reassure --threshold 15
 ```
 
 ### GitLab CI
@@ -1482,36 +1482,36 @@ stages:
   - quality
 
 variables:
-  OXIDE_CI_URL: https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64
+  OXIDE_CI_URL: https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64
 
 .install_oxide: &install_oxide
   before_script:
-    - curl -sL $OXIDE_CI_URL -o /usr/local/bin/oxide-ci
-    - chmod +x /usr/local/bin/oxide-ci
+    - curl -sL $OXIDE_CI_URL -o /usr/local/bin/greengate
+    - chmod +x /usr/local/bin/greengate
 
 secret-and-sast-scan:
   stage: security
   <<: *install_oxide
   script:
-    - oxide-ci scan
+    - greengate scan
 
 k8s-lint:
   stage: security
   <<: *install_oxide
   script:
-    - oxide-ci lint --dir ./k8s
+    - greengate lint --dir ./k8s
 
 coverage-gate:
   stage: quality
   <<: *install_oxide
   script:
-    - oxide-ci coverage --file coverage/lcov.info --min 80
+    - greengate coverage --file coverage/lcov.info --min 80
 
 dependency-audit:
   stage: security
   <<: *install_oxide
   script:
-    - oxide-ci audit
+    - greengate audit
   allow_failure: true  # optional: don't block pipeline on network issues
 ```
 
@@ -1523,16 +1523,16 @@ image: ubuntu:22.04
 pipelines:
   default:
     - step:
-        name: OxideCI Security & Quality Gates
+        name: GreenGate Security & Quality Gates
         script:
           - apt-get update -qq && apt-get install -y curl
-          - curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64
-              -o /usr/local/bin/oxide-ci
-          - chmod +x /usr/local/bin/oxide-ci
-          - oxide-ci scan
-          - oxide-ci lint --dir ./k8s
-          - oxide-ci coverage --file coverage/lcov.info --min 80
-          - oxide-ci audit
+          - curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64
+              -o /usr/local/bin/greengate
+          - chmod +x /usr/local/bin/greengate
+          - greengate scan
+          - greengate lint --dir ./k8s
+          - greengate coverage --file coverage/lcov.info --min 80
+          - greengate audit
 ```
 
 ### CircleCI
@@ -1541,34 +1541,34 @@ pipelines:
 version: 2.1
 
 jobs:
-  oxide-ci:
+  greengate:
     docker:
       - image: cimg/base:stable
     steps:
       - checkout
       - run:
-          name: Install OxideCI
+          name: Install GreenGate
           command: |
-            curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
-              -o /usr/local/bin/oxide-ci
-            chmod +x /usr/local/bin/oxide-ci
+            curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+              -o /usr/local/bin/greengate
+            chmod +x /usr/local/bin/greengate
       - run:
           name: Secret, PII & SAST Scan
-          command: oxide-ci scan
+          command: greengate scan
       - run:
           name: Kubernetes Lint
-          command: oxide-ci lint --dir ./k8s
+          command: greengate lint --dir ./k8s
       - run:
           name: Coverage Gate
-          command: oxide-ci coverage --file coverage/lcov.info --min 80
+          command: greengate coverage --file coverage/lcov.info --min 80
       - run:
           name: Dependency Audit
-          command: oxide-ci audit
+          command: greengate audit
 
 workflows:
   quality:
     jobs:
-      - oxide-ci
+      - greengate
 ```
 
 ### Pre-commit (local enforcement)
@@ -1576,7 +1576,7 @@ workflows:
 The fastest way to enforce secrets scanning locally — runs automatically on every `git commit`:
 
 ```bash
-oxide-ci install-hooks
+greengate install-hooks
 ```
 
 To remove the hook:
@@ -1589,7 +1589,7 @@ rm .git/hooks/pre-commit
 ## Architecture
 
 ```
-oxide-ci/
+greengate/
 ├── src/
 │   ├── main.rs                  # CLI entry point (clap)
 │   ├── modules/
@@ -1603,7 +1603,7 @@ oxide-ci/
 │   │   ├── perf_lighthouse.rs   # PageSpeed Insights Lighthouse gate (ureq)
 │   │   └── reassure.rs          # Reassure .perf report parser and gate
 │   └── utils/
-│       ├── config.rs            # .oxideci.toml loader (toml + serde)
+│       ├── config.rs            # .greengate.toml loader (toml + serde)
 │       ├── files.rs             # File walker (ignore crate)
 │       └── terminal.rs          # Styled output + progress bars (indicatif)
 └── tests/
@@ -1654,7 +1654,7 @@ emit_findings()     ← text / JSON / SARIF
 
 ## React Native
 
-oxide-ci works with React Native and Expo projects out of the box. npm, Yarn, and pnpm lock files are all supported for dependency auditing, SAST runs automatically on all JS/TS/TSX files, and Reassure — which was originally built *for* React Native by Callstack — is a first-class citizen.
+greengate works with React Native and Expo projects out of the box. npm, Yarn, and pnpm lock files are all supported for dependency auditing, SAST runs automatically on all JS/TS/TSX files, and Reassure — which was originally built *for* React Native by Callstack — is a first-class citizen.
 
 ### Command compatibility
 
@@ -1668,13 +1668,13 @@ oxide-ci works with React Native and Expo projects out of the box. npm, Yarn, an
 | `lint` | ⚠️ Optional | Only useful if the project has a Kubernetes backend |
 | `lighthouse` | ⚠️ Web only | Audits a public URL; applicable if you ship a React Native Web build or marketing site |
 
-> **Note on Bun:** `bun.lockb` is a binary format that oxide-ci cannot parse. If you use Bun, run `bun install --save-text-lockfile` to generate a `bun.lock` text file alongside it, or use the `package-lock.json` fallback (`bun install --backend=npm`).
+> **Note on Bun:** `bun.lockb` is a binary format that greengate cannot parse. If you use Bun, run `bun install --save-text-lockfile` to generate a `bun.lock` text file alongside it, or use the `package-lock.json` fallback (`bun install --backend=npm`).
 
 ---
 
 ### React Native–specific secrets detected
 
-In addition to the 23 built-in cloud patterns, oxide-ci detects these patterns common in RN projects (scoped to string literals in JS/TS files):
+In addition to the 23 built-in cloud patterns, greengate detects these patterns common in RN projects (scoped to string literals in JS/TS files):
 
 | Rule | What it detects |
 |---|---|
@@ -1694,7 +1694,7 @@ SAST is especially valuable in RN/Expo codebases because:
 
 ---
 
-### Recommended `.oxideci.toml` for React Native
+### Recommended `.greengate.toml` for React Native
 
 ```toml
 [scan]
@@ -1750,20 +1750,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install oxide-ci
+      - name: Install greengate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
-            -o /usr/local/bin/oxide-ci
-          chmod +x /usr/local/bin/oxide-ci
+          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+            -o /usr/local/bin/greengate
+          chmod +x /usr/local/bin/greengate
 
       - name: Secret, PII & SAST scan
-        run: oxide-ci scan
+        run: greengate scan
 
       - name: Dependency audit (npm CVEs via OSV)
-        run: oxide-ci audit   # reads package-lock.json / yarn.lock / pnpm-lock.yaml
+        run: greengate audit   # reads package-lock.json / yarn.lock / pnpm-lock.yaml
 
       - name: Coverage gate
-        run: oxide-ci coverage   # reads coverage/lcov.info (generated by jest --coverage)
+        run: greengate coverage   # reads coverage/lcov.info (generated by jest --coverage)
 
   perf:
     runs-on: ubuntu-latest
@@ -1782,14 +1782,14 @@ jobs:
         run: npx reassure measure
         # Produces output/current.perf
 
-      - name: Install oxide-ci
+      - name: Install greengate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
-            -o /usr/local/bin/oxide-ci
-          chmod +x /usr/local/bin/oxide-ci
+          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+            -o /usr/local/bin/greengate
+          chmod +x /usr/local/bin/greengate
 
       - name: Reassure performance gate
-        run: oxide-ci reassure --threshold 15
+        run: greengate reassure --threshold 15
         # Fails if any component regresses > 15% vs baseline.perf
 ```
 
@@ -1808,7 +1808,7 @@ This is **expected behaviour for private repositories**. Uploading SARIF results
 - **Free** for public repositories
 - **Paid add-on** for private repositories (part of GitHub Enterprise)
 
-The `oxide-ci scan` step itself still runs and will fail the job if real secrets or SAST issues are found — your security gate is intact. The SARIF upload is only needed for inline PR annotations in the Security tab.
+The `greengate scan` step itself still runs and will fail the job if real secrets or SAST issues are found — your security gate is intact. The SARIF upload is only needed for inline PR annotations in the Security tab.
 
 **Options:**
 
@@ -1824,7 +1824,7 @@ The `oxide-ci scan` step itself still runs and will fail the job if real secrets
 
 Package managers store sha512 integrity hashes in lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`). These look like high-entropy secrets and will generate hundreds of false positives.
 
-**Fix:** Exclude lockfiles in `.oxideci.toml`:
+**Fix:** Exclude lockfiles in `.greengate.toml`:
 
 ```toml
 [scan]
@@ -1880,7 +1880,7 @@ exclude_patterns = [
 ]
 ```
 
-> **Note:** If your Sentry DSN *is* hardcoded in these files, oxide-ci is correctly flagging it as a secret. Move it to an environment variable before excluding the file.
+> **Note:** If your Sentry DSN *is* hardcoded in these files, greengate is correctly flagging it as a secret. Move it to an environment variable before excluding the file.
 
 ---
 
@@ -1922,14 +1922,14 @@ exclude_patterns = [
 
 ---
 
-### `.oxideci.toml` itself is flagged
+### `.greengate.toml` itself is flagged
 
-If your config file contains example emails in comments (e.g. `user@example.com`), oxide-ci will flag the config file itself. Exclude it:
+If your config file contains example emails in comments (e.g. `user@example.com`), greengate will flag the config file itself. Exclude it:
 
 ```toml
 [scan]
 exclude_patterns = [
-    ".oxideci.toml",
+    ".greengate.toml",
 ]
 ```
 
@@ -1941,7 +1941,7 @@ Some SAST rules (e.g. `SAST/ChildProcessExec`) fire on any usage of a pattern, e
 
 **Option 1 — Inline suppression** (preferred for isolated occurrences):
 ```js
-child_process.exec(buildCmd, callback); // oxide-ci: ignore
+child_process.exec(buildCmd, callback); // greengate: ignore
 ```
 
 **Option 2 — Disable the rule globally** (preferred when the pattern is widespread):
@@ -1952,7 +1952,7 @@ disabled_rules = ["SAST/ChildProcessExec"]
 
 ---
 
-### Reference `.oxideci.toml` for a Next.js / React monorepo
+### Reference `.greengate.toml` for a Next.js / React monorepo
 
 Copy this as a starting point and remove exclusions that don't apply to your project:
 
@@ -1983,7 +1983,7 @@ exclude_patterns = [
     "**/__tests__/**",
 
     # The config file itself — comments may contain example emails like user@example.com
-    ".oxideci.toml",
+    ".greengate.toml",
 
     # Docs and markdown — example snippets and editorial emails
     "docs/**",
@@ -2027,7 +2027,7 @@ uses: github/codeql-action/upload-sarif@v4
 
 ## Contributing
 
-OxideCI is open source under the [MIT License](LICENSE). Contributions are welcome.
+GreenGate is open source under the [MIT License](LICENSE). Contributions are welcome.
 
 **Adding a new secret pattern:**
 
@@ -2056,4 +2056,4 @@ cargo test sast     # only SAST tests
 cargo clippy        # lint
 ```
 
-**Issues & feature requests:** [github.com/ThinkGrid-Labs/oxide-ci/issues](https://github.com/ThinkGrid-Labs/oxide-ci/issues)
+**Issues & feature requests:** [github.com/ThinkGrid-Labs/greengate/issues](https://github.com/ThinkGrid-Labs/greengate/issues)

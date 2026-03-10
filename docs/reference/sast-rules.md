@@ -1,6 +1,6 @@
 # SAST Rules Reference
 
-SAST runs automatically when `oxide-ci scan` encounters a supported source file. It uses tree-sitter to parse each file into a real AST before running any checks.
+SAST runs automatically when `greengate scan` encounters a supported source file. It uses tree-sitter to parse each file into a real AST before running any checks.
 
 **Supported languages:**
 
@@ -13,7 +13,7 @@ SAST runs automatically when `oxide-ci scan` encounters a supported source file.
 
 ## Tier-1 intra-procedural taint tracking
 
-OxideCI performs **intra-procedural taint tracking** for JS/TS to reduce both false positives and false negatives. For every XSS and command-injection sink, the engine resolves where the value came from within the enclosing function body.
+GreenGate performs **intra-procedural taint tracking** for JS/TS to reduce both false positives and false negatives. For every XSS and command-injection sink, the engine resolves where the value came from within the enclosing function body.
 
 ### How it works
 
@@ -118,18 +118,18 @@ These rules fire on specific API calls regardless of whether arguments are strin
 | `SMELL/TooManyParameters` | Function has more than N parameters | 5 params |
 | `SMELL/DeepNesting` | Control-flow depth exceeds N levels inside a function | 4 levels |
 
-Rule IDs embed the measured value — e.g. `SMELL/LongFunction (63 lines, max 50)` — for immediate context. Thresholds are configurable in `.oxideci.toml`.
+Rule IDs embed the measured value — e.g. `SMELL/LongFunction (63 lines, max 50)` — for immediate context. Thresholds are configurable in `.greengate.toml`.
 
 ## Suppressing findings in Python / Go
 
 Use a same-line comment to suppress a specific finding:
 
 ```python
-data = pickle.load(f)  # oxide-ci: ignore
+data = pickle.load(f)  # greengate: ignore
 ```
 
 ```go
-panic("fatal: unrecoverable state")  // oxide-ci: ignore
+panic("fatal: unrecoverable state")  // greengate: ignore
 ```
 
 ## Custom rules
@@ -144,7 +144,7 @@ custom_rules = [
 ]
 ```
 
-Custom rules are validated at startup — invalid queries are skipped with a warning and never cause oxide-ci to crash.
+Custom rules are validated at startup — invalid queries are skipped with a warning and never cause greengate to crash.
 
 ## Disabling rules
 

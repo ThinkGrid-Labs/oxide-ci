@@ -5,7 +5,7 @@ Parses a [Reassure](https://github.com/callstack/reassure) performance measureme
 ## Usage
 
 ```
-oxide-ci reassure [OPTIONS]
+greengate reassure [OPTIONS]
 
 Options:
   --current <FILE>      Path to current Reassure measurement file [default: output/current.perf]
@@ -14,19 +14,19 @@ Options:
   -h, --help            Print help
 ```
 
-If `--baseline` is omitted and no baseline file is found, oxide-ci runs in **report-only mode** — it prints the current measurements but does not fail.
+If `--baseline` is omitted and no baseline file is found, greengate runs in **report-only mode** — it prints the current measurements but does not fail.
 
 ## Examples
 
 ```bash
 # Gate with default 15% threshold
-oxide-ci reassure
+greengate reassure
 
 # Custom threshold
-oxide-ci reassure --threshold 10
+greengate reassure --threshold 10
 
 # Explicit file paths
-oxide-ci reassure \
+greengate reassure \
   --current output/current.perf \
   --baseline output/baseline.perf \
   --threshold 15
@@ -36,7 +36,7 @@ oxide-ci reassure \
 
 1. Run `reassure measure` in your frontend test job
 2. Upload `output/current.perf` as a CI artifact
-3. Download it in a subsequent job and run `oxide-ci reassure`
+3. Download it in a subsequent job and run `greengate reassure`
 
 ```yaml
 - name: Download Reassure report
@@ -48,7 +48,7 @@ oxide-ci reassure \
 
 - name: Reassure performance gate
   if: hashFiles('output/current.perf') != ''
-  run: oxide-ci reassure --threshold 15
+  run: greengate reassure --threshold 15
 ```
 
 ## Sample output

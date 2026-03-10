@@ -48,7 +48,7 @@ jobs:
       - name: Run all tests
         run: cargo test --verbose
 
-  # ── 3. Dogfood — oxide-ci scans itself ──────────────────────────────────────
+  # ── 3. Dogfood — greengate scans itself ──────────────────────────────────────
   self-scan:
     name: Self-Scan
     runs-on: ubuntu-latest
@@ -64,54 +64,54 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Build oxide-ci
+      - name: Build greengate
         run: cargo build --release
 
       # ── Config validation ────────────────────────────────────────────────────
-      - name: Validate .oxideci.toml
-        run: ./target/release/oxide-ci check-config
+      - name: Validate .greengate.toml
+        run: ./target/release/greengate check-config
 
       # ── Secret + SAST scan (JS/TS/Python/Go AST) — human-readable ───────────
-      # Reads .oxideci.toml to exclude test fixtures and docs that
+      # Reads .greengate.toml to exclude test fixtures and docs that
       # intentionally contain example/fake patterns.
       - name: Scan for secrets, PII and dangerous patterns
-        run: ./target/release/oxide-ci scan
+        run: ./target/release/greengate scan
 
       # ── Incremental scan — only staged/changed files ─────────────────────────
       - name: Scan files changed since last commit
-        run: ./target/release/oxide-ci scan --since HEAD~1 || true
+        run: ./target/release/greengate scan --since HEAD~1 || true
 
       # ── git blame enrichment ─────────────────────────────────────────────────
       - name: Scan with blame enrichment
-        run: ./target/release/oxide-ci scan --blame || true
+        run: ./target/release/greengate scan --blame || true
 
       # ── Multi-format output validation ───────────────────────────────────────
       - name: Generate SARIF report
         if: always()
         continue-on-error: true
-        run: ./target/release/oxide-ci scan --format sarif > oxide-ci-results.sarif 2>/dev/null || true
+        run: ./target/release/greengate scan --format sarif > greengate-results.sarif 2>/dev/null || true
 
       - name: Generate JSON report
         if: always()
         continue-on-error: true
-        run: ./target/release/oxide-ci scan --format json > oxide-ci-results.json 2>/dev/null || true
+        run: ./target/release/greengate scan --format json > greengate-results.json 2>/dev/null || true
 
       - name: Generate JUnit XML report
         if: always()
         continue-on-error: true
-        run: ./target/release/oxide-ci scan --format junit > oxide-ci-results.xml 2>/dev/null || true
+        run: ./target/release/greengate scan --format junit > greengate-results.xml 2>/dev/null || true
 
       - name: Generate GitLab SAST report
         if: always()
         continue-on-error: true
-        run: ./target/release/oxide-ci scan --format gitlab > gl-sast-report.json 2>/dev/null || true
+        run: ./target/release/greengate scan --format gitlab > gl-sast-report.json 2>/dev/null || true
 
       # ── Upload scan artifacts ────────────────────────────────────────────────
       - name: Upload SARIF to GitHub Security tab
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: oxide-ci-results.sarif
+          sarif_file: greengate-results.sarif
         continue-on-error: true
 
       - name: Upload JUnit XML
@@ -119,7 +119,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: junit-report
-          path: oxide-ci-results.xml
+          path: greengate-results.xml
         continue-on-error: true
 
       - name: Upload GitLab SAST report
@@ -135,7 +135,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: json-report
-          path: oxide-ci-results.json
+          path: greengate-results.json
         continue-on-error: true
 
       # ── GitHub Check Run annotations + PR summary comment ────────────────────
@@ -147,30 +147,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SHA: ${{ github.sha }}
-        run: ./target/release/oxide-ci scan --annotate || true
+        run: ./target/release/greengate scan --annotate || true
 
       # ── Baseline workflow ────────────────────────────────────────────────────
       - name: Save scan baseline (main branch only)
         if: github.ref == 'refs/heads/main'
         run: |
-          ./target/release/oxide-ci scan --update-baseline || true
-          git diff --quiet .oxide-baseline.json 2>/dev/null || echo "Baseline updated"
+          ./target/release/greengate scan --update-baseline || true
+          git diff --quiet .greengate-baseline.json 2>/dev/null || echo "Baseline updated"
 
       - name: Gate on new findings only (PRs)
-        if: github.event_name == 'pull_request' && hashFiles('.oxide-baseline.json') != ''
-        run: ./target/release/oxide-ci scan --since-baseline
+        if: github.event_name == 'pull_request' && hashFiles('.greengate-baseline.json') != ''
+        run: ./target/release/greengate scan --since-baseline
 
       # ── Kubernetes lint — exits 0 when no YAML manifests are present ─────────
       - name: Lint Kubernetes manifests
-        run: ./target/release/oxide-ci lint
+        run: ./target/release/greengate lint
 
       # ── Dependency audit — queries OSV database for known CVEs ───────────────
       - name: Audit dependencies (OSV)
-        run: ./target/release/oxide-ci audit
+        run: ./target/release/greengate audit
 
       # ── SBOM generation (CycloneDX 1.5) ─────────────────────────────────────
       - name: Generate SBOM
-        run: ./target/release/oxide-ci sbom --output sbom.json
+        run: ./target/release/greengate sbom --output sbom.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
@@ -197,7 +197,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Build oxide-ci
+      - name: Build greengate
         run: cargo build --release
 
       # Lighthouse — gates on PageSpeed Insights scores for a deployed URL.
@@ -208,7 +208,7 @@ jobs:
         env:
           PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
         run: |
-          ./target/release/oxide-ci lighthouse \
+          ./target/release/greengate lighthouse \
             --url "${{ vars.LIGHTHOUSE_URL }}" \
             --strategy mobile
         continue-on-error: true   # informational until thresholds are tuned
@@ -218,7 +218,7 @@ jobs:
       # frontend job that runs `reassure measure` and uploads the artifact).
       - name: Reassure performance gate
         if: hashFiles('output/current.perf') != ''
-        run: ./target/release/oxide-ci reassure
+        run: ./target/release/greengate reassure
         continue-on-error: true   # informational until baseline is established
 
   # ── 5. Formatting + lints ───────────────────────────────────────────────────

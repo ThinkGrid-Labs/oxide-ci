@@ -1,11 +1,11 @@
 # install-hooks — Git Pre-commit Hook
 
-Installs oxide-ci as a Git pre-commit hook. After installation, `oxide-ci scan --staged` runs automatically on every `git commit`, blocking the commit if secrets or SAST issues are found.
+Installs greengate as a Git pre-commit hook. After installation, `greengate scan --staged` runs automatically on every `git commit`, blocking the commit if secrets or SAST issues are found.
 
 ## Usage
 
 ```
-oxide-ci install-hooks
+greengate install-hooks
 ```
 
 No options. Run from the root of a Git repository.
@@ -16,7 +16,7 @@ Writes `.git/hooks/pre-commit` with:
 
 ```bash
 #!/bin/sh
-oxide-ci scan --staged
+greengate scan --staged
 ```
 
 This scans only the files staged for the current commit (`git diff --cached`), so it's fast even on large repositories.

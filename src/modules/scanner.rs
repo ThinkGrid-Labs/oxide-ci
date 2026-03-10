@@ -385,7 +385,7 @@ fn run_history_scan(opts: &ScanOpts, all_patterns: &[(String, Regex)]) -> Result
             let mut hits: Vec<Finding> = Vec::new();
 
             // Feature 3: inline suppression
-            if line.contains("oxide-ci: ignore") {
+            if line.contains("greengate: ignore") {
                 if let Some(b) = &bar {
                     b.inc(1);
                 }
@@ -533,7 +533,7 @@ fn run_regex_scan(
             let mut file_findings: Vec<Finding> = Vec::new();
             if let Ok(content) = fs::read_to_string(path) {
                 for (line_no, line) in content.lines().enumerate() {
-                    if line.contains("oxide-ci: ignore") {
+                    if line.contains("greengate: ignore") {
                         continue;
                     }
                     for (name, regex) in all_patterns {
@@ -614,7 +614,7 @@ fn output_sarif(findings: &[Finding]) -> Result<()> {
             json!({
                 "id": id,
                 "shortDescription": { "text": format!("{} detected", id) },
-                "helpUri": "https://github.com/ThinkGrid-Labs/oxide-ci"
+                "helpUri": "https://github.com/ThinkGrid-Labs/greengate"
             })
         })
         .collect();
@@ -649,9 +649,9 @@ fn output_sarif(findings: &[Finding]) -> Result<()> {
         "runs": [{
             "tool": {
                 "driver": {
-                    "name": "oxide-ci",
+                    "name": "greengate",
                     "version": env!("CARGO_PKG_VERSION"),
-                    "informationUri": "https://github.com/ThinkGrid-Labs/oxide-ci",
+                    "informationUri": "https://github.com/ThinkGrid-Labs/greengate",
                     "rules": rules
                 }
             },
@@ -666,7 +666,7 @@ fn output_junit(findings: &[Finding]) -> Result<()> {
     let n = findings.len();
     let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     xml.push_str(&format!(
-        "<testsuites name=\"oxide-ci\" tests=\"{n}\" failures=\"{n}\" errors=\"0\" time=\"0\">\n"
+        "<testsuites name=\"greengate\" tests=\"{n}\" failures=\"{n}\" errors=\"0\" time=\"0\">\n"
     ));
     xml.push_str(&format!(
         "  <testsuite name=\"secret-and-sast-scan\" tests=\"{n}\" failures=\"{n}\" errors=\"0\" time=\"0\">\n"
@@ -711,20 +711,20 @@ fn output_gitlab(findings: &[Finding]) -> Result<()> {
         .enumerate()
         .map(|(i, f)| {
             json!({
-                "id": format!("oxide-ci-{}", i),
+                "id": format!("greengate-{}", i),
                 "category": "sast",
                 "name": f.rule_id,
                 "description": format!("{} detected", f.rule_id),
                 "severity": gitlab_severity(&f.severity),
                 "confidence": "High",
-                "scanner": { "id": "oxide-ci", "name": "OxideCI" },
+                "scanner": { "id": "greengate", "name": "GreenGate" },
                 "location": {
                     "file": f.path.to_string_lossy(),
                     "start_line": f.line,
                     "end_line": f.line
                 },
                 "identifiers": [{
-                    "type": "oxide_ci_rule",
+                    "type": "greengate_rule",
                     "name": f.rule_id,
                     "value": f.rule_id
                 }]
@@ -737,8 +737,8 @@ fn output_gitlab(findings: &[Finding]) -> Result<()> {
         "vulnerabilities": vulns,
         "scan": {
             "scanner": {
-                "id": "oxide-ci",
-                "name": "OxideCI",
+                "id": "greengate",
+                "name": "GreenGate",
                 "version": env!("CARGO_PKG_VERSION")
             },
             "type": "sast",
@@ -1214,8 +1214,8 @@ mod tests {
 
     #[test]
     fn test_suppression_marker_detected() {
-        let line = "AWS_KEY=AKIAIOSFODNN7EXAMPLEKEY1  # oxide-ci: ignore";
-        assert!(line.contains("oxide-ci: ignore"));
+        let line = "AWS_KEY=AKIAIOSFODNN7EXAMPLEKEY1  # greengate: ignore";
+        assert!(line.contains("greengate: ignore"));
     }
 
     // ── Feature 1: Shannon entropy ─────────────────────────────────────────

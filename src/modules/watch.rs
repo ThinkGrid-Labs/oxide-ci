@@ -1,4 +1,4 @@
-/// `oxide-ci watch` — re-runs scan on every file change.
+/// `greengate watch` — re-runs scan on every file change.
 ///
 /// Uses a simple polling loop (checks modification times every 2 s).
 /// Intentionally keeps zero extra dependencies.

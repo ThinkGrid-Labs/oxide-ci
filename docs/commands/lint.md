@@ -5,7 +5,7 @@ Validates Kubernetes workload YAML files (`Deployment`, `DaemonSet`, `StatefulSe
 ## Usage
 
 ```
-oxide-ci lint [OPTIONS]
+greengate lint [OPTIONS]
 
 Options:
   -d, --dir <DIR>    Directory to scan for manifests [default: . or lint.target_dir from config]
@@ -16,10 +16,10 @@ Options:
 
 ```bash
 # Lint manifests in the current directory
-oxide-ci lint
+greengate lint
 
 # Lint a specific directory
-oxide-ci lint --dir ./infrastructure/k8s
+greengate lint --dir ./infrastructure/k8s
 ```
 
 ## Rules enforced

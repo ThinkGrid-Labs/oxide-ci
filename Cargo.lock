@@ -324,6 +324,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "greengate"
+version = "0.2.11"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ignore",
+ "indicatif",
+ "rayon",
+ "regex",
+ "roxmltree",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "streaming-iterator",
+ "tempfile",
+ "toml",
+ "tree-sitter",
+ "tree-sitter-go",
+ "tree-sitter-javascript",
+ "tree-sitter-python",
+ "tree-sitter-typescript",
+ "ureq",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -572,31 +597,6 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
-
-[[package]]
-name = "oxide-ci"
-version = "0.2.10"
-dependencies = [
- "anyhow",
- "clap",
- "ignore",
- "indicatif",
- "rayon",
- "regex",
- "roxmltree",
- "serde",
- "serde_json",
- "serde_yaml",
- "streaming-iterator",
- "tempfile",
- "toml",
- "tree-sitter",
- "tree-sitter-go",
- "tree-sitter-javascript",
- "tree-sitter-python",
- "tree-sitter-typescript",
- "ureq",
-]
 
 [[package]]
 name = "percent-encoding"

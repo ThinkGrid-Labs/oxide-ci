@@ -1,16 +1,16 @@
 # check-config — Validate Configuration
 
-Reads `.oxideci.toml`, validates it, and prints all resolved configuration values. Useful for verifying that overrides are applied correctly and that the file has no syntax errors.
+Reads `.greengate.toml`, validates it, and prints all resolved configuration values. Useful for verifying that overrides are applied correctly and that the file has no syntax errors.
 
 ## Usage
 
 ```
-oxide-ci check-config
+greengate check-config
 ```
 
 ## Behaviour
 
-- If `.oxideci.toml` exists and is valid, prints every resolved value and exits 0.
+- If `.greengate.toml` exists and is valid, prints every resolved value and exits 0.
 - If the file contains a TOML syntax or type error, prints a descriptive error and exits 1.
 - If no config file is found, prints the built-in defaults that will be used and exits 0.
 
@@ -18,16 +18,16 @@ oxide-ci check-config
 
 ```bash
 # Verify your config file before running the pipeline
-oxide-ci check-config
+greengate check-config
 
 # Combine with a profile to preview merged values
-oxide-ci --profile strict check-config
+greengate --profile strict check-config
 ```
 
 ## Sample output (valid config)
 
 ```
-✅ .oxideci.toml is valid.
+✅ .greengate.toml is valid.
 
 Resolved configuration:
 
@@ -81,8 +81,8 @@ Resolved configuration:
 ## Sample output (no config file)
 
 ```
-⚠️  No .oxideci.toml found — all commands will use built-in defaults.
-ℹ️  Run `oxide-ci init` to generate a config file.
+⚠️  No .greengate.toml found — all commands will use built-in defaults.
+ℹ️  Run `greengate init` to generate a config file.
 
 Default values that will be used:
   [scan]     entropy=true, threshold=4.5, min_length=20

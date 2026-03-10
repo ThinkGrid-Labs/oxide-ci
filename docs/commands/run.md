@@ -1,16 +1,16 @@
 # run
 
-Runs all pipeline steps defined in `.oxideci.toml` in order. A failing step stops the pipeline immediately with a non-zero exit code.
+Runs all pipeline steps defined in `.greengate.toml` in order. A failing step stops the pipeline immediately with a non-zero exit code.
 
 ## Usage
 
 ```bash
-oxide-ci run
+greengate run
 ```
 
 ## Configuration
 
-Define your pipeline steps in `.oxideci.toml`:
+Define your pipeline steps in `.greengate.toml`:
 
 ```toml
 [pipeline]
@@ -25,19 +25,19 @@ steps = [
 ]
 ```
 
-Each step is a string that maps to an `oxide-ci` subcommand, optionally followed by flags. All config values from `.oxideci.toml` are applied automatically — CLI overrides in the step string take precedence.
+Each step is a string that maps to an `greengate` subcommand, optionally followed by flags. All config values from `.greengate.toml` are applied automatically — CLI overrides in the step string take precedence.
 
 ## Available steps
 
 | Step | Equivalent command |
 |---|---|
-| `scan` | `oxide-ci scan` |
-| `lint` | `oxide-ci lint` |
-| `docker-lint` | `oxide-ci docker-lint` |
-| `coverage` | `oxide-ci coverage` |
-| `audit` | `oxide-ci audit` |
-| `lighthouse` | `oxide-ci lighthouse` |
-| `reassure` | `oxide-ci reassure` |
+| `scan` | `greengate scan` |
+| `lint` | `greengate lint` |
+| `docker-lint` | `greengate docker-lint` |
+| `coverage` | `greengate coverage` |
+| `audit` | `greengate audit` |
+| `lighthouse` | `greengate lighthouse` |
+| `reassure` | `greengate reassure` |
 
 ## Step flags
 
@@ -82,13 +82,13 @@ steps = [
 ## CI usage
 
 ```yaml
-- name: Install oxide-ci
+- name: Install greengate
   run: |
-    curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
-      -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
+    curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+      -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
 - name: Run quality gates
-  run: oxide-ci run
+  run: greengate run
 ```
 
 ## Exit codes
@@ -101,5 +101,5 @@ steps = [
 ## Notes
 
 - Steps run sequentially; the first failure stops the pipeline
-- If no `[pipeline]` section is defined in `.oxideci.toml`, the command exits with an error message instructing you to add one
-- Use `oxide-ci init` to generate a starter config with a default pipeline
+- If no `[pipeline]` section is defined in `.greengate.toml`, the command exits with an error message instructing you to add one
+- Use `greengate init` to generate a starter config with a default pipeline
