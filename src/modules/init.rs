@@ -9,7 +9,9 @@ pub fn run_init(force: bool) -> Result<()> {
     let config_path = std::path::Path::new(".greengate.toml");
 
     if config_path.exists() && !force {
-        anyhow::bail!(".greengate.toml already exists. Run `greengate init --force` to overwrite.");
+        anyhow::bail!(
+            ".greengate.toml already exists. Run `greengate init --force` to overwrite."
+        );
     }
 
     eprintln!("greengate init — generating .greengate.toml");
