@@ -22,7 +22,7 @@ pub struct Config {
     pub audit: AuditConfig,
 }
 
-/// Audit settings loaded from `.oxideci.toml` under `[audit]`.
+/// Audit settings loaded from `.greengate.toml` under `[audit]`.
 #[derive(Deserialize, Default, Clone)]
 pub struct AuditConfig {
     /// GHSA/CVE IDs to suppress — use for known-acceptable transitive dep
@@ -32,7 +32,7 @@ pub struct AuditConfig {
     pub ignore_advisories: Vec<String>,
 }
 
-/// A user-defined tree-sitter query rule from `.oxideci.toml`.
+/// A user-defined tree-sitter query rule from `.greengate.toml`.
 #[derive(Deserialize, Clone)]
 pub struct CustomSastRule {
     /// Unique rule ID reported in findings, e.g. "MY/NoConsoleLog"
@@ -41,7 +41,7 @@ pub struct CustomSastRule {
     pub query: String,
 }
 
-/// SAST settings loaded from `.oxideci.toml` under `[sast]`.
+/// SAST settings loaded from `.greengate.toml` under `[sast]`.
 #[derive(Deserialize, Clone)]
 pub struct SastConfig {
     /// Master switch — set to false to disable all SAST checks (default: true)
@@ -90,7 +90,7 @@ fn default_max_nesting_depth() -> usize {
     4
 }
 
-/// Per-scan settings loaded from `.oxideci.toml`.
+/// Per-scan settings loaded from `.greengate.toml`.
 /// `#[derive(Default)]` is not used because the entropy fields require non-zero defaults
 /// that cannot be expressed with Rust's `Default` trait directly; use helper fns instead.
 #[derive(Deserialize, Clone)]
@@ -163,7 +163,7 @@ impl Default for LintConfig {
 
 #[derive(Deserialize, Clone)]
 pub struct LighthouseConfig {
-    /// URL to audit (required for `oxide-ci lighthouse` unless passed via CLI)
+    /// URL to audit (required for `greengate lighthouse` unless passed via CLI)
     #[serde(default)]
     pub url: Option<String>,
     /// Device strategy: "mobile" (default) or "desktop"
@@ -291,25 +291,25 @@ fn default_dockerfile() -> String {
 
 #[derive(Deserialize, Clone, Default)]
 pub struct PipelineConfig {
-    /// Ordered list of steps to run with `oxide-ci run`.
+    /// Ordered list of steps to run with `greengate run`.
     /// Each entry is a command string, e.g. "scan", "coverage --min 80".
     #[serde(default)]
     pub steps: Vec<String>,
 }
 
-/// Load `.oxideci.toml` from the current directory, falling back to defaults.
+/// Load `.greengate.toml` from the current directory, falling back to defaults.
 pub fn load() -> Config {
-    let path = std::path::Path::new(".oxideci.toml");
+    let path = std::path::Path::new(".greengate.toml");
     if path.exists() {
         match std::fs::read_to_string(path) {
             Ok(content) => match toml::from_str(&content) {
                 Ok(cfg) => {
-                    eprintln!("ℹ️  Loaded config from .oxideci.toml");
+                    eprintln!("ℹ️  Loaded config from .greengate.toml");
                     return cfg;
                 }
-                Err(e) => eprintln!("⚠️  Failed to parse .oxideci.toml: {}", e),
+                Err(e) => eprintln!("⚠️  Failed to parse .greengate.toml: {}", e),
             },
-            Err(e) => eprintln!("⚠️  Failed to read .oxideci.toml: {}", e),
+            Err(e) => eprintln!("⚠️  Failed to read .greengate.toml: {}", e),
         }
     }
     Config::default()

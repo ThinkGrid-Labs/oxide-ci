@@ -1,6 +1,6 @@
 # Getting Started
 
-OxideCI is a single compiled Rust binary — no runtime dependencies, no package managers to fight.
+GreenGate is a single compiled Rust binary — no runtime dependencies, no package managers to fight.
 
 ## Installation
 
@@ -8,79 +8,79 @@ OxideCI is a single compiled Rust binary — no runtime dependencies, no package
 
 **macOS (Apple Silicon / M1+):**
 ```bash
-curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-macos-arm64 \
-  -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
+curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-macos-arm64 \
+  -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **macOS (Intel):**
 ```bash
-curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-macos-amd64 \
-  -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
+curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-macos-amd64 \
+  -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Linux (x64):**
 ```bash
-curl -sL https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-linux-amd64 \
-  -o /usr/local/bin/oxide-ci && chmod +x /usr/local/bin/oxide-ci
+curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+  -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Windows (x64) — PowerShell:**
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/ThinkGrid-Labs/oxide-ci/releases/latest/download/oxide-ci-windows-amd64.exe" `
-  -OutFile "$env:USERPROFILE\.local\bin\oxide-ci.exe"
+Invoke-WebRequest -Uri "https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-windows-amd64.exe" `
+  -OutFile "$env:USERPROFILE\.local\bin\greengate.exe"
 # Add $env:USERPROFILE\.local\bin to your PATH if not already present
 ```
 
 ### Build from source (requires Rust 1.85+)
 
 ```bash
-cargo install --git https://github.com/ThinkGrid-Labs/oxide-ci
+cargo install --git https://github.com/ThinkGrid-Labs/greengate
 ```
 
 ### Verify installation
 
 ```bash
-oxide-ci --version
-# oxide-ci 0.2.6
+greengate --version
+# greengate 0.2.6
 ```
 
 ## Quick Start
 
 ```bash
 # Scan for secrets and run SAST on JS/TS files
-oxide-ci scan
+greengate scan
 
 # Lint all Kubernetes YAML files
-oxide-ci lint --dir ./k8s
+greengate lint --dir ./k8s
 
 # Enforce 80% minimum test coverage
-oxide-ci coverage --file coverage/lcov.info --min 80
+greengate coverage --file coverage/lcov.info --min 80
 
 # Audit dependencies for known CVEs
-oxide-ci audit
+greengate audit
 
 # Install as a git pre-commit hook
-oxide-ci install-hooks
+greengate install-hooks
 
 # Gate on Lighthouse web performance scores
-oxide-ci lighthouse --url https://yourapp.com
+greengate lighthouse --url https://yourapp.com
 
 # Gate on React component performance regressions
-oxide-ci reassure
+greengate reassure
 ```
 
-## What OxideCI solves
+## What GreenGate solves
 
 | Problem | Command |
 |---|---|
-| Hardcoded secrets pushed to git | `oxide-ci scan` |
-| XSS, eval, command injection in JS/TS | `oxide-ci scan` (SAST) |
-| Kubernetes manifests missing resource limits | `oxide-ci lint` |
-| Test coverage silently dropping | `oxide-ci coverage` |
-| Vulnerable dependencies shipping to production | `oxide-ci audit` |
-| Secrets committed before anyone notices | `oxide-ci install-hooks` |
-| Lighthouse score regressing between deploys | `oxide-ci lighthouse` |
-| React component render performance regressing | `oxide-ci reassure` |
+| Hardcoded secrets pushed to git | `greengate scan` |
+| XSS, eval, command injection in JS/TS | `greengate scan` (SAST) |
+| Kubernetes manifests missing resource limits | `greengate lint` |
+| Test coverage silently dropping | `greengate coverage` |
+| Vulnerable dependencies shipping to production | `greengate audit` |
+| Secrets committed before anyone notices | `greengate install-hooks` |
+| Lighthouse score regressing between deploys | `greengate lighthouse` |
+| React component render performance regressing | `greengate reassure` |
 
 ## Next steps
 

@@ -1,16 +1,16 @@
 use crate::utils::{config::Config, terminal};
 use anyhow::Result;
 
-/// Validate and display the resolved `.oxideci.toml` configuration.
+/// Validate and display the resolved `.greengate.toml` configuration.
 ///
 /// - Exits with an error if the file exists but cannot be parsed.
 /// - Prints all resolved values so users can verify overrides are applied correctly.
 pub fn run_check_config() -> Result<()> {
-    let path = std::path::Path::new(".oxideci.toml");
+    let path = std::path::Path::new(".greengate.toml");
 
     if !path.exists() {
-        terminal::warn("No .oxideci.toml found — all commands will use built-in defaults.");
-        terminal::info("Run `oxide-ci init` to generate a config file.");
+        terminal::warn("No .greengate.toml found — all commands will use built-in defaults.");
+        terminal::info("Run `greengate init` to generate a config file.");
         print_defaults();
         return Ok(());
     }
@@ -20,12 +20,12 @@ pub fn run_check_config() -> Result<()> {
     // Parse and report any TOML/serde errors with a clear message.
     let cfg: Config = toml::from_str(&content).map_err(|e| {
         anyhow::anyhow!(
-            ".oxideci.toml is invalid:\n\n  {}\n\nRun `oxide-ci init --force` to regenerate it.",
+            ".greengate.toml is invalid:\n\n  {}\n\nRun `greengate init --force` to regenerate it.",
             e
         )
     })?;
 
-    terminal::success(".oxideci.toml is valid.");
+    terminal::success(".greengate.toml is valid.");
     eprintln!();
     eprintln!("Resolved configuration:");
     eprintln!();

@@ -5,7 +5,7 @@ Generates a [CycloneDX 1.5](https://cyclonedx.org/specification/overview/) Softw
 ## Usage
 
 ```
-oxide-ci sbom [OPTIONS]
+greengate sbom [OPTIONS]
 
 Options:
   -o, --output <FILE>    Write SBOM to a file instead of stdout
@@ -27,13 +27,13 @@ Checked in order — the first one found is used:
 
 ```bash
 # Print SBOM to stdout (pipe to a tool or inspect)
-oxide-ci sbom
+greengate sbom
 
 # Write SBOM to a file
-oxide-ci sbom --output sbom.json
+greengate sbom --output sbom.json
 
 # Pretty-print and inspect
-oxide-ci sbom | jq '.components[] | select(.name == "serde")'
+greengate sbom | jq '.components[] | select(.name == "serde")'
 ```
 
 ## Output format
@@ -44,14 +44,14 @@ The output is a CycloneDX 1.5 JSON document:
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:oxide-ci-1710000000",
+  "serialNumber": "urn:uuid:greengate-1710000000",
   "version": 1,
   "metadata": {
     "timestamp": "2026-03-06T12:00:00Z",
     "tools": [
       {
         "vendor": "ThinkGrid Labs",
-        "name": "oxide-ci",
+        "name": "greengate",
         "version": "0.2.4"
       }
     ]
@@ -73,7 +73,7 @@ The output is a CycloneDX 1.5 JSON document:
 ```yaml
 # GitHub Actions — generate and archive SBOM
 - name: Generate SBOM
-  run: oxide-ci sbom --output sbom.json
+  run: greengate sbom --output sbom.json
 
 - name: Upload SBOM artifact
   uses: actions/upload-artifact@v4

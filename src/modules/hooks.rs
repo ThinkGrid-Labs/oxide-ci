@@ -3,9 +3,9 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 const HOOK_CONTENT: &str = r#"#!/bin/sh
-# oxide-ci pre-commit hook (auto-installed)
+# greengate pre-commit hook (auto-installed)
 # Scans only staged files for secrets and PII before every commit.
-oxide-ci scan --staged
+greengate scan --staged
 "#;
 
 /// Walk up from `start` looking for a `.git` directory (max 10 levels).
@@ -59,6 +59,6 @@ pub fn run_install_hooks(force: bool) -> Result<()> {
         "Pre-commit hook installed at {}",
         hook_path.display()
     ));
-    terminal::info("oxide-ci scan --staged will now run before every commit.");
+    terminal::info("greengate scan --staged will now run before every commit.");
     Ok(())
 }

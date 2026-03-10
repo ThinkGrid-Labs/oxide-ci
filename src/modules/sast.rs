@@ -16,11 +16,11 @@ use tree_sitter::{Language, Parser, Query, QueryCursor};
 /// Return `true` if the finding at `row` (0-based) is suppressed.
 ///
 /// Checks the matched line itself AND the line immediately after it.
-/// Formatters (Prettier, ESLint) often move `// oxide-ci: ignore` comments
+/// Formatters (Prettier, ESLint) often move `// greengate: ignore` comments
 /// inside object literals to the next line, e.g.:
 /// ```
 ///   dangerouslySetInnerHTML={{          ← flagged line (row N)
-///     // oxide-ci: ignore               ← comment on row N+1
+///     // greengate: ignore               ← comment on row N+1
 ///     __html: sanitized,
 ///   }}
 /// ```
@@ -30,7 +30,7 @@ fn is_suppressed(source: &[u8], row: usize) -> bool {
     for (i, line) in lines.by_ref().enumerate() {
         if (i == row || i == row + 1)
             && std::str::from_utf8(line)
-                .map(|l| l.contains("oxide-ci: ignore"))
+                .map(|l| l.contains("greengate: ignore"))
                 .unwrap_or(false)
         {
             return true;
@@ -725,7 +725,7 @@ fn scan_dangerous_patterns(
         }
     }
 
-    // ── Custom rules from .oxideci.toml ───────────────────────────────────────
+    // ── Custom rules from .greengate.toml ───────────────────────────────────────
     for (id, query_src) in custom_rule_srcs {
         // Compile per-language: query types differ between JS and TS grammars.
         let query = match Query::new(lang, query_src) {
@@ -997,7 +997,7 @@ pub fn run_sast_scan(
                 Ok(_) => Some((r.id.clone(), r.query.clone())),
                 Err(e) => {
                     eprintln!(
-                        "oxide-ci: warning: custom SAST rule '{}' failed to compile: {}",
+                        "greengate: warning: custom SAST rule '{}' failed to compile: {}",
                         r.id, e
                     );
                     None
@@ -1072,7 +1072,7 @@ mod tests {
     fn detects_aws_key_in_string_literal() {
         let (sast, scan) = default_configs();
         let patterns = compile_builtins();
-        let f = write_tmp("ts", "const key = \"AKIAIOSFODNN7EXAMPLE123\";\n"); // oxide-ci: ignore
+        let f = write_tmp("ts", "const key = \"AKIAIOSFODNN7EXAMPLE123\";\n"); // greengate: ignore
         let findings = scan_file(f.path(), &sast, &patterns, &scan, &[]);
         assert!(
             findings.iter().any(|x| x.rule_id == "AWS Access Key"),
@@ -1085,7 +1085,7 @@ mod tests {
     fn ignores_aws_key_in_comment() {
         let (sast, scan) = default_configs();
         let patterns = compile_builtins();
-        let f = write_tmp("ts", "// AKIAIOSFODNN7EXAMPLE123\n"); // oxide-ci: ignore
+        let f = write_tmp("ts", "// AKIAIOSFODNN7EXAMPLE123\n"); // greengate: ignore
         let findings = scan_file(f.path(), &sast, &patterns, &scan, &[]);
         assert!(
             findings.is_empty(),
@@ -1100,7 +1100,7 @@ mod tests {
         let patterns = compile_builtins();
         let f = write_tmp(
             "tsx",
-            "export const A = () => <p>contact@example.com</p>;\n", // oxide-ci: ignore
+            "export const A = () => <p>contact@example.com</p>;\n", // greengate: ignore
         );
         let findings = scan_file(f.path(), &sast, &patterns, &scan, &[]);
         let email_hits: Vec<_> = findings
@@ -1118,7 +1118,7 @@ mod tests {
     fn detects_secret_in_template_literal() {
         let (sast, scan) = default_configs();
         let patterns = compile_builtins();
-        let f = write_tmp("js", "const k = `AKIAIOSFODNN7EXAMPLE123`;\n"); // oxide-ci: ignore
+        let f = write_tmp("js", "const k = `AKIAIOSFODNN7EXAMPLE123`;\n"); // greengate: ignore
         let findings = scan_file(f.path(), &sast, &patterns, &scan, &[]);
         assert!(
             findings.iter().any(|x| x.rule_id == "AWS Access Key"),
@@ -1132,7 +1132,7 @@ mod tests {
         let patterns = compile_builtins();
         let f = write_tmp(
             "ts",
-            "const k = \"AKIAIOSFODNN7EXAMPLE123\"; // oxide-ci: ignore\n",
+            "const k = \"AKIAIOSFODNN7EXAMPLE123\"; // greengate: ignore\n",
         );
         let findings = scan_file(f.path(), &sast, &patterns, &scan, &[]);
         assert!(
@@ -1278,7 +1278,7 @@ mod tests {
     #[test]
     fn suppression_skips_finding() {
         let (sast, scan) = default_configs();
-        let f = write_tmp("js", "eval(x); // oxide-ci: ignore\n");
+        let f = write_tmp("js", "eval(x); // greengate: ignore\n");
         let findings = scan_file(f.path(), &sast, &[], &scan, &[]);
         assert!(
             !findings.iter().any(|x| x.rule_id == "SAST/EvalUsage"),

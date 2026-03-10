@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: OxideCI
+  name: GreenGate
   text: Rust DevOps CLI for CI Quality Gates
   tagline: Secret scanning, AST-based SAST (JS/TS/Python/Go), Kubernetes linting, coverage gates, SBOM generation, dependency auditing, and web performance — single zero-dependency binary.
   actions:
@@ -11,7 +11,7 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/ThinkGrid-Labs/oxide-ci
+      link: https://github.com/ThinkGrid-Labs/greengate
 
 features:
   - title: Zero Runtime Dependencies
@@ -29,7 +29,7 @@ features:
   - title: Coverage Gates
     details: Parses lcov.info and fails the build when line coverage drops below a configurable threshold. Zero external tools required.
   - title: Dependency Audit
-    details: Queries the OSV vulnerability database for known CVEs across 6 ecosystems. Offline-capable with a local cache. Suppress known-acceptable transitive advisories per-ID via ignore_advisories in .oxideci.toml.
+    details: Queries the OSV vulnerability database for known CVEs across 6 ecosystems. Offline-capable with a local cache. Suppress known-acceptable transitive advisories per-ID via ignore_advisories in .greengate.toml.
   - title: Web Performance
     details: Lighthouse audits via the PageSpeed Insights API gate on performance, accessibility, best practices, and SEO scores.
   - title: Reassure Performance

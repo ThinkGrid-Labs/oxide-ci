@@ -1,6 +1,6 @@
 # Secret Detection Patterns
 
-oxide-ci ships with 26 built-in regex patterns covering the most common cloud providers, SaaS platforms, and API services. All patterns are applied only to string literals (not comments or JSX text) when scanning JS/TS files.
+greengate ships with 26 built-in regex patterns covering the most common cloud providers, SaaS platforms, and API services. All patterns are applied only to string literals (not comments or JSX text) when scanning JS/TS files.
 
 ## Built-in patterns
 
@@ -36,7 +36,7 @@ oxide-ci ships with 26 built-in regex patterns covering the most common cloud pr
 ## Adding custom patterns
 
 ```toml
-# .oxideci.toml
+# .greengate.toml
 [scan]
 extra_patterns = [
   { name = "Internal Service Token", regex = "svc_[a-z0-9]{40}" },
@@ -72,5 +72,5 @@ exclude_patterns = [
 ## Suppressing individual findings
 
 ```ts
-const key = "AKIAIOSFODNN7EXAMPLE123"; // oxide-ci: ignore
+const key = "AKIAIOSFODNN7EXAMPLE123"; // greengate: ignore
 ```

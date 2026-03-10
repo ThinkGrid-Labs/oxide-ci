@@ -1,6 +1,6 @@
 [package]
-name = "oxide-ci"
-version = "0.2.10"
+name = "greengate"
+version = "0.2.11"
 edition = "2024"
 
 [dependencies]

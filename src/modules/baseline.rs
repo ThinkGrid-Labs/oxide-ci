@@ -2,14 +2,14 @@
 /// known issues, so CI only fails on *new* findings introduced by a PR/commit.
 ///
 /// Workflow:
-///   1. `oxide-ci scan --update-baseline`  → writes `.oxide-baseline.json`
-///   2. `oxide-ci scan --since-baseline`   → only fails on findings absent from baseline
+///   1. `greengate scan --update-baseline`  → writes `.greengate-baseline.json`
+///   2. `greengate scan --since-baseline`   → only fails on findings absent from baseline
 use crate::modules::scanner::Finding;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-const BASELINE_FILE: &str = ".oxide-baseline.json";
+const BASELINE_FILE: &str = ".greengate-baseline.json";
 
 /// Stable fingerprint stored in the baseline.
 /// Uses path + rule + line so individual line shifts don't invalidate the whole file.
@@ -30,7 +30,7 @@ impl From<&Finding> for BaselineEntry {
     }
 }
 
-/// Persist findings to `.oxide-baseline.json`.
+/// Persist findings to `.greengate-baseline.json`.
 pub fn save_baseline(findings: &[Finding]) -> Result<()> {
     let entries: Vec<BaselineEntry> = findings.iter().map(BaselineEntry::from).collect();
     let json = serde_json::to_string_pretty(&entries)?;

@@ -332,7 +332,7 @@ fn cache_dir() -> Option<PathBuf> {
         .ok()
         .map(PathBuf::from)
         .or_else(dirs_home)?;
-    let dir = base.join(".cache").join("oxide-ci").join("osv");
+    let dir = base.join(".cache/greengate/osv");
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
 }
@@ -549,7 +549,7 @@ pub fn run_audit() -> Result<()> {
 
     if !ignored.is_empty() {
         terminal::info(&format!(
-            "Ignoring {} suppressed advisory/-ies from .oxideci.toml",
+            "Ignoring {} suppressed advisory/-ies from .greengate.toml",
             ignored.len()
         ));
     }
@@ -618,7 +618,7 @@ pub fn run_audit() -> Result<()> {
 
     if !suppressed.is_empty() {
         terminal::warn(&format!(
-            "Suppressed {} advisory/-ies (listed in .oxideci.toml [audit] ignore_advisories):",
+            "Suppressed {} advisory/-ies (listed in .greengate.toml [audit] ignore_advisories):",
             suppressed.len()
         ));
         for v in &suppressed {

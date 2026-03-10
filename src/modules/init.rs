@@ -1,4 +1,4 @@
-/// `oxide-ci init` — interactive wizard that generates `.oxideci.toml`.
+/// `greengate init` — interactive wizard that generates `.greengate.toml`.
 ///
 /// Asks a few questions about the project and writes a tailored config file.
 /// Aborts cleanly if the file already exists (unless --force is passed).
@@ -6,13 +6,15 @@ use anyhow::Result;
 use std::io::{self, BufRead, Write};
 
 pub fn run_init(force: bool) -> Result<()> {
-    let config_path = std::path::Path::new(".oxideci.toml");
+    let config_path = std::path::Path::new(".greengate.toml");
 
     if config_path.exists() && !force {
-        anyhow::bail!(".oxideci.toml already exists. Run `oxide-ci init --force` to overwrite.");
+        anyhow::bail!(
+            ".greengate.toml already exists. Run `greengate init --force` to overwrite."
+        );
     }
 
-    eprintln!("oxide-ci init — generating .oxideci.toml");
+    eprintln!("greengate init — generating .greengate.toml");
     eprintln!("Press Enter to accept the default shown in [brackets].\n");
 
     let stdin = io::stdin();
@@ -85,7 +87,7 @@ pub fn run_init(force: bool) -> Result<()> {
 
     // ── Pipeline ──────────────────────────────────────────────────────────────
     eprintln!("[ Pipeline Runner ]");
-    let run_pipeline = ask_bool!("Generate a default pipeline (oxide-ci run)?", true);
+    let run_pipeline = ask_bool!("Generate a default pipeline (greengate run)?", true);
     eprintln!();
 
     // ── Build TOML ────────────────────────────────────────────────────────────
@@ -159,19 +161,19 @@ pub fn run_init(force: bool) -> Result<()> {
 
     std::fs::write(config_path, &toml)?;
 
-    eprintln!("✅ .oxideci.toml written successfully.");
+    eprintln!("✅ .greengate.toml written successfully.");
     eprintln!();
     eprintln!("Next steps:");
-    eprintln!("  oxide-ci scan          # scan for secrets & SAST issues");
-    eprintln!("  oxide-ci audit         # check dependencies for CVEs");
-    eprintln!("  oxide-ci coverage      # gate on test coverage");
+    eprintln!("  greengate scan          # scan for secrets & SAST issues");
+    eprintln!("  greengate audit         # check dependencies for CVEs");
+    eprintln!("  greengate coverage      # gate on test coverage");
     if !docker_file.is_empty() {
-        eprintln!("  oxide-ci docker-lint   # lint your Dockerfile");
+        eprintln!("  greengate docker-lint   # lint your Dockerfile");
     }
     if run_pipeline {
-        eprintln!("  oxide-ci run           # run all pipeline steps in order");
+        eprintln!("  greengate run           # run all pipeline steps in order");
     }
-    eprintln!("  oxide-ci install-hooks # install git pre-commit hook");
+    eprintln!("  greengate install-hooks # install git pre-commit hook");
 
     Ok(())
 }

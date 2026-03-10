@@ -1,11 +1,11 @@
 # watch
 
-Re-runs the secret and SAST scan automatically whenever source files change. Useful for catching secrets during active development without having to run `oxide-ci scan` manually.
+Re-runs the secret and SAST scan automatically whenever source files change. Useful for catching secrets during active development without having to run `greengate scan` manually.
 
 ## Usage
 
 ```bash
-oxide-ci watch [--staged] [--interval <ms>]
+greengate watch [--staged] [--interval <ms>]
 ```
 
 ## Options
@@ -17,7 +17,7 @@ oxide-ci watch [--staged] [--interval <ms>]
 
 ## How it works
 
-`oxide-ci watch` polls the working directory every `--interval` milliseconds. When it detects a file with a newer modification time than the last snapshot, it immediately re-runs the scan and prints results. It then continues watching.
+`greengate watch` polls the working directory every `--interval` milliseconds. When it detects a file with a newer modification time than the last snapshot, it immediately re-runs the scan and prints results. It then continues watching.
 
 Unlike a watcher that fails the process on findings, `watch` **does not exit on findings** — it reports them and keeps going so you can fix them in-place.
 
@@ -25,20 +25,20 @@ Unlike a watcher that fails the process on findings, `watch` **does not exit on 
 
 ```bash
 # Watch for changes, scan full working tree
-oxide-ci watch
+greengate watch
 
 # Watch only staged files (faster in large repos)
-oxide-ci watch --staged
+greengate watch --staged
 
 # Poll every 500ms for a faster feedback loop
-oxide-ci watch --interval 500
+greengate watch --interval 500
 ```
 
 ## Typical local workflow
 
 ```bash
 # Terminal 1: start watching
-oxide-ci watch
+greengate watch
 
 # Terminal 2: edit your code
 # Every time you save, the scanner re-runs and reports instantly
@@ -46,6 +46,6 @@ oxide-ci watch
 
 ## Notes
 
-- `watch` respects `.gitignore` and `.oxideci.toml` exclusion rules
+- `watch` respects `.gitignore` and `.greengate.toml` exclusion rules
 - Ctrl-C stops the watcher
-- This command is for local development only — use `oxide-ci scan` in CI
+- This command is for local development only — use `greengate scan` in CI

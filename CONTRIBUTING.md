@@ -1,6 +1,6 @@
-# Contributing to OxideCI
+# Contributing to GreenGate
 
-Thanks for your interest in contributing! OxideCI is a Rust CLI tool — contributions of all kinds are welcome: bug reports, new secret-detection patterns, SAST rules, documentation improvements, and new features.
+Thanks for your interest in contributing! GreenGate is a Rust CLI tool — contributions of all kinds are welcome: bug reports, new secret-detection patterns, SAST rules, documentation improvements, and new features.
 
 ## Getting Started
 
@@ -12,8 +12,8 @@ Thanks for your interest in contributing! OxideCI is a Rust CLI tool — contrib
 ### Build
 
 ```bash
-git clone https://github.com/ThinkGrid-Labs/oxide-ci
-cd oxide-ci
+git clone https://github.com/ThinkGrid-Labs/greengate
+cd greengate
 cargo build
 ```
 
@@ -29,16 +29,16 @@ All tests must pass before submitting a pull request.
 
 ### Reporting bugs
 
-Open an issue at [github.com/ThinkGrid-Labs/oxide-ci/issues](https://github.com/ThinkGrid-Labs/oxide-ci/issues) and include:
+Open an issue at [github.com/ThinkGrid-Labs/greengate/issues](https://github.com/ThinkGrid-Labs/greengate/issues) and include:
 
-- oxide-ci version (`oxide-ci --version`)
+- greengate version (`greengate --version`)
 - OS and architecture
 - The command you ran and the full output
 - What you expected to happen
 
 ### Suggesting new secret patterns
 
-OxideCI's built-in patterns live in `src/scanner.rs`. Each pattern is a named regex. To propose a new one:
+GreenGate's built-in patterns live in `src/scanner.rs`. Each pattern is a named regex. To propose a new one:
 
 1. Add the pattern to the `patterns()` function with a descriptive name (e.g. `"Twilio Auth Token"`)
 2. Add a test in `tests/` that exercises the new pattern with both a true-positive and a true-negative fixture

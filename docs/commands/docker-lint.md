@@ -5,7 +5,7 @@ Lint a `Dockerfile` for best-practice violations that cause security issues, blo
 ## Usage
 
 ```bash
-oxide-ci docker-lint [--file <path>]
+greengate docker-lint [--file <path>]
 ```
 
 ## Options
@@ -30,7 +30,7 @@ oxide-ci docker-lint [--file <path>]
 ## Configuration
 
 ```toml
-# .oxideci.toml
+# .greengate.toml
 [docker]
 dockerfile = "Dockerfile"   # default
 ```
@@ -46,14 +46,14 @@ dockerfile = "Dockerfile"   # default
 
 ```bash
 # Lint the default Dockerfile
-oxide-ci docker-lint
+greengate docker-lint
 
 # Lint a specific Dockerfile
-oxide-ci docker-lint --file docker/Dockerfile.prod
+greengate docker-lint --file docker/Dockerfile.prod
 
 # In GitHub Actions
 - name: Lint Dockerfile
-  run: oxide-ci docker-lint --file Dockerfile
+  run: greengate docker-lint --file Dockerfile
 ```
 
 ## Example output

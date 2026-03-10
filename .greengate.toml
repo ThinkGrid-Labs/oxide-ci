@@ -1,8 +1,8 @@
-# oxide-ci self-scan configuration
+# greengate self-scan configuration
 # Excludes files that intentionally contain fake/example secret patterns
 # (test fixtures, documentation examples, and regex pattern definitions)
 
-# oxide-ci self-scan configuration
+# greengate self-scan configuration
 # Excludes files that intentionally contain fake/example secret patterns
 # (test fixtures, documentation examples, and regex pattern definitions)
 
@@ -40,7 +40,7 @@ min = 80.0
 target_dir = "."
 
 # ── Lighthouse (web performance) ──────────────────────────────────────────────
-# Uncomment and set url to enable `oxide-ci lighthouse` quality gate.
+# Uncomment and set url to enable `greengate lighthouse` quality gate.
 # The API key is optional; without it the unauthenticated quota applies.
 # Set PAGESPEED_API_KEY env var in CI to avoid hardcoding the key here.
 #
@@ -54,7 +54,7 @@ target_dir = "."
 # api_key = ""                 # or set PAGESPEED_API_KEY env var
 
 # ── Reassure (React component performance) ────────────────────────────────────
-# Uncomment to enable `oxide-ci reassure` quality gate after running
+# Uncomment to enable `greengate reassure` quality gate after running
 # `reassure measure` in your frontend CI pipeline.
 #
 # [reassure]

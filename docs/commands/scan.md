@@ -7,7 +7,7 @@ For JavaScript, TypeScript, Python, and Go files the scanner automatically runs 
 ## Usage
 
 ```
-oxide-ci scan [OPTIONS]
+greengate scan [OPTIONS]
 
 Options:
   --format <FORMAT>    Output format: text (default), json, sarif, junit, gitlab
@@ -17,7 +17,7 @@ Options:
   --annotate           Post findings as a GitHub Check Run with per-line
                        annotations and a rich PR summary comment. Requires
                        GITHUB_TOKEN, GITHUB_REPOSITORY, and GITHUB_SHA env vars.
-  --update-baseline    Save current findings as the baseline (.oxide-baseline.json)
+  --update-baseline    Save current findings as the baseline (.greengate-baseline.json)
   --since-baseline     Only fail on findings not present in the saved baseline
   --blame              Enrich each finding with git blame info (author + commit)
   -h, --help           Print help
@@ -27,39 +27,39 @@ Options:
 
 ```bash
 # Full scan — human-readable output
-oxide-ci scan
+greengate scan
 
 # Only scan what you're about to commit (fast, ideal for pre-commit)
-oxide-ci scan --staged
+greengate scan --staged
 
 # Only scan files changed since the last commit
-oxide-ci scan --since HEAD~1
+greengate scan --since HEAD~1
 
 # Output SARIF for GitHub Advanced Security PR annotations
-oxide-ci scan --format sarif > results.sarif
+greengate scan --format sarif > results.sarif
 
 # Output JSON for custom tooling
-oxide-ci scan --format json | jq '.findings[].rule'
+greengate scan --format json | jq '.findings[].rule'
 
 # JUnit XML for Jenkins / Azure DevOps
-oxide-ci scan --format junit > results.xml
+greengate scan --format junit > results.xml
 
 # GitLab SAST Security Scanner JSON
-oxide-ci scan --format gitlab > gl-sast-report.json
+greengate scan --format gitlab > gl-sast-report.json
 
 # Enrich findings with git blame (author + commit hash)
-oxide-ci scan --blame
+greengate scan --blame
 
 # Post findings directly to the GitHub Checks tab + PR summary comment
 GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
 GITHUB_REPOSITORY=owner/repo \
 GITHUB_SHA=${{ github.sha }} \
-oxide-ci scan --annotate
+greengate scan --annotate
 ```
 
 ## AST-Based SAST for JS/TS/Python/Go
 
-When scanning `.js`, `.jsx`, `.ts`, `.tsx`, `.py`, or `.go` files, oxide-ci uses tree-sitter to parse each file into a real AST. This provides:
+When scanning `.js`, `.jsx`, `.ts`, `.tsx`, `.py`, or `.go` files, greengate uses tree-sitter to parse each file into a real AST. This provides:
 
 **1. String-literal scoping** — secret patterns only fire inside string and template literals, not comments or JSX text:
 
@@ -84,14 +84,14 @@ If your repository already has existing findings you can't fix immediately, the 
 **Step 1: Save a baseline** (typically on your main branch)
 
 ```bash
-oxide-ci scan --update-baseline
-# Writes .oxide-baseline.json — commit this file
+greengate scan --update-baseline
+# Writes .greengate-baseline.json — commit this file
 ```
 
 **Step 2: Gate on new findings only** (in CI, on every PR)
 
 ```bash
-oxide-ci scan --since-baseline
+greengate scan --since-baseline
 # Only fails if new findings are introduced vs the baseline
 ```
 
@@ -101,20 +101,20 @@ The baseline file stores `(file, rule, line)` fingerprints. If a secret moves to
 # GitHub Actions example
 - name: Save baseline (main branch only)
   if: github.ref == 'refs/heads/main'
-  run: oxide-ci scan --update-baseline && git add .oxide-baseline.json
+  run: greengate scan --update-baseline && git add .greengate-baseline.json
 
 - name: Gate on new secrets only (PRs)
   if: github.event_name == 'pull_request'
-  run: oxide-ci scan --since-baseline
+  run: greengate scan --since-baseline
 ```
 
 ## Suppressing findings
 
-Add `// oxide-ci: ignore` on the same line to suppress a specific finding:
+Add `// greengate: ignore` on the same line to suppress a specific finding:
 
 ```ts
-const legacyKey = "AKIAIOSFODNN7EXAMPLE123"; // oxide-ci: ignore
-el.innerHTML = sanitizedHtml;                 // oxide-ci: ignore
+const legacyKey = "AKIAIOSFODNN7EXAMPLE123"; // greengate: ignore
+el.innerHTML = sanitizedHtml;                 // greengate: ignore
 ```
 
 ## Sample output

@@ -5,10 +5,10 @@ Audits web performance via the [Google PageSpeed Insights API](https://developer
 ## Usage
 
 ```
-oxide-ci lighthouse [OPTIONS]
+greengate lighthouse [OPTIONS]
 
 Options:
-  --url <URL>                URL to audit [required or set in .oxideci.toml]
+  --url <URL>                URL to audit [required or set in .greengate.toml]
   --strategy <STRATEGY>      mobile (default) or desktop
   --min-performance <N>      Minimum performance score 0–100 [default: 80]
   --min-accessibility <N>    Minimum accessibility score 0–100 [default: 90]
@@ -21,24 +21,24 @@ Options:
 
 ```bash
 # Audit with default thresholds
-oxide-ci lighthouse --url https://yourapp.com
+greengate lighthouse --url https://yourapp.com
 
 # Desktop strategy with custom thresholds
-oxide-ci lighthouse --url https://yourapp.com \
+greengate lighthouse --url https://yourapp.com \
   --strategy desktop \
   --min-performance 90 \
   --min-accessibility 95
 
-# Use defaults from .oxideci.toml
-oxide-ci lighthouse
+# Use defaults from .greengate.toml
+greengate lighthouse
 ```
 
 ## API key
 
-The PageSpeed Insights API has a default quota of 400 requests per day without an API key. For CI pipelines, set `PAGESPEED_API_KEY` as an environment variable or use `api_key` in `.oxideci.toml` to increase quota.
+The PageSpeed Insights API has a default quota of 400 requests per day without an API key. For CI pipelines, set `PAGESPEED_API_KEY` as an environment variable or use `api_key` in `.greengate.toml` to increase quota.
 
 ```bash
-PAGESPEED_API_KEY=your_key oxide-ci lighthouse --url https://yourapp.com
+PAGESPEED_API_KEY=your_key greengate lighthouse --url https://yourapp.com
 ```
 
 ## In GitHub Actions
@@ -48,7 +48,7 @@ PAGESPEED_API_KEY=your_key oxide-ci lighthouse --url https://yourapp.com
   env:
     PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
   run: |
-    oxide-ci lighthouse \
+    greengate lighthouse \
       --url "${{ vars.LIGHTHOUSE_URL }}" \
       --strategy mobile \
       --min-performance 80 \

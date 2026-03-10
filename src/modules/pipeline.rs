@@ -1,6 +1,6 @@
-/// `oxide-ci run` — pipeline runner.
+/// `greengate run` — pipeline runner.
 ///
-/// Reads `[pipeline] steps = [...]` from `.oxideci.toml` and runs each step
+/// Reads `[pipeline] steps = [...]` from `.greengate.toml` and runs each step
 /// in order. A failing step stops the pipeline and exits non-zero.
 ///
 /// Each step is either a bare command name ("scan") or a command with flags
@@ -10,13 +10,13 @@ use crate::modules::scanner::{DiffMode, OutputFormat, ScanOpts};
 use crate::utils::{config, terminal};
 use anyhow::Result;
 
-/// Run the pipeline defined in `.oxideci.toml`.
+/// Run the pipeline defined in `.greengate.toml`.
 pub fn run_pipeline(cfg: &config::Config) -> Result<()> {
     let steps = &cfg.pipeline.steps;
 
     if steps.is_empty() {
         anyhow::bail!(
-            "No pipeline steps defined. Add [pipeline] steps = [\"scan\", ...] to .oxideci.toml"
+            "No pipeline steps defined. Add [pipeline] steps = [\"scan\", ...] to .greengate.toml"
         );
     }
 
@@ -120,7 +120,7 @@ fn dispatch(command: &str, args: &[&str], cfg: &config::Config) -> Result<()> {
                 .or_else(|| cfg.lighthouse.url.clone())
                 .ok_or_else(|| {
                     anyhow::anyhow!(
-                        "lighthouse step: no URL. Set [lighthouse] url in .oxideci.toml or pass --url"
+                        "lighthouse step: no URL. Set [lighthouse] url in .greengate.toml or pass --url"
                     )
                 })?;
             crate::modules::perf_lighthouse::run_lighthouse(LighthouseOpts {

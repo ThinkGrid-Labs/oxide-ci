@@ -5,7 +5,7 @@ mod modules;
 mod utils;
 
 #[derive(Parser)]
-#[command(name = "oxide-ci")]
+#[command(name = "greengate")]
 #[command(about = "A high-performance DevOps CLI tool in Rust", long_about = None)]
 struct Cli {
     /// Apply a preset quality profile: strict, relaxed, or ci
@@ -37,7 +37,7 @@ enum Commands {
         /// No-op when env vars are absent.
         #[arg(long)]
         annotate: bool,
-        /// Save current findings as the baseline (writes .oxide-baseline.json)
+        /// Save current findings as the baseline (writes .greengate-baseline.json)
         #[arg(long)]
         update_baseline: bool,
         /// Only fail on findings not present in the saved baseline
@@ -68,7 +68,7 @@ enum Commands {
         #[arg(short, long)]
         min: Option<f64>,
     },
-    /// Installs oxide-ci as a git pre-commit hook
+    /// Installs greengate as a git pre-commit hook
     InstallHooks {
         /// Overwrite an existing hook without prompting
         #[arg(long)]
@@ -112,9 +112,9 @@ enum Commands {
         #[arg(long)]
         threshold: Option<f64>,
     },
-    /// Interactive wizard that generates a .oxideci.toml config file
+    /// Interactive wizard that generates a .greengate.toml config file
     Init {
-        /// Overwrite an existing .oxideci.toml without prompting
+        /// Overwrite an existing .greengate.toml without prompting
         #[arg(long)]
         force: bool,
     },
@@ -127,9 +127,9 @@ enum Commands {
         #[arg(long, default_value = "2000")]
         interval: u64,
     },
-    /// Runs all pipeline steps defined in .oxideci.toml in order
+    /// Runs all pipeline steps defined in .greengate.toml in order
     Run,
-    /// Validates .oxideci.toml and prints all resolved configuration values
+    /// Validates .greengate.toml and prints all resolved configuration values
     CheckConfig,
     /// Generates a CycloneDX 1.5 SBOM from the project's lock file
     Sbom {
@@ -226,7 +226,7 @@ fn main() -> anyhow::Result<()> {
                 && let Some(env) = modules::github::detect_github_env()
                 && let Err(e) = modules::github::annotate(&findings, &env)
             {
-                eprintln!("oxide-ci: warning: GitHub annotation failed: {}", e);
+                eprintln!("greengate: warning: GitHub annotation failed: {}", e);
             }
             modules::scanner::emit_findings(&findings, &output_format)?;
         }
@@ -262,7 +262,7 @@ fn main() -> anyhow::Result<()> {
 
             let resolved_url = url.or_else(|| cfg.lighthouse.url.clone()).ok_or_else(|| {
                 anyhow::anyhow!(
-                    "No URL specified. Pass --url <URL> or set [lighthouse] url in .oxideci.toml"
+                    "No URL specified. Pass --url <URL> or set [lighthouse] url in .greengate.toml"
                 )
             })?;
 
