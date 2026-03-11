@@ -11,7 +11,7 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/ThinkGrid-Labs/greengate
+      link: https://github.com/thinkgrid-labs/greengate
 
 features:
   - title: Zero Runtime Dependencies

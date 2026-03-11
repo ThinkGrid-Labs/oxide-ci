@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: Install greengate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
       - name: Lighthouse post-deploy audit
@@ -69,7 +69,7 @@ jobs:
     steps:
       - name: Install greengate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
       - name: Lighthouse pre-merge gate
@@ -183,7 +183,7 @@ min = 70.0
 ```yaml
 - name: Install greengate
   run: |
-    curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+    curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
       -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
 - name: Scan
