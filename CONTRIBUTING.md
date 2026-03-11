@@ -12,7 +12,7 @@ Thanks for your interest in contributing! GreenGate is a Rust CLI tool — contr
 ### Build
 
 ```bash
-git clone https://github.com/ThinkGrid-Labs/greengate
+git clone https://github.com/thinkgrid-labs/greengate
 cd greengate
 cargo build
 ```
@@ -29,7 +29,7 @@ All tests must pass before submitting a pull request.
 
 ### Reporting bugs
 
-Open an issue at [github.com/ThinkGrid-Labs/greengate/issues](https://github.com/ThinkGrid-Labs/greengate/issues) and include:
+Open an issue at [github.com/ThinkGrid-Labs/greengate/issues](https://github.com/thinkgrid-labs/greengate/issues) and include:
 
 - greengate version (`greengate --version`)
 - OS and architecture

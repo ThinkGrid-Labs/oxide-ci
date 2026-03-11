@@ -21,7 +21,7 @@ jobs:
 
       - name: Install GreenGate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate
           chmod +x /usr/local/bin/greengate
 
@@ -64,7 +64,7 @@ stages:
 
 .install_oxide: &install_oxide
   before_script:
-    - curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64
+    - curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64
         -o /usr/local/bin/greengate
     - chmod +x /usr/local/bin/greengate
 

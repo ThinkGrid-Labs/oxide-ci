@@ -3,12 +3,12 @@
 > A blazing-fast DevOps CLI built in Rust — secret scanning, AST-based SAST for JS/TS/Python/Go, Kubernetes linting, Dockerfile linting, coverage gates, dependency auditing with offline cache, web performance auditing, React component regression detection, CycloneDX SBOM generation, scan baselines, a pipeline runner, config profiles, and an interactive setup wizard — in a single zero-dependency binary.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Build](https://img.shields.io/github/actions/workflow/status/ThinkGrid-Labs/greengate/ci.yml?branch=main)](https://github.com/ThinkGrid-Labs/greengate/actions)
-[![GitHub release](https://img.shields.io/github/v/release/ThinkGrid-Labs/greengate)](https://github.com/ThinkGrid-Labs/greengate/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/thinkgrid-labs/greengate/ci.yml?branch=main)](https://github.com/thinkgrid-labs/greengate/actions)
+[![GitHub release](https://img.shields.io/github/v/release/thinkgrid-labs/greengate)](https://github.com/thinkgrid-labs/greengate/releases/latest)
 [![Crates.io](https://img.shields.io/crates/v/greengate)](https://crates.io/crates/greengate)
 [![Downloads](https://img.shields.io/crates/d/greengate)](https://crates.io/crates/greengate)
 [![MSRV](https://img.shields.io/badge/MSRV-1.85-orange)](https://www.rust-lang.org)
-[![GitHub Stars](https://img.shields.io/github/stars/ThinkGrid-Labs/greengate?style=social)](https://github.com/ThinkGrid-Labs/greengate/stargazers)
+[![GitHub Stars](https://img.shields.io/github/stars/thinkgrid-labs/greengate?style=social)](https://github.com/thinkgrid-labs/greengate/stargazers)
 
 ---
 
@@ -134,32 +134,32 @@ Most DevOps quality tools are either slow, require a runtime (Node, Python, Java
 
 **macOS (Apple Silicon / M1+):**
 ```bash
-curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-macos-arm64 \
+curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-macos-arm64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **macOS (Intel):**
 ```bash
-curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-macos-amd64 \
+curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-macos-amd64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Linux (x64):**
 ```bash
-curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Windows (x64) — PowerShell:**
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-windows-amd64.exe" `
+Invoke-WebRequest -Uri "https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-windows-amd64.exe" `
   -OutFile "$env:USERPROFILE\.local\bin\greengate.exe"
 # Add $env:USERPROFILE\.local\bin to your PATH if not already present
 ```
 
 ### Build from source (requires Rust 1.85+)
 ```bash
-cargo install --git https://github.com/ThinkGrid-Labs/greengate
+cargo install --git https://github.com/thinkgrid-labs/greengate
 ```
 
 ### Verify installation
@@ -1401,7 +1401,7 @@ jobs:
 
       - name: Install GreenGate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate
           chmod +x /usr/local/bin/greengate
 
@@ -1441,7 +1441,7 @@ jobs:
 
       - name: Install GreenGate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate
           chmod +x /usr/local/bin/greengate
 
@@ -1482,7 +1482,7 @@ stages:
   - quality
 
 variables:
-  OXIDE_CI_URL: https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64
+  OXIDE_CI_URL: https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64
 
 .install_oxide: &install_oxide
   before_script:
@@ -1526,7 +1526,7 @@ pipelines:
         name: GreenGate Security & Quality Gates
         script:
           - apt-get update -qq && apt-get install -y curl
-          - curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64
+          - curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64
               -o /usr/local/bin/greengate
           - chmod +x /usr/local/bin/greengate
           - greengate scan
@@ -1549,7 +1549,7 @@ jobs:
       - run:
           name: Install GreenGate
           command: |
-            curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+            curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
               -o /usr/local/bin/greengate
             chmod +x /usr/local/bin/greengate
       - run:
@@ -1752,7 +1752,7 @@ jobs:
 
       - name: Install greengate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate
           chmod +x /usr/local/bin/greengate
 
@@ -1784,7 +1784,7 @@ jobs:
 
       - name: Install greengate
         run: |
-          curl -sL https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-linux-amd64 \
+          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate
           chmod +x /usr/local/bin/greengate
 
@@ -2056,4 +2056,4 @@ cargo test sast     # only SAST tests
 cargo clippy        # lint
 ```
 
-**Issues & feature requests:** [github.com/ThinkGrid-Labs/greengate/issues](https://github.com/ThinkGrid-Labs/greengate/issues)
+**Issues & feature requests:** [github.com/ThinkGrid-Labs/greengate/issues](https://github.com/thinkgrid-labs/greengate/issues)
