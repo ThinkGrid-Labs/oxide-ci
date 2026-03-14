@@ -98,15 +98,19 @@ pub fn run_review(opts: ReviewOpts) -> Result<()> {
     // 3. Coverage gaps (optional)
     let coverage_out = if let Some(ref cov_file) = opts.coverage_file {
         let cov_map = crate::modules::coverage::parse_coverage_map(cov_file)?;
-        Some(compute_coverage_gaps(&diff_files, &cov_map, opts.min_coverage))
+        Some(compute_coverage_gaps(
+            &diff_files,
+            &cov_map,
+            opts.min_coverage,
+        ))
     } else {
         None
     };
 
     // 4. Determine overall pass/fail
     let coverage_passed = coverage_out.as_ref().map(|c| c.passed).unwrap_or(true);
-    let complexity_passed = opts.complexity_budget == 0
-        || complexity.score <= opts.complexity_budget;
+    let complexity_passed =
+        opts.complexity_budget == 0 || complexity.score <= opts.complexity_budget;
     let passed = coverage_passed && complexity_passed;
 
     let output = ReviewOutput {
@@ -249,10 +253,7 @@ fn parse_hunk_new_start(line: &str) -> Option<u32> {
     // Find "+<start>" within the hunk header
     let after_at = line.strip_prefix("@@")?.trim_start();
     let plus_part = after_at.split_whitespace().nth(1)?; // "+7,10"
-    let start_str = plus_part
-        .strip_prefix('+')?
-        .split(',')
-        .next()?;
+    let start_str = plus_part.strip_prefix('+')?.split(',').next()?;
     start_str.parse().ok()
 }
 
@@ -507,7 +508,11 @@ fn emit_text(output: &ReviewOutput, _min_coverage: f64, complexity_budget: u32) 
     );
     eprintln!("  Cyclomatic nodes : {}", c.cyclomatic_nodes);
     if complexity_budget > 0 {
-        let status = if c.score <= complexity_budget { "✓" } else { "✗" };
+        let status = if c.score <= complexity_budget {
+            "✓"
+        } else {
+            "✗"
+        };
         eprintln!(
             "  Budget           : {}/{} {}",
             c.score, complexity_budget, status

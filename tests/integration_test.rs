@@ -737,13 +737,20 @@ fn review_exits_zero_without_coverage_file() {
         .status()
         .unwrap();
 
-    assert!(status.success(), "review without coverage file should exit 0");
+    assert!(
+        status.success(),
+        "review without coverage file should exit 0"
+    );
 }
 
 #[test]
 fn review_json_format_is_valid() {
     let dir = tempfile::tempdir().unwrap();
-    setup_two_commit_repo(dir.path(), "app.js", "function foo() { if (true) { return 1; } }\n");
+    setup_two_commit_repo(
+        dir.path(),
+        "app.js",
+        "function foo() { if (true) { return 1; } }\n",
+    );
 
     let output = Command::new(binary())
         .args(["review", "--base", "HEAD~1", "--format", "json"])
@@ -758,10 +765,16 @@ fn review_json_format_is_valid() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let parsed: serde_json::Value =
         serde_json::from_str(&stdout).expect("--format json must produce valid JSON");
-    assert!(parsed["complexity"].is_object(), "JSON must have 'complexity' key");
+    assert!(
+        parsed["complexity"].is_object(),
+        "JSON must have 'complexity' key"
+    );
     assert!(parsed["passed"].is_boolean(), "JSON must have 'passed' key");
     let score = parsed["complexity"]["score"].as_u64().unwrap_or(0);
-    assert!(score > 0, "complexity score should be > 0 for a non-empty diff");
+    assert!(
+        score > 0,
+        "complexity score should be > 0 for a non-empty diff"
+    );
 }
 
 #[test]
@@ -813,7 +826,11 @@ fn review_coverage_passes_when_all_lines_covered() {
 
     // LCOV: the single added line is covered
     let lcov_path = dir.path().join("lcov.info");
-    std::fs::write(&lcov_path, "SF:util.js\nDA:1,3\nLH:1\nLF:1\nend_of_record\n").unwrap();
+    std::fs::write(
+        &lcov_path,
+        "SF:util.js\nDA:1,3\nLH:1\nLF:1\nend_of_record\n",
+    )
+    .unwrap();
 
     let status = Command::new(binary())
         .args([
@@ -852,7 +869,7 @@ fn review_sarif_output_is_valid() {
             "--coverage-file",
             lcov_path.to_str().unwrap(),
             "--min-coverage",
-            "0",  // don't fail so we can inspect SARIF output
+            "0", // don't fail so we can inspect SARIF output
             "--format",
             "sarif",
         ])
