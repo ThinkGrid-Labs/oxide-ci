@@ -9,6 +9,7 @@ pub mod init;
 pub mod k8s_lint;
 pub mod perf_lighthouse;
 pub mod pipeline;
+pub mod pr_review;
 pub mod reassure;
 pub mod sast;
 pub mod sbom;

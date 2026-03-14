@@ -50,6 +50,9 @@ greengate --version
 # Scan for secrets and run SAST on JS/TS files
 greengate scan
 
+# Analyze a PR: Complexity Score + new-code coverage gaps
+greengate review --base main --coverage-file coverage/lcov.info
+
 # Lint all Kubernetes YAML files
 greengate lint --dir ./k8s
 
@@ -75,6 +78,8 @@ greengate reassure
 |---|---|
 | Hardcoded secrets pushed to git | `greengate scan` |
 | XSS, eval, command injection in JS/TS | `greengate scan` (SAST) |
+| PR too complex — hard to estimate review time | `greengate review` |
+| New code added without test coverage | `greengate review --coverage-file lcov.info` |
 | Kubernetes manifests missing resource limits | `greengate lint` |
 | Test coverage silently dropping | `greengate coverage` |
 | Vulnerable dependencies shipping to production | `greengate audit` |
@@ -87,3 +92,4 @@ greengate reassure
 - Set up a [configuration file](/reference/config) to share settings across all commands
 - Integrate with [GitHub Actions or GitLab CI](/guide/ci-integration)
 - Explore individual [command references](/commands/scan)
+- See [PR review](/commands/review) for the `review` subcommand

@@ -156,9 +156,36 @@ fn dispatch(command: &str, args: &[&str], cfg: &config::Config) -> Result<()> {
             })
         }
 
+        "review" => {
+            let base = flag_value(args, "--base")
+                .unwrap_or("HEAD~1")
+                .to_string();
+            let staged = args.contains(&"--staged");
+            let coverage_file = flag_value(args, "--coverage-file").map(str::to_string);
+            let min_coverage: f64 = flag_value(args, "--min-coverage")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(cfg.review.min_new_code_coverage);
+            let complexity_budget: u32 = flag_value(args, "--complexity-budget")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(cfg.review.complexity_budget);
+            let format = flag_value(args, "--format")
+                .unwrap_or("text")
+                .to_string();
+            let annotate = args.contains(&"--annotate");
+            crate::modules::pr_review::run_review(crate::modules::pr_review::ReviewOpts {
+                base,
+                staged,
+                coverage_file,
+                min_coverage,
+                complexity_budget,
+                format,
+                annotate,
+            })
+        }
+
         other => {
             anyhow::bail!(
-                "Unknown pipeline step '{}'. Valid steps: scan, lint, docker-lint, coverage, audit, lighthouse, reassure",
+                "Unknown pipeline step '{}'. Valid steps: scan, lint, docker-lint, coverage, audit, lighthouse, reassure, review",
                 other
             )
         }

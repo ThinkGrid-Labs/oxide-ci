@@ -160,6 +160,33 @@ jobs:
         if: github.event_name == 'pull_request' && hashFiles('.greengate-baseline.json') != ''
         run: ./target/release/greengate scan --since-baseline
 
+      # ── PR review — Complexity Score + new-code coverage gaps ──────────────────
+      # Outputs a Complexity Score (estimated review effort) and flags newly added
+      # lines that are not covered by tests. Only runs on pull_request events so
+      # there is always a HEAD~1 to diff against.
+      - name: PR review (complexity + coverage gaps)
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          ./target/release/greengate review \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --format json \
+            --annotate \
+            > review-report.json 2>&1 || true
+          cat review-report.json
+        continue-on-error: true   # informational until coverage reports are wired in
+
+      - name: Upload PR review report
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-report
+          path: review-report.json
+        continue-on-error: true
+
       # ── Kubernetes lint — exits 0 when no YAML manifests are present ─────────
       - name: Lint Kubernetes manifests
         run: ./target/release/greengate lint

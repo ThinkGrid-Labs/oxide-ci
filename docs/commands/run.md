@@ -22,6 +22,7 @@ steps = [
   "docker-lint",
   "lighthouse",
   "reassure",
+  "review --base HEAD~1",
 ]
 ```
 
@@ -38,6 +39,7 @@ Each step is a string that maps to an `greengate` subcommand, optionally followe
 | `audit` | `greengate audit` |
 | `lighthouse` | `greengate lighthouse` |
 | `reassure` | `greengate reassure` |
+| `review` | `greengate review` |
 
 ## Step flags
 

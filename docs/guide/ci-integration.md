@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history required for --base diff
 
       - name: Install GreenGate
         run: |
@@ -29,6 +31,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: greengate scan --annotate
+
+      - name: PR Review (Complexity + Coverage Gaps)
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          greengate review \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --coverage-file coverage/lcov.info \
+            --min-coverage 80 \
+            --annotate
+        continue-on-error: true   # informational until coverage is wired in
 
       - name: Kubernetes Lint
         run: greengate lint --dir ./k8s
@@ -62,7 +78,7 @@ stages:
   - security
   - quality
 
-.install_oxide: &install_oxide
+.install_greengate: &install_greengate
   before_script:
     - curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64
         -o /usr/local/bin/greengate
@@ -70,25 +86,37 @@ stages:
 
 secret-scan:
   stage: security
-  <<: *install_oxide
+  <<: *install_greengate
   script:
     - greengate scan
 
+pr-review:
+  stage: quality
+  <<: *install_greengate
+  only:
+    - merge_requests
+  script:
+    - greengate review
+        --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+        --coverage-file coverage/lcov.info
+        --min-coverage 80
+  allow_failure: true   # informational until coverage is wired in
+
 k8s-lint:
   stage: security
-  <<: *install_oxide
+  <<: *install_greengate
   script:
     - greengate lint --dir ./k8s
 
 coverage-gate:
   stage: quality
-  <<: *install_oxide
+  <<: *install_greengate
   script:
     - greengate coverage --file coverage/lcov.info --min 80
 
 dependency-audit:
   stage: security
-  <<: *install_oxide
+  <<: *install_greengate
   script:
     - greengate audit
 ```
