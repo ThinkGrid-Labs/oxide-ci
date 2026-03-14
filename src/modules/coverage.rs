@@ -128,16 +128,14 @@ fn lcov_to_line_map(content: &str) -> Result<HashMap<String, HashMap<u32, u64>>>
         } else if let Some(rest) = line.strip_prefix("DA:") {
             // DA:<line>,<hits>[,<checksum>]
             let mut parts = rest.splitn(3, ',');
-            if let (Some(lineno_s), Some(hits_s)) = (parts.next(), parts.next()) {
-                if let (Ok(lineno), Ok(hits)) =
+            if let (Some(lineno_s), Some(hits_s)) = (parts.next(), parts.next())
+                && let (Ok(lineno), Ok(hits)) =
                     (lineno_s.trim().parse::<u32>(), hits_s.trim().parse::<u64>())
-                {
-                    if !current_path.is_empty() {
-                        map.entry(current_path.clone())
-                            .or_default()
-                            .insert(lineno, hits);
-                    }
-                }
+                && !current_path.is_empty()
+            {
+                map.entry(current_path.clone())
+                    .or_default()
+                    .insert(lineno, hits);
             }
         } else if line == "end_of_record" {
             current_path.clear();
@@ -157,14 +155,14 @@ fn cobertura_to_line_map(content: &str) -> Result<HashMap<String, HashMap<u32, u
         }
         let entry = map.entry(filename).or_default();
         for line_node in class_node.descendants().filter(|n| n.has_tag_name("line")) {
-            if let Some(number_s) = line_node.attribute("number") {
-                if let Ok(lineno) = number_s.parse::<u32>() {
-                    let hits: u64 = line_node
-                        .attribute("hits")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(0);
-                    entry.insert(lineno, hits);
-                }
+            if let Some(number_s) = line_node.attribute("number")
+                && let Ok(lineno) = number_s.parse::<u32>()
+            {
+                let hits: u64 = line_node
+                    .attribute("hits")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(0);
+                entry.insert(lineno, hits);
             }
         }
     }

@@ -127,12 +127,11 @@ pub fn run_review(opts: ReviewOpts) -> Result<()> {
     }
 
     // 6. GitHub annotations
-    if opts.annotate {
-        if let Some(env) = github::detect_github_env() {
-            if let Err(e) = post_github_review(&output, &env) {
-                eprintln!("greengate: warning: GitHub review annotation failed: {}", e);
-            }
-        }
+    if opts.annotate
+        && let Some(env) = github::detect_github_env()
+        && let Err(e) = post_github_review(&output, &env)
+    {
+        eprintln!("greengate: warning: GitHub review annotation failed: {}", e);
     }
 
     if !passed {
@@ -265,7 +264,7 @@ fn compute_complexity(files: &[DiffFile]) -> ComplexityResult {
     let files_changed = files.len();
 
     // Count cyclomatic complexity nodes across all added content using tree-sitter.
-    let cyclomatic_nodes: u32 = files.iter().map(|f| count_complexity_nodes(f)).sum();
+    let cyclomatic_nodes: u32 = files.iter().map(count_complexity_nodes).sum();
 
     let raw = (lines_added as f64 * 0.3)
         + (files_changed as f64 * 5.0)
