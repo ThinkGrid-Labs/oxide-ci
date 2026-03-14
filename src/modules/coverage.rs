@@ -1,5 +1,6 @@
 use crate::utils::terminal;
 use anyhow::{Context, Result};
+use std::collections::HashMap;
 
 struct FileRecord {
     path: String,
@@ -103,6 +104,69 @@ fn parse_cobertura(content: &str) -> Result<(u64, u64, Vec<FileRecord>)> {
     let total_hit: u64 = records.iter().map(|r| r.hit).sum();
     let total_found: u64 = records.iter().map(|r| r.found).sum();
     Ok((total_hit, total_found, records))
+}
+
+// ── Public coverage map (used by pr_review) ───────────────────────────────────
+
+/// Parse a coverage file and return a map of `file_path → { line_number → hit_count }`.
+/// Line numbers are 1-based. Only lines explicitly listed in the coverage report are present.
+pub fn parse_coverage_map(file: &str) -> Result<HashMap<String, HashMap<u32, u64>>> {
+    let content = std::fs::read_to_string(file)
+        .with_context(|| format!("Cannot read coverage file: {}", file))?;
+    match detect_format(file) {
+        CoverageFormat::Lcov => lcov_to_line_map(&content),
+        CoverageFormat::Cobertura => cobertura_to_line_map(&content),
+    }
+}
+
+fn lcov_to_line_map(content: &str) -> Result<HashMap<String, HashMap<u32, u64>>> {
+    let mut map: HashMap<String, HashMap<u32, u64>> = HashMap::new();
+    let mut current_path = String::new();
+    for line in content.lines() {
+        if let Some(path) = line.strip_prefix("SF:") {
+            current_path = path.to_string();
+        } else if let Some(rest) = line.strip_prefix("DA:") {
+            // DA:<line>,<hits>[,<checksum>]
+            let mut parts = rest.splitn(3, ',');
+            if let (Some(lineno_s), Some(hits_s)) = (parts.next(), parts.next())
+                && let (Ok(lineno), Ok(hits)) =
+                    (lineno_s.trim().parse::<u32>(), hits_s.trim().parse::<u64>())
+                && !current_path.is_empty()
+            {
+                map.entry(current_path.clone())
+                    .or_default()
+                    .insert(lineno, hits);
+            }
+        } else if line == "end_of_record" {
+            current_path.clear();
+        }
+    }
+    Ok(map)
+}
+
+fn cobertura_to_line_map(content: &str) -> Result<HashMap<String, HashMap<u32, u64>>> {
+    let doc =
+        roxmltree::Document::parse(content).with_context(|| "Failed to parse Cobertura XML")?;
+    let mut map: HashMap<String, HashMap<u32, u64>> = HashMap::new();
+    for class_node in doc.descendants().filter(|n| n.has_tag_name("class")) {
+        let filename = class_node.attribute("filename").unwrap_or("").to_string();
+        if filename.is_empty() {
+            continue;
+        }
+        let entry = map.entry(filename).or_default();
+        for line_node in class_node.descendants().filter(|n| n.has_tag_name("line")) {
+            if let Some(number_s) = line_node.attribute("number")
+                && let Ok(lineno) = number_s.parse::<u32>()
+            {
+                let hits: u64 = line_node
+                    .attribute("hits")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(0);
+                entry.insert(lineno, hits);
+            }
+        }
+    }
+    Ok(map)
 }
 
 // ── Public entry point ────────────────────────────────────────────────────────

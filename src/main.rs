@@ -137,6 +137,30 @@ enum Commands {
         #[arg(short, long)]
         output: Option<String>,
     },
+    /// Analyzes a PR diff: outputs a Complexity Score and new-code coverage gaps
+    Review {
+        /// Diff base ref: commit, branch, or tag (default: HEAD~1)
+        #[arg(long, default_value = "HEAD~1")]
+        base: String,
+        /// Diff against staged changes instead of committed diff
+        #[arg(long)]
+        staged: bool,
+        /// Path to LCOV or Cobertura coverage file to cross-reference
+        #[arg(long)]
+        coverage_file: Option<String>,
+        /// Minimum coverage % required for newly added lines (overrides config)
+        #[arg(long)]
+        min_coverage: Option<f64>,
+        /// Fail if Complexity Score exceeds this value; 0 = warn only (overrides config)
+        #[arg(long)]
+        complexity_budget: Option<u32>,
+        /// Output format: text (default), json, sarif
+        #[arg(long, default_value = "text")]
+        format: String,
+        /// Post results as a GitHub Check Run with annotations and a PR comment
+        #[arg(long)]
+        annotate: bool,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -319,6 +343,25 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Sbom { output } => {
             modules::sbom::run_sbom(output.as_deref())?;
+        }
+        Commands::Review {
+            base,
+            staged,
+            coverage_file,
+            min_coverage,
+            complexity_budget,
+            format,
+            annotate,
+        } => {
+            modules::pr_review::run_review(modules::pr_review::ReviewOpts {
+                base,
+                staged,
+                coverage_file,
+                min_coverage: min_coverage.unwrap_or(cfg.review.min_new_code_coverage),
+                complexity_budget: complexity_budget.unwrap_or(cfg.review.complexity_budget),
+                format,
+                annotate,
+            })?;
         }
     }
 

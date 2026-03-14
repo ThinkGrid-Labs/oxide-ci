@@ -1,5 +1,37 @@
 use std::process::Command;
 
+/// Initialize a minimal git repo with a single "initial" commit in `dir`.
+fn init_git_repo(dir: &std::path::Path) {
+    Command::new("git")
+        .args(["init", "-b", "main"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["config", "user.email", "test@test.com"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["config", "user.name", "Test"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+}
+
+fn git_commit_all(dir: &std::path::Path, msg: &str) {
+    Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["commit", "-m", msg, "--allow-empty"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+}
+
 fn binary() -> std::path::PathBuf {
     env!("CARGO_BIN_EXE_greengate").into()
 }
@@ -678,4 +710,176 @@ fn sast_specific_rule_disabled_via_config() {
         .unwrap();
 
     assert!(status.success(), "disabled rule should produce no findings");
+}
+
+// ── review ────────────────────────────────────────────────────────────────────
+
+/// Helper: create a git repo, write an initial file, commit it, then add a
+/// second file so there is a HEAD~1..HEAD diff to analyze.
+fn setup_two_commit_repo(dir: &std::path::Path, new_file: &str, new_content: &str) {
+    init_git_repo(dir);
+    // First commit: a seed file
+    std::fs::write(dir.join("seed.txt"), "initial\n").unwrap();
+    git_commit_all(dir, "initial");
+    // Second commit: the file we want reviewed
+    std::fs::write(dir.join(new_file), new_content).unwrap();
+    git_commit_all(dir, "add new file");
+}
+
+#[test]
+fn review_exits_zero_without_coverage_file() {
+    let dir = tempfile::tempdir().unwrap();
+    setup_two_commit_repo(dir.path(), "main.rs", "fn main() {}\n");
+
+    let status = Command::new(binary())
+        .args(["review", "--base", "HEAD~1"])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        status.success(),
+        "review without coverage file should exit 0"
+    );
+}
+
+#[test]
+fn review_json_format_is_valid() {
+    let dir = tempfile::tempdir().unwrap();
+    setup_two_commit_repo(
+        dir.path(),
+        "app.js",
+        "function foo() { if (true) { return 1; } }\n",
+    );
+
+    let output = Command::new(binary())
+        .args(["review", "--base", "HEAD~1", "--format", "json"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "review JSON should exit 0 when no coverage gate"
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("--format json must produce valid JSON");
+    assert!(
+        parsed["complexity"].is_object(),
+        "JSON must have 'complexity' key"
+    );
+    assert!(parsed["passed"].is_boolean(), "JSON must have 'passed' key");
+    let score = parsed["complexity"]["score"].as_u64().unwrap_or(0);
+    assert!(
+        score > 0,
+        "complexity score should be > 0 for a non-empty diff"
+    );
+}
+
+#[test]
+fn review_coverage_gap_fails_below_threshold() {
+    let dir = tempfile::tempdir().unwrap();
+    // Add a JS file with new lines, all of which will be uncovered
+    setup_two_commit_repo(
+        dir.path(),
+        "lib.js",
+        "function add(a, b) { return a + b; }\nfunction sub(a, b) { return a - b; }\n",
+    );
+
+    // Write an LCOV file that shows line 1 covered, line 2 uncovered (50%)
+    let lcov_path = dir.path().join("lcov.info");
+    std::fs::write(
+        &lcov_path,
+        "SF:lib.js\nDA:1,1\nDA:2,0\nLH:1\nLF:2\nend_of_record\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .args([
+            "review",
+            "--base",
+            "HEAD~1",
+            "--coverage-file",
+            lcov_path.to_str().unwrap(),
+            "--min-coverage",
+            "80",
+        ])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        !status.success(),
+        "review should fail when new-code coverage is below threshold"
+    );
+}
+
+#[test]
+fn review_coverage_passes_when_all_lines_covered() {
+    let dir = tempfile::tempdir().unwrap();
+    setup_two_commit_repo(
+        dir.path(),
+        "util.js",
+        "function greet(name) { return 'Hello ' + name; }\n",
+    );
+
+    // LCOV: the single added line is covered
+    let lcov_path = dir.path().join("lcov.info");
+    std::fs::write(
+        &lcov_path,
+        "SF:util.js\nDA:1,3\nLH:1\nLF:1\nend_of_record\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .args([
+            "review",
+            "--base",
+            "HEAD~1",
+            "--coverage-file",
+            lcov_path.to_str().unwrap(),
+            "--min-coverage",
+            "80",
+        ])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        status.success(),
+        "review should pass when all new lines are covered"
+    );
+}
+
+#[test]
+fn review_sarif_output_is_valid() {
+    let dir = tempfile::tempdir().unwrap();
+    setup_two_commit_repo(dir.path(), "mod.js", "function x() { return 1; }\n");
+
+    // LCOV with uncovered line to generate SARIF results
+    let lcov_path = dir.path().join("lcov.info");
+    std::fs::write(&lcov_path, "SF:mod.js\nDA:1,0\nLH:0\nLF:1\nend_of_record\n").unwrap();
+
+    let output = Command::new(binary())
+        .args([
+            "review",
+            "--base",
+            "HEAD~1",
+            "--coverage-file",
+            lcov_path.to_str().unwrap(),
+            "--min-coverage",
+            "0", // don't fail so we can inspect SARIF output
+            "--format",
+            "sarif",
+        ])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("--format sarif must produce valid JSON");
+    assert_eq!(parsed["version"].as_str(), Some("2.1.0"));
+    assert!(parsed["runs"].is_array());
 }

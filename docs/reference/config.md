@@ -66,6 +66,15 @@ current   = "output/current.perf"
 baseline  = "output/baseline.perf"
 threshold = 15.0               # maximum regression % before failing
 
+[review]
+# Minimum coverage required for newly added lines in a PR diff (default 80.0)
+# Only enforced when --coverage-file is provided
+min_new_code_coverage = 80.0
+
+# Maximum Complexity Score before failing (default 0 = warn only)
+# Set to a positive integer to fail the gate when the score exceeds this value
+complexity_budget = 0
+
 [audit]
 # GHSA/CVE advisory IDs to suppress — use for known-acceptable transitive
 # dependency vulnerabilities that cannot be fixed by upgrading a direct dep.

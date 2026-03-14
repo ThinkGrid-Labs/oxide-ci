@@ -4,7 +4,7 @@ layout: home
 hero:
   name: GreenGate
   text: Rust DevOps CLI for CI Quality Gates
-  tagline: Secret scanning, AST-based SAST (JS/TS/Python/Go), Kubernetes linting, coverage gates, SBOM generation, dependency auditing, and web performance — single zero-dependency binary.
+  tagline: Secret scanning, AST-based SAST, PR review intelligence, Kubernetes linting, coverage gates, dependency auditing, and web performance — single zero-dependency binary.
   actions:
     - theme: brand
       text: Get Started
@@ -18,6 +18,8 @@ features:
     details: Drop a single compiled Rust binary into any CI pipeline, Docker image, or developer machine. No Node, Python, or JVM required.
   - title: AST-Based SAST + Taint Tracking
     details: tree-sitter parses JS/TS/TSX/JSX, Python, and Go into a real AST. For JS/TS, Tier-1 intra-procedural taint tracking traces user-controlled input through variable assignments to XSS and injection sinks. Confirmed chains are labelled [tainted]; sanitizer-backed values are suppressed automatically.
+  - title: PR Review Intelligence
+    details: "greengate review scores every PR with a Complexity Score (estimated review time) and cross-references newly added lines against your LCOV/Cobertura report — surfacing exactly which new lines are untested. Post results as GitHub Check Run annotations with one flag."
   - title: Blazing Fast
     details: Parallel file scanning via rayon across all CPU cores. Typical repositories scan in under a second.
   - title: Secret & PII Detection
@@ -27,7 +29,7 @@ features:
   - title: Docker Linting
     details: Audits Dockerfiles for unpinned base images, ADD instead of COPY, missing USER, missing HEALTHCHECK, exposed dangerous ports, and more.
   - title: Coverage Gates
-    details: Parses lcov.info and fails the build when line coverage drops below a configurable threshold. Zero external tools required.
+    details: Parses lcov.info and Cobertura XML. Fails the build when line coverage drops below a configurable threshold. The review command goes further — it checks coverage only for newly added lines in a PR diff. Zero external tools required.
   - title: Dependency Audit
     details: Queries the OSV vulnerability database for known CVEs across 6 ecosystems. Offline-capable with a local cache. Suppress known-acceptable transitive advisories per-ID via ignore_advisories in .greengate.toml.
   - title: Web Performance

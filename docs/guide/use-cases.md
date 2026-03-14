@@ -203,6 +203,71 @@ greengate install-hooks   # catch secrets before they leave your machine
 
 ---
 
+## 7. Engineering team — PR review intelligence gate
+
+**Situation:** PRs are going out with untested new code and no consistent estimate of review effort. You want instant feedback on every PR: exactly which newly added lines lack test coverage, and an estimated review time so reviewers can plan their load.
+
+**What `greengate review` outputs:**
+- **Complexity Score** — estimated review time based on lines added/removed, files touched, and cyclomatic complexity of added code
+- **New-code coverage gaps** — cross-references the diff against your LCOV report and pinpoints exactly which added lines are not covered
+
+```yaml
+- name: Install greengate
+  run: |
+    curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+      -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
+
+- name: PR Review (Complexity + Coverage Gaps)
+  if: github.event_name == 'pull_request'
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    GITHUB_REPOSITORY: ${{ github.repository }}
+    GITHUB_SHA: ${{ github.sha }}
+  run: |
+    greengate review \
+      --base "${{ github.event.pull_request.base.sha }}" \
+      --coverage-file coverage/lcov.info \
+      --min-coverage 80 \
+      --annotate
+```
+
+**Example output:**
+```
+╔══ PR Review ════════════════════════════════╗
+  Complexity Score : 47  (Normal Review ~23 min)
+  Files changed    : 5
+  Lines added/del  : +120 / -34
+  Cyclomatic nodes : 18
+╚═════════════════════════════════════════════╝
+
+New-Code Coverage: 73.3%  ✗ (target: 80%)
+
+  src/engine.rs      12/15 added lines covered  (80.0%) ✓
+  src/scanner.rs      6/11 added lines covered  (54.5%) ✗
+    Uncovered lines: 88, 89, 92, 95, 101
+```
+
+With `--annotate`, results are posted as GitHub Check Run annotations directly on the diff lines and a summary comment is added to the PR.
+
+**Without a coverage file:** `greengate review` still outputs the Complexity Score and exits 0 — useful when you just want review-time estimates without a coverage gate.
+
+**`.greengate.toml` config:**
+```toml
+[review]
+min_new_code_coverage = 80   # fail if new-code coverage drops below this
+complexity_budget = 0         # 0 = warn only; >0 = fail when score exceeds budget
+```
+
+**What it catches:**
+
+| | |
+|---|---|
+| New code with no tests | Exact uncovered line numbers in the diff |
+| PR too large to review safely | Complexity Score > 100 → "Large PR — consider splitting" |
+| Reviewer overload | Estimated review time in the PR comment |
+
+---
+
 ## Key principle: Lighthouse needs a deployed URL
 
 Lighthouse tests whatever is **live at the URL you provide**. This means:

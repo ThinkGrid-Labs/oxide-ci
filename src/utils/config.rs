@@ -20,6 +20,8 @@ pub struct Config {
     pub pipeline: PipelineConfig,
     #[serde(default)]
     pub audit: AuditConfig,
+    #[serde(default)]
+    pub review: ReviewConfig,
 }
 
 /// Audit settings loaded from `.greengate.toml` under `[audit]`.
@@ -285,6 +287,32 @@ impl Default for DockerConfig {
 
 fn default_dockerfile() -> String {
     "Dockerfile".to_string()
+}
+
+// ── Review config ─────────────────────────────────────────────────────────────
+
+/// Settings for `greengate review` loaded from `.greengate.toml` under `[review]`.
+#[derive(Deserialize, Clone)]
+pub struct ReviewConfig {
+    /// Minimum coverage percentage required for newly added lines (default: 80)
+    #[serde(default = "default_review_min_coverage")]
+    pub min_new_code_coverage: f64,
+    /// Fail if Complexity Score exceeds this value; 0 = warn only (default: 0)
+    #[serde(default)]
+    pub complexity_budget: u32,
+}
+
+impl Default for ReviewConfig {
+    fn default() -> Self {
+        Self {
+            min_new_code_coverage: default_review_min_coverage(),
+            complexity_budget: 0,
+        }
+    }
+}
+
+fn default_review_min_coverage() -> f64 {
+    80.0
 }
 
 // ── Pipeline config ───────────────────────────────────────────────────────────
