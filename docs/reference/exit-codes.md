@@ -1,3 +1,8 @@
+---
+title: 'Exit Codes'
+description: 'GreenGate exit code reference: 0 for clean, 1 for findings or gate failure. Reliable for CI pipeline scripting without output parsing.'
+---
+
 # Exit Codes
 
 All greengate commands follow a simple two-code convention. CI pipelines can rely on the exit code directly — no output parsing required.

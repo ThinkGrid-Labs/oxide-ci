@@ -1,3 +1,8 @@
+---
+title: 'check-config — Validate Configuration'
+description: 'Validate .greengate.toml and print all resolved configuration values, including profile overrides. Useful for debugging config issues in CI.'
+---
+
 # check-config — Validate Configuration
 
 Reads `.greengate.toml`, validates it, and prints all resolved configuration values. Useful for verifying that overrides are applied correctly and that the file has no syntax errors.

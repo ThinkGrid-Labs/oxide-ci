@@ -1,3 +1,8 @@
+---
+title: 'sbom — SBOM Generation'
+description: 'Generate a CycloneDX 1.5 Software Bill of Materials from Cargo.lock, package-lock.json, requirements.txt, or go.sum. No internet access required.'
+---
+
 # sbom — SBOM Generation
 
 Generates a [CycloneDX 1.5](https://cyclonedx.org/specification/overview/) Software Bill of Materials (SBOM) from your project's lock file. No internet access required — the lock file is parsed locally.

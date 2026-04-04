@@ -1,3 +1,8 @@
+---
+title: 'SAST Rules Reference'
+description: 'All built-in SAST rules for JS, TS, Python, and Go: eval, innerHTML, command injection, SQL injection, dangerous deserialization, and taint-tracked XSS sinks.'
+---
+
 # SAST Rules Reference
 
 SAST runs automatically when `greengate scan` encounters a supported source file. It uses tree-sitter to parse each file into a real AST before running any checks.

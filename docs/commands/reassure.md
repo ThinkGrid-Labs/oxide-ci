@@ -1,3 +1,8 @@
+---
+title: 'reassure — React Component Performance Gate'
+description: 'Parse a Reassure performance report and fail if any React component mean render time regresses beyond a configurable threshold compared to the baseline.'
+---
+
 # reassure — React Component Performance Gate
 
 Parses a [Reassure](https://github.com/callstack/reassure) performance measurement report and fails if any component's mean render time has regressed beyond the configured threshold compared to the baseline.

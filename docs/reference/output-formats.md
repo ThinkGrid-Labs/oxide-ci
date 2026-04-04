@@ -1,3 +1,8 @@
+---
+title: 'Output Formats'
+description: 'GreenGate supports SARIF 2.1.0, JSON, JUnit XML, GitLab SAST, and plain text output. Compatible with GitHub Security tab, SonarQube, and all major CI platforms.'
+---
+
 # Output Formats
 
 The `scan` command supports five output formats via `--format`. The `review` command supports three formats (`text`, `json`, `sarif`) — see [review output formats](#review-command-formats) below.

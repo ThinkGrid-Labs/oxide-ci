@@ -1,3 +1,8 @@
+---
+title: 'Use Cases & Scenarios'
+description: 'Real-world examples: supply-chain attack defence, secret scanning, Kubernetes quality gates, full security pipelines, and PR review intelligence for engineering teams.'
+---
+
 # Use Cases & Scenarios
 
 Real-world examples of how greengate fits into different team workflows.

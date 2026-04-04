@@ -1,3 +1,8 @@
+---
+title: 'init — Config Wizard'
+description: 'Interactive wizard that generates a .greengate.toml configuration file for your project with sensible defaults.'
+---
+
 # init
 
 Interactive wizard that generates a `.greengate.toml` configuration file for your project.

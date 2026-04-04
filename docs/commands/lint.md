@@ -1,3 +1,8 @@
+---
+title: 'lint — Kubernetes Manifest Linting'
+description: 'Validate Kubernetes YAML manifests for missing resource limits, health probes, unpinned images, and containers running as root.'
+---
+
 # lint — Kubernetes Manifest Linting
 
 Validates Kubernetes workload YAML files (`Deployment`, `DaemonSet`, `StatefulSet`, `Job`, `CronJob`) against security and reliability best practices. Supports multi-document YAML files separated by `---`.

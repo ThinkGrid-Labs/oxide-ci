@@ -1,3 +1,8 @@
+---
+title: 'watch-install — Supply-Chain Protection'
+description: 'Wrap npm, yarn, pnpm, or bun installs with real-time phantom-file detection. Halts the install if a postinstall script drops and deletes a binary — the signature of supply-chain attacks like the 2025 axios compromise.'
+---
+
 # watch-install
 
 > **Supply-chain protection for npm, yarn, pnpm, and bun installs.**

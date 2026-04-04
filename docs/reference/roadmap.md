@@ -1,3 +1,8 @@
+---
+title: 'Roadmap'
+description: 'GreenGate planned features: sandbox-install zero-trust package runner, SBOM-based install verification, Python and Go taint tracking, and Rust SAST.'
+---
+
 # Roadmap
 
 This page tracks planned features and the reasoning behind their prioritisation.

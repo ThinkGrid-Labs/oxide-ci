@@ -1,3 +1,8 @@
+---
+title: 'install-hooks — Git Pre-commit Hook'
+description: 'Install greengate as a Git pre-commit hook to run secret and SAST scanning on staged files automatically before every commit.'
+---
+
 # install-hooks — Git Pre-commit Hook
 
 Installs greengate as a Git pre-commit hook. After installation, `greengate scan --staged` runs automatically on every `git commit`, blocking the commit if secrets or SAST issues are found.

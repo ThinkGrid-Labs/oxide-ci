@@ -1,3 +1,8 @@
+---
+title: 'scan — Secret & PII Scanning'
+description: 'Scan your codebase for hardcoded secrets, credentials, and PII using 26 built-in patterns plus AST-based SAST for JS, TS, Python, and Go with taint tracking.'
+---
+
 # scan — Secret & PII Scanning
 
 Recursively scans every file in the current directory for hardcoded secrets, credentials, and PII using 26 built-in regex patterns. Respects `.gitignore` automatically.

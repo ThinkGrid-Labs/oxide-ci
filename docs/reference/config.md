@@ -1,3 +1,8 @@
+---
+title: 'Configuration Reference (.greengate.toml)'
+description: 'Full reference for .greengate.toml — all sections, fields, defaults, and examples for supply_chain, scan, coverage, audit, review, lint, lighthouse, and more.'
+---
+
 # Configuration File (.greengate.toml)
 
 Place `.greengate.toml` in the root of your repository. CLI flags always override config file values. All fields are optional — omitted values fall back to built-in defaults.

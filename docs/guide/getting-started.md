@@ -1,3 +1,8 @@
+---
+title: 'Getting Started'
+description: 'Install GreenGate and run your first scan in under a minute. Single binary, no runtime dependencies — works on macOS, Linux, and Windows.'
+---
+
 # Getting Started
 
 GreenGate is a single compiled Rust binary — no runtime dependencies, no package managers to fight.

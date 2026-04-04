@@ -1,3 +1,8 @@
+---
+title: 'audit — Dependency Vulnerability Audit'
+description: 'Audit project dependencies for known CVEs via the OSV database. Supports npm, Cargo, PyPI, Go, Maven, and NuGet. Offline-capable with local caching.'
+---
+
 # audit — Dependency Vulnerability Audit
 
 Audits project dependencies for known vulnerabilities by querying the [OSV database](https://osv.dev) (Open Source Vulnerabilities). Supports 6 ecosystems and auto-detects the manifest file.

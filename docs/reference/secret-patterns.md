@@ -1,3 +1,8 @@
+---
+title: 'Secret Detection Patterns'
+description: 'All 26 built-in secret detection patterns in GreenGate: AWS, Azure, GCP, Stripe, GitHub, Twilio, Expo, Sentry, Mapbox, and more. Includes Shannon entropy detection.'
+---
+
 # Secret Detection Patterns
 
 greengate ships with 26 built-in regex patterns covering the most common cloud providers, SaaS platforms, and API services. All patterns are applied only to string literals (not comments or JSX text) when scanning JS/TS files.

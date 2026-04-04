@@ -1,3 +1,8 @@
+---
+title: 'lighthouse — Web Performance Audit'
+description: 'Gate on Lighthouse scores via the Google PageSpeed Insights API. Fail CI when performance, accessibility, best-practices, or SEO scores drop below threshold.'
+---
+
 # lighthouse — Web Performance Audit
 
 Audits web performance via the [Google PageSpeed Insights API](https://developers.google.com/speed/docs/insights/v5/get-started) (Lighthouse). Fails if any score is below the configured minimum.

@@ -1,3 +1,8 @@
+---
+title: 'Limitations'
+description: 'Known boundaries of GreenGate analysis: language coverage, taint tracking scope, Lighthouse requirements, and what watch-install cannot detect.'
+---
+
 # Limitations
 
 This page documents the known boundaries of GreenGate's analysis. Understanding these limitations helps you set accurate expectations and decide where additional tooling may be warranted.

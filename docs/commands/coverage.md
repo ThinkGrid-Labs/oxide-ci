@@ -1,3 +1,8 @@
+---
+title: 'coverage — Coverage Threshold Gate'
+description: 'Parse LCOV or Cobertura XML coverage reports and fail the build when total line coverage drops below a configurable minimum threshold.'
+---
+
 # coverage — Coverage Threshold Gate
 
 Parses a coverage report and fails with exit code 1 if total line coverage is below the specified minimum. Shows a per-file breakdown of files below the threshold.

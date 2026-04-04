@@ -1,3 +1,8 @@
+---
+title: 'review — PR Diff Analyzer'
+description: 'Analyze a pull request diff for a Complexity Score (estimated review time) and new-code coverage gaps. Post results as GitHub Check Run annotations.'
+---
+
 # review — PR Diff Analyzer
 
 Analyzes a pull request diff and outputs two things:

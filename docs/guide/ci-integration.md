@@ -1,3 +1,8 @@
+---
+title: 'CI/CD Integration'
+description: 'Integrate GreenGate into GitHub Actions, GitLab CI, Bitbucket Pipelines, and CircleCI. Full examples for supply-chain protection, secret scanning, coverage gates, and PR review.'
+---
+
 # CI/CD Integration
 
 ## GitHub Actions — Full pipeline
