@@ -16,3 +16,4 @@ pub mod sbom;
 pub mod scanner;
 pub mod taint;
 pub mod watch;
+pub mod watch_install;

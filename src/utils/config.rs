@@ -22,6 +22,8 @@ pub struct Config {
     pub audit: AuditConfig,
     #[serde(default)]
     pub review: ReviewConfig,
+    #[serde(default)]
+    pub supply_chain: SupplyChainConfig,
 }
 
 /// Audit settings loaded from `.greengate.toml` under `[audit]`.
@@ -323,6 +325,45 @@ pub struct PipelineConfig {
     /// Each entry is a command string, e.g. "scan", "coverage --min 80".
     #[serde(default)]
     pub steps: Vec<String>,
+}
+
+// ── Supply chain config ───────────────────────────────────────────────────────
+
+/// Settings for supply-chain protection loaded from `.greengate.toml`
+/// under `[supply_chain]`.  Currently drives `greengate watch-install`;
+/// reserved for `greengate sandbox-install` in a future release.
+#[derive(Deserialize, Clone)]
+pub struct SupplyChainConfig {
+    /// Fail the install if a phantom file (created-then-deleted postinstall
+    /// binary) or unexpected executable drop is detected (default: true).
+    #[serde(default = "default_supply_chain_block_phantom")]
+    pub block_phantom_scripts: bool,
+    /// Monitor the project root for new executables dropped during install.
+    /// When false, only `node_modules/` phantom-file detection runs (default: true).
+    #[serde(default = "default_supply_chain_sandbox")]
+    pub enforce_sandbox: bool,
+    /// Packages whose postinstall scripts may legitimately create temp files
+    /// (e.g. native build tools).  Findings from these packages are reported
+    /// as warnings and do not trigger a failure.
+    #[serde(default)]
+    pub allow_postinstall: Vec<String>,
+}
+
+impl Default for SupplyChainConfig {
+    fn default() -> Self {
+        Self {
+            block_phantom_scripts: default_supply_chain_block_phantom(),
+            enforce_sandbox: default_supply_chain_sandbox(),
+            allow_postinstall: Vec::new(),
+        }
+    }
+}
+
+fn default_supply_chain_block_phantom() -> bool {
+    true
+}
+fn default_supply_chain_sandbox() -> bool {
+    true
 }
 
 /// Load `.greengate.toml` from the current directory, falling back to defaults.

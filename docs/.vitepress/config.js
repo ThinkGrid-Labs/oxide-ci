@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: 'GreenGate',
-  description: 'Rust DevOps CLI: secret scanning, AST-based SAST, Kubernetes linting, coverage gates, dependency auditing, and web performance — single zero-dependency binary.',
+  description: 'Rust DevOps CLI: supply-chain protection, secret scanning, AST-based SAST, Kubernetes linting, coverage gates, dependency auditing, and web performance — single zero-dependency binary.',
   base: '/greengate/',
 
   head: [
@@ -36,11 +36,12 @@ export default defineConfig({
       {
         text: 'Commands',
         items: [
+          { text: '🔒 watch-install', link: '/commands/watch-install' },
           { text: 'scan', link: '/commands/scan' },
+          { text: 'audit', link: '/commands/audit' },
           { text: 'lint', link: '/commands/lint' },
           { text: 'docker-lint', link: '/commands/docker-lint' },
           { text: 'coverage', link: '/commands/coverage' },
-          { text: 'audit', link: '/commands/audit' },
           { text: 'install-hooks', link: '/commands/install-hooks' },
           { text: 'lighthouse', link: '/commands/lighthouse' },
           { text: 'reassure', link: '/commands/reassure' },
@@ -57,6 +58,7 @@ export default defineConfig({
           { text: 'Exit Codes', link: '/reference/exit-codes' },
           { text: 'Output Formats', link: '/reference/output-formats' },
           { text: 'Limitations', link: '/reference/limitations' },
+          { text: 'Roadmap', link: '/reference/roadmap' },
         ],
       },
     ],

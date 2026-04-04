@@ -27,10 +27,17 @@ jobs:
             -o /usr/local/bin/greengate
           chmod +x /usr/local/bin/greengate
 
+      # Replaces plain `npm ci` — halts if a postinstall script drops and deletes a binary
+      - name: Supply-chain safe install
+        run: greengate watch-install npm ci
+
       - name: Secret, PII & SAST Scan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: greengate scan --annotate
+
+      - name: Dependency Audit (OSV)
+        run: greengate audit
 
       - name: PR Review (Complexity + Coverage Gaps)
         if: github.event_name == 'pull_request'
@@ -51,9 +58,6 @@ jobs:
 
       - name: Coverage Gate
         run: greengate coverage --file coverage/lcov.info --min 80
-
-      - name: Dependency Audit
-        run: greengate audit
 ```
 
 ## GitHub Actions — SARIF upload (alternative)

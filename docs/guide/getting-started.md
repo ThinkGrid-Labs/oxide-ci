@@ -41,14 +41,20 @@ cargo install --git https://github.com/thinkgrid-labs/greengate
 
 ```bash
 greengate --version
-# greengate 0.2.6
+# greengate 0.3.0
 ```
 
 ## Quick Start
 
 ```bash
+# Supply-chain safe install — monitors for postinstall droppers in real time
+greengate watch-install npm ci
+
 # Scan for secrets and run SAST on JS/TS files
 greengate scan
+
+# Audit dependencies for known CVEs
+greengate audit
 
 # Analyze a PR: Complexity Score + new-code coverage gaps
 greengate review --base main --coverage-file coverage/lcov.info
@@ -58,9 +64,6 @@ greengate lint --dir ./k8s
 
 # Enforce 80% minimum test coverage
 greengate coverage --file coverage/lcov.info --min 80
-
-# Audit dependencies for known CVEs
-greengate audit
 
 # Install as a git pre-commit hook
 greengate install-hooks
@@ -76,13 +79,14 @@ greengate reassure
 
 | Problem | Command |
 |---|---|
+| Postinstall dropper attacking your npm install | `greengate watch-install` |
+| Vulnerable dependencies shipping to production | `greengate audit` |
 | Hardcoded secrets pushed to git | `greengate scan` |
 | XSS, eval, command injection in JS/TS | `greengate scan` (SAST) |
 | PR too complex — hard to estimate review time | `greengate review` |
 | New code added without test coverage | `greengate review --coverage-file lcov.info` |
 | Kubernetes manifests missing resource limits | `greengate lint` |
 | Test coverage silently dropping | `greengate coverage` |
-| Vulnerable dependencies shipping to production | `greengate audit` |
 | Secrets committed before anyone notices | `greengate install-hooks` |
 | Lighthouse score regressing between deploys | `greengate lighthouse` |
 | React component render performance regressing | `greengate reassure` |
