@@ -4,7 +4,56 @@ Real-world examples of how greengate fits into different team workflows.
 
 ---
 
-## 1. SaaS startup — post-deploy Lighthouse health check
+## 1. Supply-chain attack defence — protecting npm installs
+
+> **Context:** In early 2025, attackers targeting the axios npm ecosystem demonstrated the "phantom dropper" attack pattern: a malicious `postinstall` script downloads a binary, executes it to exfiltrate secrets or install persistence, then deletes the binary before `npm install` finishes. The installed `node_modules/` looks identical to a clean install. Lock-file diffing and CVE scanners cannot detect it because no known vulnerability is involved — just a malicious script that leaves no trace.
+
+**What `greengate watch-install` catches:**
+
+GreenGate monitors `node_modules/` every 250 ms while the package manager runs. Any file that is created and then deleted within the install window is flagged as a `PHANTOM`. The install is halted before the CI pipeline continues.
+
+**Drop-in replacement for `npm ci`:**
+
+```yaml
+- name: Install GreenGate
+  run: |
+    curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+      -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
+
+- name: Supply-chain safe install
+  run: greengate watch-install npm ci
+```
+
+**With config for native build tools** (esbuild, prisma, swc legitimately create temp files):
+
+```toml
+# .greengate.toml
+[supply_chain]
+block_phantom_scripts = true
+enforce_sandbox       = true
+allow_postinstall     = ["esbuild", "prisma", "@swc/core"]
+```
+
+**Layered with `greengate audit`** for defence in depth:
+
+```yaml
+- run: greengate watch-install npm ci   # catches runtime dropper behaviour
+- run: greengate audit                  # catches known CVEs in your lock file
+```
+
+| Layer | What it catches |
+|---|---|
+| `watch-install` | Postinstall scripts that write+execute+delete a binary |
+| `watch-install` | New executables dropped in the project root |
+| `audit` | Packages with known CVEs in the OSV database |
+
+Neither replaces the other. A compromised package can be zero-day (not in OSV yet) but still exhibit dropper behaviour on the filesystem.
+
+**What it does not catch:** Pure network exfiltration with no file written to disk. For that, combine with outbound network egress controls in your CI runner.
+
+---
+
+## 3. SaaS startup — post-deploy Lighthouse health check
 
 **Situation:** You ship helpdeck-landing to production on every merge to `main`. You want to know immediately if a deploy breaks your Lighthouse scores.
 
@@ -42,7 +91,7 @@ jobs:
 
 ---
 
-## 2. SaaS startup — pre-merge gate with staging environment
+## 4. SaaS startup — pre-merge gate with staging environment
 
 **Situation:** You have a staging server. You want to block merges if a PR degrades performance _before_ it hits production.
 
@@ -87,7 +136,7 @@ jobs:
 
 ---
 
-## 3. Preventing secrets from being committed
+## 4. Preventing secrets from being committed
 
 **Situation:** A developer accidentally hardcodes an API key and pushes it. You want to catch this before it ever reaches the remote.
 
@@ -110,7 +159,7 @@ This installs a pre-commit hook that scans staged files on every `git commit`. I
 
 ---
 
-## 4. Kubernetes team — manifest quality gate
+## 5. Kubernetes team — manifest quality gate
 
 **Situation:** Your team ships microservices with Kubernetes manifests. You want to block deployments that are missing resource limits, health probes, or use the `latest` image tag.
 
@@ -134,7 +183,7 @@ greengate lint   # reads config automatically
 
 ---
 
-## 5. Full security pipeline — Next.js / React app
+## 6. Full security pipeline — Next.js / React app
 
 **Situation:** You run a React frontend with a Node.js backend. You want secrets, SAST, dependency CVEs, and coverage all gated in one pipeline.
 
@@ -164,7 +213,7 @@ greengate lint   # reads config automatically
 
 ---
 
-## 6. Solo developer — minimal setup
+## 7. Solo developer — minimal setup
 
 **Situation:** You're shipping solo, no staging environment. You want the basics without overhead.
 
@@ -203,7 +252,7 @@ greengate install-hooks   # catch secrets before they leave your machine
 
 ---
 
-## 7. Engineering team — PR review intelligence gate
+## 8. Engineering team — PR review intelligence gate
 
 **Situation:** PRs are going out with untested new code and no consistent estimate of review effort. You want instant feedback on every PR: exactly which newly added lines lack test coverage, and an estimated review time so reviewers can plan their load.
 

@@ -18,12 +18,13 @@
 
 | Command | Purpose |
 |---|---|
+| `greengate watch-install` | **Supply-chain protection** — wraps npm/yarn/pnpm/bun and halts on phantom postinstall droppers |
 | `greengate scan` | Secrets, PII & AST-based SAST for JS/TS/Python/Go |
+| `greengate audit` | OSV dependency vulnerability audit |
 | `greengate review` | PR Complexity Score + new-code coverage gaps |
 | `greengate lint` | Kubernetes manifest linting |
 | `greengate docker-lint` | Dockerfile best-practice checks |
 | `greengate coverage` | LCOV / Cobertura coverage threshold gate |
-| `greengate audit` | OSV dependency vulnerability audit |
 | `greengate lighthouse` | PageSpeed Insights performance gate |
 | `greengate reassure` | React component render regression gate |
 | `greengate sbom` | CycloneDX 1.5 SBOM generation |
@@ -68,17 +69,20 @@ cargo install --git https://github.com/thinkgrid-labs/greengate
 ## Quick start
 
 ```bash
+# Supply-chain safe install — detects postinstall droppers in real time
+greengate watch-install npm ci
+
 # Scan for secrets and run SAST
 greengate scan
+
+# Audit dependencies for known CVEs
+greengate audit
 
 # Analyze a PR: complexity score + new-code coverage gaps
 greengate review --base main --coverage-file coverage/lcov.info
 
 # Enforce 80% minimum coverage
 greengate coverage --file coverage/lcov.info --min 80
-
-# Audit dependencies for known CVEs
-greengate audit
 
 # Lint Kubernetes manifests
 greengate lint --dir ./k8s
@@ -100,10 +104,17 @@ greengate run
     curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
       -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
+# Replaces plain `npm ci` — halts if a postinstall script drops and deletes a binary
+- name: Supply-chain safe install
+  run: greengate watch-install npm ci
+
 - name: Secret, PII & SAST scan
   run: greengate scan --annotate
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+- name: Dependency audit (OSV)
+  run: greengate audit
 
 - name: PR review (complexity + coverage gaps)
   if: github.event_name == 'pull_request'
@@ -120,9 +131,6 @@ greengate run
 
 - name: Coverage gate
   run: greengate coverage --file coverage/lcov.info --min 80
-
-- name: Dependency audit
-  run: greengate audit
 ```
 
 > See [CI/CD Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration) for full GitHub Actions, GitLab CI, Bitbucket, and CircleCI examples.
@@ -134,6 +142,11 @@ greengate run
 Create `.greengate.toml` in your repo root. All fields are optional:
 
 ```toml
+[supply_chain]
+block_phantom_scripts = true
+enforce_sandbox       = true
+allow_postinstall     = ["esbuild", "prisma", "@swc/core"]
+
 [scan]
 exclude_patterns = ["tests/**", "*.test.ts", "vendor/**"]
 entropy = true
@@ -162,8 +175,8 @@ Full guides, command references, and CI examples live in the **[docs site](https
 - [Getting Started](https://thinkgrid-labs.github.io/greengate/guide/getting-started)
 - [CI/CD Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration)
 - [Use Cases](https://thinkgrid-labs.github.io/greengate/guide/use-cases)
-- **Commands:** [scan](https://thinkgrid-labs.github.io/greengate/commands/scan) · [review](https://thinkgrid-labs.github.io/greengate/commands/review) · [coverage](https://thinkgrid-labs.github.io/greengate/commands/coverage) · [audit](https://thinkgrid-labs.github.io/greengate/commands/audit) · [lint](https://thinkgrid-labs.github.io/greengate/commands/lint) · [docker-lint](https://thinkgrid-labs.github.io/greengate/commands/docker-lint) · [lighthouse](https://thinkgrid-labs.github.io/greengate/commands/lighthouse) · [reassure](https://thinkgrid-labs.github.io/greengate/commands/reassure) · [sbom](https://thinkgrid-labs.github.io/greengate/commands/sbom) · [run](https://thinkgrid-labs.github.io/greengate/commands/run)
-- **Reference:** [Config](https://thinkgrid-labs.github.io/greengate/reference/config) · [Secret Patterns](https://thinkgrid-labs.github.io/greengate/reference/secret-patterns) · [SAST Rules](https://thinkgrid-labs.github.io/greengate/reference/sast-rules) · [Output Formats](https://thinkgrid-labs.github.io/greengate/reference/output-formats) · [Exit Codes](https://thinkgrid-labs.github.io/greengate/reference/exit-codes)
+- **Commands:** [watch-install](https://thinkgrid-labs.github.io/greengate/commands/watch-install) · [scan](https://thinkgrid-labs.github.io/greengate/commands/scan) · [audit](https://thinkgrid-labs.github.io/greengate/commands/audit) · [review](https://thinkgrid-labs.github.io/greengate/commands/review) · [coverage](https://thinkgrid-labs.github.io/greengate/commands/coverage) · [lint](https://thinkgrid-labs.github.io/greengate/commands/lint) · [docker-lint](https://thinkgrid-labs.github.io/greengate/commands/docker-lint) · [lighthouse](https://thinkgrid-labs.github.io/greengate/commands/lighthouse) · [reassure](https://thinkgrid-labs.github.io/greengate/commands/reassure) · [sbom](https://thinkgrid-labs.github.io/greengate/commands/sbom) · [run](https://thinkgrid-labs.github.io/greengate/commands/run)
+- **Reference:** [Config](https://thinkgrid-labs.github.io/greengate/reference/config) · [Secret Patterns](https://thinkgrid-labs.github.io/greengate/reference/secret-patterns) · [SAST Rules](https://thinkgrid-labs.github.io/greengate/reference/sast-rules) · [Output Formats](https://thinkgrid-labs.github.io/greengate/reference/output-formats) · [Exit Codes](https://thinkgrid-labs.github.io/greengate/reference/exit-codes) · [Roadmap](https://thinkgrid-labs.github.io/greengate/reference/roadmap)
 
 ---
 

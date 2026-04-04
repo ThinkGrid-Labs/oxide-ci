@@ -137,6 +137,25 @@ enum Commands {
         #[arg(short, long)]
         output: Option<String>,
     },
+    /// Wraps a package manager install and monitors for phantom dependencies
+    /// (postinstall scripts that drop and delete binaries) and executable drops.
+    /// Example: greengate watch-install npm install
+    ///          greengate watch-install pnpm install --frozen-lockfile
+    WatchInstall {
+        /// Package manager to wrap: npm, yarn, pnpm, or bun
+        #[arg(value_name = "PACKAGE_MANAGER")]
+        package_manager: String,
+        /// Arguments forwarded verbatim to the package manager
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            value_name = "ARGS"
+        )]
+        args: Vec<String>,
+        /// Report findings but do not exit non-zero (overrides config block_phantom_scripts)
+        #[arg(long)]
+        no_fail: bool,
+    },
     /// Analyzes a PR diff: outputs a Complexity Score and new-code coverage gaps
     Review {
         /// Diff base ref: commit, branch, or tag (default: HEAD~1)
@@ -343,6 +362,19 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Sbom { output } => {
             modules::sbom::run_sbom(output.as_deref())?;
+        }
+        Commands::WatchInstall {
+            package_manager,
+            args,
+            no_fail,
+        } => {
+            modules::watch_install::run_watch_install(modules::watch_install::WatchInstallOpts {
+                package_manager,
+                args,
+                block_phantom_scripts: !no_fail && cfg.supply_chain.block_phantom_scripts,
+                enforce_sandbox: cfg.supply_chain.enforce_sandbox,
+                allow_postinstall: cfg.supply_chain.allow_postinstall,
+            })?;
         }
         Commands::Review {
             base,

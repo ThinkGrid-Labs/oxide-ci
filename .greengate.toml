@@ -61,3 +61,18 @@ target_dir = "."
 # current   = "output/current.perf"
 # baseline  = "output/baseline.perf"
 # threshold = 15.0               # % mean-time regression allowed
+
+# ── Supply chain protection ───────────────────────────────────────────────────
+# Drives `greengate watch-install <pm> install`.
+# block_phantom_scripts — exit non-zero if a postinstall script creates and
+#   then deletes a file inside node_modules/ (dropper signature).
+# enforce_sandbox — also flag new executables dropped in the project root
+#   that were not present before the install began.
+# allow_postinstall — packages whose postinstall scripts legitimately create
+#   temp files (e.g. native build tools that compile .node addons).
+#   Findings from these are reported as warnings, not errors.
+#
+# [supply_chain]
+# block_phantom_scripts = true
+# enforce_sandbox       = true
+# allow_postinstall     = ["esbuild", "prisma", "@swc/core"]

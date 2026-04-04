@@ -883,3 +883,297 @@ fn review_sarif_output_is_valid() {
     assert_eq!(parsed["version"].as_str(), Some("2.1.0"));
     assert!(parsed["runs"].is_array());
 }
+
+// ── watch-install ─────────────────────────────────────────────────────────────
+//
+// These tests use `sh -c "..."` as the wrapped "package manager" so they run
+// without npm/yarn being installed.  All `watch-install` integration tests are
+// Unix-only because they rely on POSIX shell.
+//
+// Timing note: the watcher polls every 250 ms.  Scripts that create-then-delete
+// a file sleep for 0.7 s between the two operations, giving the watcher at
+// least two polls to observe the file before it disappears.
+
+#[test]
+#[cfg(unix)]
+fn watch_install_exits_zero_on_clean_install() {
+    // Package manager does nothing — no files touched, no phantoms.
+    let dir = tempfile::tempdir().unwrap();
+
+    let status = Command::new(binary())
+        .args(["watch-install", "sh", "-c", "exit 0"])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        status.success(),
+        "clean install with no filesystem changes must exit 0"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn watch_install_exits_nonzero_on_phantom_file() {
+    // Script creates a file inside node_modules/, waits, then deletes it —
+    // the classic postinstall-dropper signature.
+    let dir = tempfile::tempdir().unwrap();
+
+    let status = Command::new(binary())
+        .args([
+            "watch-install",
+            "sh",
+            "-c",
+            "mkdir -p node_modules/evil-pkg \
+             && touch node_modules/evil-pkg/backdoor \
+             && sleep 0.7 \
+             && rm node_modules/evil-pkg/backdoor",
+        ])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        !status.success(),
+        "phantom file (created-then-deleted) must cause non-zero exit"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn watch_install_no_fail_flag_exits_zero_despite_phantom() {
+    // --no-fail: report findings but never set non-zero exit.
+    let dir = tempfile::tempdir().unwrap();
+
+    let status = Command::new(binary())
+        .args([
+            "watch-install",
+            "--no-fail",
+            "sh",
+            "-c",
+            "mkdir -p node_modules/evil-pkg \
+             && touch node_modules/evil-pkg/backdoor \
+             && sleep 0.7 \
+             && rm node_modules/evil-pkg/backdoor",
+        ])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        status.success(),
+        "--no-fail must suppress non-zero exit even when phantom detected"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn watch_install_config_block_false_exits_zero_on_phantom() {
+    // block_phantom_scripts = false in .greengate.toml: same effect as --no-fail.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join(".greengate.toml"),
+        "[supply_chain]\nblock_phantom_scripts = false\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .args([
+            "watch-install",
+            "sh",
+            "-c",
+            "mkdir -p node_modules/evil-pkg \
+             && touch node_modules/evil-pkg/backdoor \
+             && sleep 0.7 \
+             && rm node_modules/evil-pkg/backdoor",
+        ])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        status.success(),
+        "block_phantom_scripts = false must not fail even with a phantom"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn watch_install_allowlisted_package_does_not_fail() {
+    // Phantom inside a package on allow_postinstall must not cause failure.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join(".greengate.toml"),
+        "[supply_chain]\nallow_postinstall = [\"trusted-builder\"]\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .args([
+            "watch-install",
+            "sh",
+            "-c",
+            "mkdir -p node_modules/trusted-builder \
+             && touch node_modules/trusted-builder/native.node \
+             && sleep 0.7 \
+             && rm node_modules/trusted-builder/native.node",
+        ])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        status.success(),
+        "phantom from an allow_postinstall package must not fail the install"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn watch_install_non_allowlisted_fails_even_when_other_package_is_allowed() {
+    // allow_postinstall = ["trusted"] but the phantom is from "evil-pkg" → still fails.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join(".greengate.toml"),
+        "[supply_chain]\nallow_postinstall = [\"trusted\"]\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .args([
+            "watch-install",
+            "sh",
+            "-c",
+            "mkdir -p node_modules/evil-pkg \
+             && touch node_modules/evil-pkg/dropper \
+             && sleep 0.7 \
+             && rm node_modules/evil-pkg/dropper",
+        ])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        !status.success(),
+        "non-allowlisted phantom must still fail even when other packages are allowed"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn watch_install_persistent_file_in_node_modules_is_not_flagged() {
+    // A file that remains after install is not a phantom.
+    let dir = tempfile::tempdir().unwrap();
+
+    let status = Command::new(binary())
+        .args([
+            "watch-install",
+            "sh",
+            "-c",
+            "mkdir -p node_modules/real-pkg && echo 'module.exports={}' > node_modules/real-pkg/index.js",
+        ])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        status.success(),
+        "a persistent node_modules file must not be flagged as a phantom"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn watch_install_unknown_pm_exits_nonzero() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let status = Command::new(binary())
+        .args([
+            "watch-install",
+            "this-pm-does-not-exist-anywhere",
+            "install",
+        ])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        !status.success(),
+        "non-existent package manager must cause non-zero exit"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn watch_install_exec_drop_in_project_root_is_flagged() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // Script drops an executable in the project root.
+    let status = Command::new(binary())
+        .args([
+            "watch-install",
+            "sh",
+            "-c",
+            "printf '#!/bin/sh\\necho hi\\n' > ./injected && chmod +x ./injected",
+        ])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        !status.success(),
+        "executable dropped in project root must cause non-zero exit"
+    );
+
+    // Clean up so the temp dir can be removed cleanly.
+    let _ = std::fs::remove_file(dir.path().join("injected"));
+}
+
+#[test]
+#[cfg(unix)]
+fn watch_install_enforce_sandbox_false_ignores_exec_drop() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join(".greengate.toml"),
+        "[supply_chain]\nenforce_sandbox = false\n",
+    )
+    .unwrap();
+
+    let status = Command::new(binary())
+        .args([
+            "watch-install",
+            "sh",
+            "-c",
+            "printf '#!/bin/sh\\necho hi\\n' > ./injected && chmod +x ./injected",
+        ])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+
+    assert!(
+        status.success(),
+        "exec-drop in root must be ignored when enforce_sandbox = false"
+    );
+
+    let _ = std::fs::remove_file(dir.path().join("injected"));
+}
+
+#[test]
+#[cfg(unix)]
+fn watch_install_pm_failure_emits_warning() {
+    // Wrapped pm exits non-zero. Greengate should warn about it.
+    let dir = tempfile::tempdir().unwrap();
+
+    let output = Command::new(binary())
+        .args(["watch-install", "sh", "-c", "exit 1"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("non-zero"),
+        "failed pm must emit a warning to stderr; stderr: {}",
+        stderr
+    );
+}
