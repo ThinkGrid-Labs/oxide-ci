@@ -392,9 +392,17 @@ fn main() -> anyhow::Result<()> {
                 allow_postinstall: cfg.supply_chain.allow_postinstall,
             })?;
         }
-        Commands::Tia { base, staged, format } => {
+        Commands::Tia {
+            base,
+            staged,
+            format,
+        } => {
             modules::tia::run_tia(
-                modules::tia::TiaOpts { base, staged, format },
+                modules::tia::TiaOpts {
+                    base,
+                    staged,
+                    format,
+                },
                 &cfg.tia,
             )?;
         }

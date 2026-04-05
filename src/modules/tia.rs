@@ -280,11 +280,7 @@ fn extract_imports(source: &[u8], language: Language, query_str: &str) -> Vec<St
         return Vec::new();
     };
 
-    let import_idx = match query
-        .capture_names()
-        .iter()
-        .position(|n| *n == "import")
-    {
+    let import_idx = match query.capture_names().iter().position(|n| *n == "import") {
         Some(i) => i as u32,
         None => return Vec::new(),
     };
@@ -313,10 +309,7 @@ fn normalize_import(import: &str, test_dir: &Path) -> String {
 
     if import.starts_with('.') {
         // Relative import — resolve manually without hitting the filesystem
-        let dir_str = test_dir
-            .to_str()
-            .unwrap_or("")
-            .replace('\\', "/");
+        let dir_str = test_dir.to_str().unwrap_or("").replace('\\', "/");
         let mut components: Vec<String> = dir_str
             .split('/')
             .filter(|s| !s.is_empty() && *s != ".")
@@ -447,7 +440,10 @@ fn emit_newline(output: &TiaOutput) {
 fn emit_text(output: &TiaOutput) {
     eprintln!();
     eprintln!("╔══ Test Impact Analysis ══════════════════════════════╗");
-    eprintln!("  Changed source files : {}", output.changed_source_files.len());
+    eprintln!(
+        "  Changed source files : {}",
+        output.changed_source_files.len()
+    );
     eprintln!("  Total test files     : {}", output.total_test_files);
     eprintln!("  Affected tests       : {}", output.affected_tests.len());
     eprintln!("╚══════════════════════════════════════════════════════╝");

@@ -83,39 +83,39 @@ pub struct ScriptThreat {
 /// These are fast literal substring checks — no regex overhead.
 const SCRIPT_SIGNALS: &[(&str, &str)] = &[
     // Dynamic code execution
-    ("eval()",           "eval("),
-    ("new Function()",   "new Function("),
-    ("vm.runInContext",  "vm.runInContext"),
+    ("eval()", "eval("),
+    ("new Function()", "new Function("),
+    ("vm.runInContext", "vm.runInContext"),
     ("vm.runInNewContext", "vm.runInNewContext"),
     // Base64 / obfuscation
     ("Buffer.from(base64)", "Buffer.from("),
-    ("atob()",           "atob("),
-    ("btoa()",           "btoa("),
+    ("atob()", "atob("),
+    ("btoa()", "btoa("),
     // Raw networking
-    ("require('http')",  "require('http')"),
+    ("require('http')", "require('http')"),
     ("require(\"http\")", "require(\"http\")"),
     ("require('https')", "require('https')"),
     ("require(\"https\")", "require(\"https\")"),
-    ("require('net')",   "require('net')"),
-    ("require('dns')",   "require('dns')"),
-    ("require('tls')",   "require('tls')"),
+    ("require('net')", "require('net')"),
+    ("require('dns')", "require('dns')"),
+    ("require('tls')", "require('tls')"),
     // HTTP client libraries
-    ("fetch(",           "fetch("),
-    ("axios",            "axios"),
-    ("got(",             "got("),
-    ("request(",         "request("),
-    ("superagent",       "superagent"),
+    ("fetch(", "fetch("),
+    ("axios", "axios"),
+    ("got(", "got("),
+    ("request(", "request("),
+    ("superagent", "superagent"),
     // Shell / subprocess
-    ("child_process",    "child_process"),
-    ("execSync(",        "execSync("),
-    ("spawnSync(",       "spawnSync("),
-    ("exec(",            "exec("),
-    ("spawn(",           "spawn("),
+    ("child_process", "child_process"),
+    ("execSync(", "execSync("),
+    ("spawnSync(", "spawnSync("),
+    ("exec(", "exec("),
+    ("spawn(", "spawn("),
     // Env exfiltration
-    ("process.env",      "process.env"),
+    ("process.env", "process.env"),
     // Shell commands
-    ("curl ",            "curl "),
-    ("wget ",            "wget "),
+    ("curl ", "curl "),
+    ("wget ", "wget "),
 ];
 
 // ── Pre-flight script scanner ─────────────────────────────────────────────────
@@ -260,7 +260,10 @@ fn report_script_threats(threats: &[ScriptThreat], allow_postinstall: &[String])
             eprintln!("    Signals   : {}", t.signals.join(", "));
         }
         if t.max_entropy > 4.8 {
-            eprintln!("    Entropy   : {:.2}  (threshold 4.80 — likely obfuscated)", t.max_entropy);
+            eprintln!(
+                "    Entropy   : {:.2}  (threshold 4.80 — likely obfuscated)",
+                t.max_entropy
+            );
         }
     }
     eprintln!();
