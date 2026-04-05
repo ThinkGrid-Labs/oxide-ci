@@ -1,6 +1,6 @@
 ---
-title: 'Getting Started'
-description: 'Install GreenGate and run your first scan in under a minute. Single binary, no runtime dependencies — works on macOS, Linux, and Windows.'
+title: 'Getting Started with GreenGate'
+description: 'Install GreenGate Rust DevOps CLI and run your first secret scan, supply chain check, and dependency audit in under a minute. Single binary for macOS, Linux, and Windows — no Node or Python required.'
 ---
 
 # Getting Started

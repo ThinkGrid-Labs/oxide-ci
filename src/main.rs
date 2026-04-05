@@ -156,6 +156,22 @@ enum Commands {
         #[arg(long)]
         no_fail: bool,
     },
+    /// Determines which test files are affected by changed source files using
+    /// AST-based import analysis. Output is newline-separated by default so it
+    /// can be piped directly into a test runner:
+    ///   pytest $(greengate tia --base main)
+    ///   npx jest $(greengate tia --base main)
+    Tia {
+        /// Diff base ref: commit, branch, or tag (default: HEAD~1)
+        #[arg(long, default_value = "HEAD~1")]
+        base: String,
+        /// Diff against staged changes instead of committed diff
+        #[arg(long)]
+        staged: bool,
+        /// Output format: newline (default, pipe-friendly), text, or json
+        #[arg(long, default_value = "newline")]
+        format: String,
+    },
     /// Analyzes a PR diff: outputs a Complexity Score and new-code coverage gaps
     Review {
         /// Diff base ref: commit, branch, or tag (default: HEAD~1)
@@ -375,6 +391,12 @@ fn main() -> anyhow::Result<()> {
                 enforce_sandbox: cfg.supply_chain.enforce_sandbox,
                 allow_postinstall: cfg.supply_chain.allow_postinstall,
             })?;
+        }
+        Commands::Tia { base, staged, format } => {
+            modules::tia::run_tia(
+                modules::tia::TiaOpts { base, staged, format },
+                &cfg.tia,
+            )?;
         }
         Commands::Review {
             base,

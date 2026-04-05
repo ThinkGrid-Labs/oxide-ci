@@ -1,6 +1,6 @@
 # GreenGate — Rust DevOps CLI for CI Quality Gates
 
-> A blazing-fast DevOps CLI built in Rust — secret scanning, AST-based SAST, PR review intelligence, Kubernetes linting, coverage gates, dependency auditing, web performance, and more — in a single zero-dependency binary.
+> A blazing-fast DevOps security CLI built in Rust — zero-trust supply chain protection, test impact analysis, secret scanning, AST-based SAST, PR review intelligence, Kubernetes linting, coverage gates, and dependency auditing — in a single zero-dependency binary.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build](https://img.shields.io/github/actions/workflow/status/thinkgrid-labs/greengate/ci.yml?branch=main)](https://github.com/thinkgrid-labs/greengate/actions)
@@ -10,7 +10,21 @@
 [![MSRV](https://img.shields.io/badge/MSRV-1.85-orange)](https://www.rust-lang.org)
 [![GitHub Stars](https://img.shields.io/github/stars/thinkgrid-labs/greengate?style=social)](https://github.com/thinkgrid-labs/greengate/stargazers)
 
-**[Documentation](https://thinkgrid-labs.github.io/greengate)** · [Commands](https://thinkgrid-labs.github.io/greengate/commands/scan) · [CI Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration) · [Config Reference](https://thinkgrid-labs.github.io/greengate/reference/config)
+**[Documentation](https://thinkgrid-labs.github.io/greengate)** · [Commands](https://thinkgrid-labs.github.io/greengate/commands/watch-install) · [CI Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration) · [Config Reference](https://thinkgrid-labs.github.io/greengate/reference/config)
+
+GreenGate is a single compiled Rust binary that replaces a collection of loosely connected CI security scripts. It intercepts npm/yarn/pnpm/bun installs with a zero-trust supply chain gate, detects hardcoded secrets and PII with 26 built-in patterns, runs AST-based SAST with taint tracking, selects only the tests affected by a diff, and enforces coverage and complexity thresholds — all from one tool with no Node, Python, or JVM runtime required.
+
+---
+
+## Contents
+
+- [What it does](#what-it-does)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [GitHub Actions](#github-actions)
+- [Configuration](#configuration)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
 
 ---
 
@@ -18,10 +32,11 @@
 
 | Command | Purpose |
 |---|---|
-| `greengate watch-install` | **Supply-chain protection** — wraps npm/yarn/pnpm/bun and halts on phantom postinstall droppers |
+| `greengate watch-install` | **Zero-trust supply chain gate** — 3-layer protection: pre-flight script scan (entropy + network/eval patterns), runtime phantom-file detection, post-install exec-drop detection |
+| `greengate tia` | **Test impact analysis** — AST import parsing determines exactly which tests are affected by a diff; pipe into pytest/jest/go test |
 | `greengate scan` | Secrets, PII & AST-based SAST for JS/TS/Python/Go |
-| `greengate audit` | OSV dependency vulnerability audit |
-| `greengate review` | PR Complexity Score + new-code coverage gaps |
+| `greengate audit` | OSV dependency vulnerability audit (npm, Cargo, PyPI, Go, Maven, NuGet) |
+| `greengate review` | PR Complexity Score + new-code coverage gaps with GitHub Check Run annotations |
 | `greengate lint` | Kubernetes manifest linting |
 | `greengate docker-lint` | Dockerfile best-practice checks |
 | `greengate coverage` | LCOV / Cobertura coverage threshold gate |
@@ -69,14 +84,17 @@ cargo install --git https://github.com/thinkgrid-labs/greengate
 ## Quick start
 
 ```bash
-# Supply-chain safe install — detects postinstall droppers in real time
+# Zero-trust supply chain gate — static script scan + runtime dropper detection
 greengate watch-install npm ci
 
-# Scan for secrets and run SAST
+# Scan for hardcoded secrets, PII, and SAST issues
 greengate scan
 
-# Audit dependencies for known CVEs
+# Audit dependencies for known CVEs (OSV database)
 greengate audit
+
+# Test impact analysis — run only tests affected by changes since main
+pytest $(greengate tia --base main)
 
 # Analyze a PR: complexity score + new-code coverage gaps
 greengate review --base main --coverage-file coverage/lcov.info
@@ -104,8 +122,8 @@ greengate run
     curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
       -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
-# Replaces plain `npm ci` — halts if a postinstall script drops and deletes a binary
-- name: Supply-chain safe install
+# Zero-trust supply chain gate — static script scan + runtime dropper detection
+- name: Zero-trust supply chain install
   run: greengate watch-install npm ci
 
 - name: Secret, PII & SAST scan
@@ -115,6 +133,12 @@ greengate run
 
 - name: Dependency audit (OSV)
   run: greengate audit
+
+- name: Test impact analysis
+  if: github.event_name == 'pull_request'
+  run: |
+    TESTS=$(greengate tia --base "${{ github.event.pull_request.base.sha }}")
+    if [ -n "$TESTS" ]; then pytest $TESTS; fi
 
 - name: PR review (complexity + coverage gaps)
   if: github.event_name == 'pull_request'
@@ -147,6 +171,9 @@ block_phantom_scripts = true
 enforce_sandbox       = true
 allow_postinstall     = ["esbuild", "prisma", "@swc/core"]
 
+[tia]
+test_patterns = ["**/*.test.ts", "**/*.test.js", "**/test_*.py", "**/*_test.go"]
+
 [scan]
 exclude_patterns = ["tests/**", "*.test.ts", "vendor/**"]
 entropy = true
@@ -164,7 +191,7 @@ complexity_budget = 0   # 0 = warn only; > 0 = hard fail threshold
 steps = ["scan", "review --base main --coverage-file coverage/lcov.info", "coverage", "audit"]
 ```
 
-Full reference → [docs/reference/config](https://thinkgrid-labs.github.io/greengate/reference/config)
+Full reference → [Configuration Reference](https://thinkgrid-labs.github.io/greengate/reference/config)
 
 ---
 
@@ -175,7 +202,7 @@ Full guides, command references, and CI examples live in the **[docs site](https
 - [Getting Started](https://thinkgrid-labs.github.io/greengate/guide/getting-started)
 - [CI/CD Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration)
 - [Use Cases](https://thinkgrid-labs.github.io/greengate/guide/use-cases)
-- **Commands:** [watch-install](https://thinkgrid-labs.github.io/greengate/commands/watch-install) · [scan](https://thinkgrid-labs.github.io/greengate/commands/scan) · [audit](https://thinkgrid-labs.github.io/greengate/commands/audit) · [review](https://thinkgrid-labs.github.io/greengate/commands/review) · [coverage](https://thinkgrid-labs.github.io/greengate/commands/coverage) · [lint](https://thinkgrid-labs.github.io/greengate/commands/lint) · [docker-lint](https://thinkgrid-labs.github.io/greengate/commands/docker-lint) · [lighthouse](https://thinkgrid-labs.github.io/greengate/commands/lighthouse) · [reassure](https://thinkgrid-labs.github.io/greengate/commands/reassure) · [sbom](https://thinkgrid-labs.github.io/greengate/commands/sbom) · [run](https://thinkgrid-labs.github.io/greengate/commands/run)
+- **Commands:** [watch-install](https://thinkgrid-labs.github.io/greengate/commands/watch-install) · [tia](https://thinkgrid-labs.github.io/greengate/commands/tia) · [scan](https://thinkgrid-labs.github.io/greengate/commands/scan) · [audit](https://thinkgrid-labs.github.io/greengate/commands/audit) · [review](https://thinkgrid-labs.github.io/greengate/commands/review) · [coverage](https://thinkgrid-labs.github.io/greengate/commands/coverage) · [lint](https://thinkgrid-labs.github.io/greengate/commands/lint) · [docker-lint](https://thinkgrid-labs.github.io/greengate/commands/docker-lint) · [lighthouse](https://thinkgrid-labs.github.io/greengate/commands/lighthouse) · [reassure](https://thinkgrid-labs.github.io/greengate/commands/reassure) · [sbom](https://thinkgrid-labs.github.io/greengate/commands/sbom) · [run](https://thinkgrid-labs.github.io/greengate/commands/run)
 - **Reference:** [Config](https://thinkgrid-labs.github.io/greengate/reference/config) · [Secret Patterns](https://thinkgrid-labs.github.io/greengate/reference/secret-patterns) · [SAST Rules](https://thinkgrid-labs.github.io/greengate/reference/sast-rules) · [Output Formats](https://thinkgrid-labs.github.io/greengate/reference/output-formats) · [Exit Codes](https://thinkgrid-labs.github.io/greengate/reference/exit-codes) · [Roadmap](https://thinkgrid-labs.github.io/greengate/reference/roadmap)
 
 ---

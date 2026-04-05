@@ -3,7 +3,7 @@ title: 'watch — Continuous File Scanning'
 description: 'Re-run secret and SAST scanning automatically whenever source files change. Useful for catching issues during active development without manual scans.'
 ---
 
-# watch
+# watch — Continuous File Scanning
 
 Re-runs the secret and SAST scan automatically whenever source files change. Useful for catching secrets during active development without having to run `greengate scan` manually.
 

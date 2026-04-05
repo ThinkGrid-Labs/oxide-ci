@@ -1,6 +1,6 @@
 ---
-title: 'Use Cases & Scenarios'
-description: 'Real-world examples: supply-chain attack defence, secret scanning, Kubernetes quality gates, full security pipelines, and PR review intelligence for engineering teams.'
+title: 'Use Cases — GreenGate DevOps Security CLI'
+description: 'Real-world GreenGate use cases: stopping npm supply chain attacks, secret leak prevention, Kubernetes security gates, test impact analysis in CI, and full DevOps security pipelines.'
 ---
 
 # Use Cases & Scenarios

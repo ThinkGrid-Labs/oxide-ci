@@ -3,7 +3,7 @@ title: 'docker-lint — Dockerfile Linting'
 description: 'Lint a Dockerfile for security issues and best-practice violations: unpinned base images, ADD instead of COPY, missing USER or HEALTHCHECK, and more.'
 ---
 
-# docker-lint
+# docker-lint — Dockerfile Linting
 
 Lint a `Dockerfile` for best-practice violations that cause security issues, bloated images, or unreliable container behaviour.
 

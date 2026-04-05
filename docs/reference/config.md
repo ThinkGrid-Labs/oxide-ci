@@ -1,6 +1,6 @@
 ---
-title: 'Configuration Reference (.greengate.toml)'
-description: 'Full reference for .greengate.toml — all sections, fields, defaults, and examples for supply_chain, scan, coverage, audit, review, lint, lighthouse, and more.'
+title: 'Configuration Reference — .greengate.toml'
+description: 'Full .greengate.toml reference: supply_chain (zero-trust gate), tia (test patterns), scan (entropy, secrets), coverage, audit, review, sast, lint, lighthouse, and all default values.'
 ---
 
 # Configuration File (.greengate.toml)
@@ -87,6 +87,42 @@ complexity_budget = 0
 # Re-evaluate when upstream tools release new major versions.
 ignore_advisories = [
   # "GHSA-xxxx-yyyy-zzzz",   # affected-package — reason suppressed
+]
+
+[supply_chain]
+# Halt the install when any layer of the zero-trust gate detects a threat (default: true).
+block_phantom_scripts = true
+
+# Monitor the project root for new executable files after install (default: true).
+enforce_sandbox = true
+
+# Packages whose postinstall scripts legitimately make network calls or create
+# temp files (e.g. native build tools that compile .node addons). Findings from
+# these packages are downgraded to warnings — they still appear in output for
+# audit trail but do not trigger a non-zero exit.
+allow_postinstall = [
+  # "esbuild",
+  # "prisma",
+  # "@swc/core",
+]
+
+[tia]
+# Glob patterns that identify test files for Test Impact Analysis.
+# Uses standard glob syntax with ** for recursive matching.
+# Defaults cover TypeScript/JavaScript, Python, and Go conventions.
+test_patterns = [
+  "**/*.test.ts",
+  "**/*.test.tsx",
+  "**/*.test.js",
+  "**/*.test.jsx",
+  "**/*.spec.ts",
+  "**/*.spec.tsx",
+  "**/*.spec.js",
+  "**/*.spec.jsx",
+  "**/test_*.py",
+  "**/*_test.py",
+  "tests/**/*.py",
+  "**/*_test.go",
 ]
 ```
 

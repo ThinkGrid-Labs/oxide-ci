@@ -1,16 +1,30 @@
-//! `greengate watch-install` — wraps a package-manager install command and
-//! monitors `node_modules/` in real-time for two supply-chain attack signatures:
+//! `greengate watch-install` — Zero-Trust Supply Chain Quality Gate.
 //!
-//! 1. **Phantom files** — a file is created inside `node_modules/` during a
-//!    postinstall script and then deleted before the install finishes.  This is
-//!    the textbook dropper pattern (write binary → execute → unlink to hide
-//!    evidence).
+//! Wraps a package-manager install command and actively enforces a zero-trust
+//! posture against supply-chain attacks at three layers:
 //!
-//! 2. **Executable drops** — a new executable file appears in the project root
-//!    that was not present before the install began.  Legitimate package managers
-//!    never place executables outside `node_modules/`.
+//! **Layer 1 — Pre-flight script scan (static analysis)**
+//! Before the install runs, any `preinstall` / `install` / `postinstall`
+//! scripts found in already-present `node_modules/*/package.json` files are
+//! scanned for:
+//!   - Suspicious network API calls (`fetch`, `http`, `https`, `dns`, `axios`…)
+//!   - Dynamic code execution (`eval`, `new Function`, `vm.runInContext`…)
+//!   - Process / shell spawning (`exec`, `spawn`, `child_process`, `execSync`…)
+//!   - Credential / environment exfiltration (`process.env`)
+//!   - Obfuscation markers — Base64 decode calls (`atob`, `Buffer.from`)
+//!   - High Shannon entropy (>4.8 over a 64-char rolling window), a reliable
+//!     indicator of obfuscated or minified malicious payloads
 //!
-//! Implementation uses a 250 ms polling thread — zero extra dependencies.
+//! **Layer 2 — Runtime phantom-file detection (behavioural)**
+//! A 250 ms polling thread watches `node_modules/` while the install runs.
+//! If a file is written during a postinstall script and then deleted before
+//! the install exits (the classic dropper pattern), it is flagged.
+//!
+//! **Layer 3 — Post-install executable-drop detection**
+//! After the install completes, any new executable file that appeared in the
+//! project root (outside `node_modules/`) is flagged as a supply-chain drop.
+//!
+//! Implementation uses zero extra runtime dependencies.
 
 use crate::utils::terminal;
 use anyhow::Result;
@@ -50,25 +64,252 @@ pub enum FindingKind {
     ExecutableDrop,
 }
 
+/// A suspicious pattern found in a package's lifecycle script.
+#[derive(Debug)]
+pub struct ScriptThreat {
+    /// npm package name
+    pub package: String,
+    /// Which lifecycle hook: "preinstall", "install", or "postinstall"
+    pub hook: String,
+    /// Human-readable list of matched signal names
+    pub signals: Vec<String>,
+    /// Maximum Shannon entropy observed in any 64-char window of the script
+    pub max_entropy: f64,
+}
+
+// ── Suspicious script patterns ────────────────────────────────────────────────
+
+/// Each entry is (signal_name, substring_to_search_for).
+/// These are fast literal substring checks — no regex overhead.
+const SCRIPT_SIGNALS: &[(&str, &str)] = &[
+    // Dynamic code execution
+    ("eval()",           "eval("),
+    ("new Function()",   "new Function("),
+    ("vm.runInContext",  "vm.runInContext"),
+    ("vm.runInNewContext", "vm.runInNewContext"),
+    // Base64 / obfuscation
+    ("Buffer.from(base64)", "Buffer.from("),
+    ("atob()",           "atob("),
+    ("btoa()",           "btoa("),
+    // Raw networking
+    ("require('http')",  "require('http')"),
+    ("require(\"http\")", "require(\"http\")"),
+    ("require('https')", "require('https')"),
+    ("require(\"https\")", "require(\"https\")"),
+    ("require('net')",   "require('net')"),
+    ("require('dns')",   "require('dns')"),
+    ("require('tls')",   "require('tls')"),
+    // HTTP client libraries
+    ("fetch(",           "fetch("),
+    ("axios",            "axios"),
+    ("got(",             "got("),
+    ("request(",         "request("),
+    ("superagent",       "superagent"),
+    // Shell / subprocess
+    ("child_process",    "child_process"),
+    ("execSync(",        "execSync("),
+    ("spawnSync(",       "spawnSync("),
+    ("exec(",            "exec("),
+    ("spawn(",           "spawn("),
+    // Env exfiltration
+    ("process.env",      "process.env"),
+    // Shell commands
+    ("curl ",            "curl "),
+    ("wget ",            "wget "),
+];
+
+// ── Pre-flight script scanner ─────────────────────────────────────────────────
+
+/// Scan all `package.json` files under `node_modules/` for suspicious lifecycle
+/// scripts. Returns one `ScriptThreat` per (package, hook) pair that fires at
+/// least one signal or exceeds the entropy threshold.
+fn scan_package_scripts(node_modules: &Path) -> Vec<ScriptThreat> {
+    let mut threats = Vec::new();
+
+    let packages_dir = node_modules;
+    let Ok(top_level) = std::fs::read_dir(packages_dir) else {
+        return threats;
+    };
+
+    for entry in top_level.flatten() {
+        let path = entry.path();
+
+        // Handle scoped packages (@scope/name) — one extra level deep
+        let pkg_dirs: Vec<PathBuf> = if path.is_dir()
+            && path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with('@'))
+                .unwrap_or(false)
+        {
+            std::fs::read_dir(&path)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.is_dir())
+                .collect()
+        } else if path.is_dir() {
+            vec![path]
+        } else {
+            continue;
+        };
+
+        for pkg_dir in pkg_dirs {
+            let pkg_json_path = pkg_dir.join("package.json");
+            let Ok(contents) = std::fs::read_to_string(&pkg_json_path) else {
+                continue;
+            };
+            let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&contents) else {
+                continue;
+            };
+
+            let pkg_name = manifest
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or("<unknown>")
+                .to_string();
+
+            let Some(scripts) = manifest.get("scripts").and_then(|s| s.as_object()) else {
+                continue;
+            };
+
+            for hook in &["preinstall", "install", "postinstall"] {
+                let Some(script_val) = scripts.get(*hook) else {
+                    continue;
+                };
+                let Some(script) = script_val.as_str() else {
+                    continue;
+                };
+
+                let signals: Vec<String> = SCRIPT_SIGNALS
+                    .iter()
+                    .filter(|(_, needle)| script.contains(needle))
+                    .map(|(name, _)| name.to_string())
+                    .collect();
+
+                let max_entropy = max_script_entropy(script);
+                const ENTROPY_THRESHOLD: f64 = 4.8;
+
+                if !signals.is_empty() || max_entropy > ENTROPY_THRESHOLD {
+                    threats.push(ScriptThreat {
+                        package: pkg_name.clone(),
+                        hook: hook.to_string(),
+                        signals,
+                        max_entropy,
+                    });
+                }
+            }
+        }
+    }
+
+    threats
+}
+
+/// Compute the maximum Shannon entropy over all 64-character sliding windows
+/// of `text`. Returns 0.0 for inputs shorter than 32 chars.
+fn max_script_entropy(text: &str) -> f64 {
+    const WINDOW: usize = 64;
+    let bytes = text.as_bytes();
+    if bytes.len() < 32 {
+        return 0.0;
+    }
+
+    let mut max = 0.0_f64;
+    let end = bytes.len().saturating_sub(WINDOW - 1);
+    for start in 0..end {
+        let window = &bytes[start..start + WINDOW];
+        let mut freq = [0u32; 256];
+        for &b in window {
+            freq[b as usize] += 1;
+        }
+        let entropy: f64 = freq
+            .iter()
+            .filter(|&&c| c > 0)
+            .map(|&c| {
+                let p = c as f64 / WINDOW as f64;
+                -p * p.log2()
+            })
+            .sum();
+        if entropy > max {
+            max = entropy;
+        }
+    }
+    max
+}
+
+fn report_script_threats(threats: &[ScriptThreat], allow_postinstall: &[String]) {
+    if threats.is_empty() {
+        return;
+    }
+    eprintln!();
+    eprintln!(
+        "⚠️  Zero-Trust Supply Chain Gate: {} package(s) with suspicious lifecycle scripts:",
+        threats.len()
+    );
+    eprintln!();
+    for t in threats {
+        let allowed = is_allowlisted(&t.package, allow_postinstall);
+        let tag = if allowed {
+            " [allowlisted — warning only]"
+        } else {
+            ""
+        };
+        eprintln!("  [SCRIPT_THREAT] {} ({}){}", t.package, t.hook, tag);
+        if !t.signals.is_empty() {
+            eprintln!("    Signals   : {}", t.signals.join(", "));
+        }
+        if t.max_entropy > 4.8 {
+            eprintln!("    Entropy   : {:.2}  (threshold 4.80 — likely obfuscated)", t.max_entropy);
+        }
+    }
+    eprintln!();
+    eprintln!(
+        "  Tip: inspect each flagged script manually. If the package is a known\n  \
+         native build tool, add it to [supply_chain] allow_postinstall in .greengate.toml."
+    );
+    eprintln!();
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 pub fn run_watch_install(opts: WatchInstallOpts) -> Result<()> {
     terminal::info(&format!(
-        "watch-install: wrapping `{} {}`",
+        "Zero-Trust Supply Chain Gate: intercepting `{} {}`",
         opts.package_manager,
         opts.args.join(" "),
     ));
 
-    // 1. Pre-install snapshots — taken before the child process starts so we
+    // 1. Layer 1 — Pre-flight static scan of already-present node_modules/.
+    //    Catches suspicious scripts from a previous install or partial cache.
+    let node_modules_path = Path::new("node_modules");
+    if node_modules_path.is_dir() {
+        let pre_threats = scan_package_scripts(node_modules_path);
+        let blocking: Vec<&ScriptThreat> = pre_threats
+            .iter()
+            .filter(|t| !is_allowlisted(&t.package, &opts.allow_postinstall))
+            .collect();
+        report_script_threats(&pre_threats, &opts.allow_postinstall);
+        if !blocking.is_empty() && opts.block_phantom_scripts {
+            return Err(anyhow::anyhow!(
+                "Zero-Trust Supply Chain Gate: {} pre-existing package(s) with suspicious \
+                 lifecycle scripts — halting before install. Review the findings above or \
+                 add to allow_postinstall if trusted.",
+                blocking.len()
+            ));
+        }
+    }
+
+    // 2. Pre-install snapshots — taken before the child process starts so we
     //    have a clean baseline to diff against.
     let pre_modules = snapshot_dir("node_modules");
     let pre_root = snapshot_root_executables(".");
 
-    // 2. Shared state updated by the polling thread.
+    // 3. Shared state updated by the polling thread.
     let state = Arc::new(Mutex::new(WatchState::new(pre_modules)));
     let done = Arc::new(AtomicBool::new(false));
 
-    // 3. Background polling thread — checks node_modules/ every 250 ms.
+    // 4. Layer 2 — Runtime phantom-file detection thread (250 ms polling).
     //    Started *before* the child process so we don't miss early events.
     let state_clone = Arc::clone(&state);
     let done_clone = Arc::clone(&done);
@@ -83,18 +324,18 @@ pub fn run_watch_install(opts: WatchInstallOpts) -> Result<()> {
         state_clone.lock().unwrap().update(current);
     });
 
-    // 4. Run the wrapped package manager and inherit its stdio so the developer
+    // 5. Run the wrapped package manager and inherit its stdio so the developer
     //    sees normal install output.
     let pm_status = std::process::Command::new(&opts.package_manager)
         .args(&opts.args)
         .status();
 
-    // 5. Signal the polling thread to stop and wait for it to finish its
+    // 6. Signal the polling thread to stop and wait for it to finish its
     //    final scan before we read the accumulated findings.
     done.store(true, Ordering::Relaxed);
     let _ = poll_thread.join();
 
-    // 6. Check whether the package manager itself reported an error.
+    // 7. Check whether the package manager itself reported an error.
     match &pm_status {
         Err(e) => {
             return Err(anyhow::anyhow!(
@@ -112,12 +353,29 @@ pub fn run_watch_install(opts: WatchInstallOpts) -> Result<()> {
         _ => {}
     }
 
-    // 7. Collect all findings from the watcher (allowlisted findings are retained
-    //    so they can be shown as warnings, but they do not trigger a failure).
+    // 8. Layer 1 (post-install pass) — scan scripts of newly installed packages.
+    //    Catches packages that weren't in node_modules/ before this install run.
+    if node_modules_path.is_dir() {
+        let post_threats = scan_package_scripts(node_modules_path);
+        report_script_threats(&post_threats, &opts.allow_postinstall);
+        let blocking_scripts = post_threats
+            .iter()
+            .filter(|t| !is_allowlisted(&t.package, &opts.allow_postinstall))
+            .count();
+        if blocking_scripts > 0 && opts.block_phantom_scripts {
+            return Err(anyhow::anyhow!(
+                "Zero-Trust Supply Chain Gate: {} newly installed package(s) with suspicious \
+                 lifecycle scripts detected — halting.",
+                blocking_scripts
+            ));
+        }
+    }
+
+    // 9. Collect all phantom findings from the Layer 2 watcher.
     let mut watch_state = state.lock().unwrap();
     let mut findings: Vec<PhantomFinding> = watch_state.phantoms();
 
-    // 8. Detect new executables in the project root (exec-drop detection).
+    // 10. Layer 3 — Detect new executables in the project root (exec-drop).
     if opts.enforce_sandbox {
         let post_root = snapshot_root_executables(".");
         for path in post_root.keys() {
@@ -146,10 +404,9 @@ pub fn run_watch_install(opts: WatchInstallOpts) -> Result<()> {
         }
     }
 
-    // 9. Emit all findings; allowlisted ones are shown as warnings only.
+    // 11. Emit all phantom/exec-drop findings; allowlisted ones warn but don't fail.
     report_findings(&findings, &opts.allow_postinstall);
 
-    // Fail only on findings that are NOT covered by allow_postinstall.
     let blocking_count = findings
         .iter()
         .filter(|f| !is_allowlisted(&f.package, &opts.allow_postinstall))
@@ -157,13 +414,16 @@ pub fn run_watch_install(opts: WatchInstallOpts) -> Result<()> {
 
     if blocking_count > 0 && opts.block_phantom_scripts {
         return Err(anyhow::anyhow!(
-            "watch-install: {} blocking event(s) detected — halting.",
+            "Zero-Trust Supply Chain Gate: {} blocking runtime event(s) detected — halting.",
             blocking_count
         ));
     }
 
     if findings.is_empty() {
-        terminal::success("watch-install: clean — no phantom files or executable drops detected.");
+        terminal::success(
+            "Zero-Trust Supply Chain Gate: clean — no phantom files, executable drops, \
+             or suspicious scripts detected.",
+        );
     }
 
     Ok(())

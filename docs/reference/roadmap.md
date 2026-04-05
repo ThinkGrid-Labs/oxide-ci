@@ -1,6 +1,6 @@
 ---
-title: 'Roadmap'
-description: 'GreenGate planned features: sandbox-install zero-trust package runner, SBOM-based install verification, Python and Go taint tracking, and Rust SAST.'
+title: 'Roadmap — GreenGate'
+description: 'GreenGate shipped features (test impact analysis, zero-trust supply chain hardening) and planned features: sandbox-install with network isolation, SBOM verification, Python/Go taint tracking.'
 ---
 
 # Roadmap
@@ -9,22 +9,9 @@ This page tracks planned features and the reasoning behind their prioritisation.
 
 ---
 
-## Shipped
-
-### v0.2.x — Supply chain: `watch-install`
-
-`greengate watch-install` wraps any package manager (`npm`, `yarn`, `pnpm`, `bun`) and monitors `node_modules/` in real time during the install. It detects the two most common runtime attack signatures:
-
-- **Phantom files** — postinstall scripts that write a binary, execute it, and delete it before the install finishes (dropper pattern, as seen in the 2025 axios-ecosystem compromise)
-- **Executable drops** — new executable files placed in the project root that were not present before the install began
-
-Controlled via `[supply_chain]` in `.greengate.toml`. See the [watch-install command reference](/commands/watch-install) for full details.
-
----
-
 ## Planned
 
-### Feature 2 — `sandbox-install` (Zero-Trust Package Runner)
+### Feature: `sandbox-install` (Full Network Isolation)
 
 **Status:** Planned — implementation deferred pending architectural decision.
 
@@ -43,7 +30,8 @@ This provides a stronger guarantee than `watch-install` because:
 | | `watch-install` | `sandbox-install` |
 |---|---|---|
 | Phantom file detection | Yes | Yes (no host filesystem to write to) |
-| Network exfiltration during install | No | Yes — `--network=none` blocks it |
+| Static script analysis | Yes | Yes (pre-flight scan) |
+| Network exfiltration during install | Detected via script scan | Blocked — `--network=none` |
 | Host process isolation | No | Yes — install never runs on host |
 | Requires Docker | No | Yes |
 
@@ -57,13 +45,13 @@ Additionally, `sandbox-install` requires Docker to be running on the host — wh
 
 ---
 
-### Feature 3 — SBOM-based install verification
+### Feature: SBOM-based install verification
 
 Cross-reference the post-install `node_modules/` tree against the project's CycloneDX SBOM (`greengate sbom`) to detect packages that installed without appearing in the declared dependency graph. Complements `watch-install` for detecting dependency confusion attacks.
 
 ---
 
-### Feature 4 — `scan` improvements
+### Feature: `scan` improvements
 
 - **Python taint tracking** — extend the existing JS/TS taint engine to Python (Flask/Django request sources → SQL/command injection sinks)
 - **Go taint tracking** — similar, targeting `net/http` request sources

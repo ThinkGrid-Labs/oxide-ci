@@ -1,6 +1,6 @@
 ---
-title: 'Output Formats'
-description: 'GreenGate supports SARIF 2.1.0, JSON, JUnit XML, GitLab SAST, and plain text output. Compatible with GitHub Security tab, SonarQube, and all major CI platforms.'
+title: 'Output Formats — GreenGate CLI Reference'
+description: 'GreenGate output formats: SARIF 2.1.0, JSON, JUnit XML, GitLab SAST, and plain text. Upload findings to GitHub Security tab, SonarQube, or any major CI platform.'
 ---
 
 # Output Formats

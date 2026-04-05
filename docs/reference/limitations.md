@@ -1,6 +1,6 @@
 ---
-title: 'Limitations'
-description: 'Known boundaries of GreenGate analysis: language coverage, taint tracking scope, Lighthouse requirements, and what watch-install cannot detect.'
+title: 'Known Limitations — GreenGate'
+description: 'Known boundaries of GreenGate: supported language coverage, taint tracking scope, what the zero-trust supply chain gate cannot detect, and Lighthouse API requirements.'
 ---
 
 # Limitations
