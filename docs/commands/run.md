@@ -3,7 +3,7 @@ title: 'run — Pipeline Executor'
 description: 'Run all quality gate steps defined in .greengate.toml in order. A failing step halts the pipeline immediately with a non-zero exit code.'
 ---
 
-# run
+# run — Pipeline Executor
 
 Runs all pipeline steps defined in `.greengate.toml` in order. A failing step stops the pipeline immediately with a non-zero exit code.
 

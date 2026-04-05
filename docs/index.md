@@ -4,7 +4,7 @@ layout: home
 hero:
   name: GreenGate
   text: Rust DevOps CLI for CI Quality Gates
-  tagline: Supply-chain protection, secret scanning, AST-based SAST, PR review intelligence, Kubernetes linting, coverage gates, and dependency auditing — single zero-dependency binary.
+  tagline: Zero-trust supply chain protection, secret scanning, AST-based SAST, test impact analysis, PR review intelligence, Kubernetes linting, coverage gates, and dependency auditing — single zero-dependency binary.
   actions:
     - theme: brand
       text: Get Started
@@ -17,8 +17,10 @@ hero:
       link: https://github.com/thinkgrid-labs/greengate
 
 features:
-  - title: 🔒 Supply-Chain Protection (NEW)
-    details: "greengate watch-install wraps npm/yarn/pnpm/bun and monitors node_modules/ in real time. Halts the install if a postinstall script drops a binary, executes it, then deletes it — the dropper pattern used in the 2025 axios-ecosystem compromise. Zero new dependencies; 250ms polling loop."
+  - title: 🔒 Zero-Trust Supply Chain Gate
+    details: "greengate watch-install enforces three independent layers: (1) pre-flight static scan of postinstall scripts for network calls, eval(), process.env, and high-entropy obfuscated payloads; (2) 250ms runtime phantom-file detection; (3) post-install exec-drop detection. Catches the full spectrum of supply-chain attacks including the 2025 axios-ecosystem compromise pattern."
+  - title: 🎯 Test Impact Analysis
+    details: "greengate tia uses tree-sitter to parse import statements across your entire test suite and determines exactly which tests are affected by a diff. Pipe output directly into pytest, jest, or go test to run only what matters — cutting CI compute time without sacrificing correctness."
   - title: Zero Runtime Dependencies
     details: Drop a single compiled Rust binary into any CI pipeline, Docker image, or developer machine. No Node, Python, or JVM required.
   - title: AST-Based SAST + Taint Tracking

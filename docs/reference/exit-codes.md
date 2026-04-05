@@ -1,6 +1,6 @@
 ---
-title: 'Exit Codes'
-description: 'GreenGate exit code reference: 0 for clean, 1 for findings or gate failure. Reliable for CI pipeline scripting without output parsing.'
+title: 'Exit Codes — GreenGate CLI Reference'
+description: 'GreenGate exit code reference: exit 0 for clean, exit 1 for findings or gate failure across all commands. Designed for reliable CI pipeline scripting without stdout parsing.'
 ---
 
 # Exit Codes

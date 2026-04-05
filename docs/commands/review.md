@@ -1,6 +1,6 @@
 ---
-title: 'review — PR Diff Analyzer'
-description: 'Analyze a pull request diff for a Complexity Score (estimated review time) and new-code coverage gaps. Post results as GitHub Check Run annotations.'
+title: 'review — PR Complexity & Coverage Gate'
+description: 'Analyze a pull request diff for a Complexity Score (estimated review time) and new-code coverage gaps. Fail CI when newly added lines are untested. Post GitHub Check Run annotations.'
 ---
 
 # review — PR Diff Analyzer

@@ -1,6 +1,6 @@
 ---
-title: 'SAST Rules Reference'
-description: 'All built-in SAST rules for JS, TS, Python, and Go: eval, innerHTML, command injection, SQL injection, dangerous deserialization, and taint-tracked XSS sinks.'
+title: 'SAST Rules Reference — GreenGate'
+description: 'All built-in GreenGate SAST rules for JavaScript, TypeScript, Python, and Go: eval injection, XSS sinks, SQL injection, command injection, dangerous deserialization, and taint-tracked flows.'
 ---
 
 # SAST Rules Reference

@@ -1,6 +1,6 @@
 ---
-title: 'Secret Detection Patterns'
-description: 'All 26 built-in secret detection patterns in GreenGate: AWS, Azure, GCP, Stripe, GitHub, Twilio, Expo, Sentry, Mapbox, and more. Includes Shannon entropy detection.'
+title: 'Secret Detection Patterns — GreenGate'
+description: 'All 26 built-in hardcoded secret and credential patterns in GreenGate: AWS access keys, Azure connection strings, GCP service accounts, Stripe, GitHub PATs, Twilio, and more. Plus Shannon entropy scanning.'
 ---
 
 # Secret Detection Patterns

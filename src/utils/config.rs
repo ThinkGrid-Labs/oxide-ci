@@ -24,6 +24,8 @@ pub struct Config {
     pub review: ReviewConfig,
     #[serde(default)]
     pub supply_chain: SupplyChainConfig,
+    #[serde(default)]
+    pub tia: TiaConfig,
 }
 
 /// Audit settings loaded from `.greengate.toml` under `[audit]`.
@@ -364,6 +366,42 @@ fn default_supply_chain_block_phantom() -> bool {
 }
 fn default_supply_chain_sandbox() -> bool {
     true
+}
+
+// ── TIA config ────────────────────────────────────────────────────────────────
+
+/// Settings for `greengate tia` loaded from `.greengate.toml` under `[tia]`.
+#[derive(Deserialize, Clone)]
+pub struct TiaConfig {
+    /// Glob patterns that identify test files to consider for impact analysis.
+    /// Patterns follow standard glob syntax with `**` for recursive matching.
+    #[serde(default = "default_tia_test_patterns")]
+    pub test_patterns: Vec<String>,
+}
+
+impl Default for TiaConfig {
+    fn default() -> Self {
+        Self {
+            test_patterns: default_tia_test_patterns(),
+        }
+    }
+}
+
+fn default_tia_test_patterns() -> Vec<String> {
+    vec![
+        "**/*.test.ts".to_string(),
+        "**/*.test.tsx".to_string(),
+        "**/*.test.js".to_string(),
+        "**/*.test.jsx".to_string(),
+        "**/*.spec.ts".to_string(),
+        "**/*.spec.tsx".to_string(),
+        "**/*.spec.js".to_string(),
+        "**/*.spec.jsx".to_string(),
+        "**/test_*.py".to_string(),
+        "**/*_test.py".to_string(),
+        "tests/**/*.py".to_string(),
+        "**/*_test.go".to_string(),
+    ]
 }
 
 /// Load `.greengate.toml` from the current directory, falling back to defaults.

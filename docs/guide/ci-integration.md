@@ -1,6 +1,6 @@
 ---
-title: 'CI/CD Integration'
-description: 'Integrate GreenGate into GitHub Actions, GitLab CI, Bitbucket Pipelines, and CircleCI. Full examples for supply-chain protection, secret scanning, coverage gates, and PR review.'
+title: 'CI/CD Integration — GreenGate'
+description: 'Integrate GreenGate into GitHub Actions, GitLab CI, Bitbucket, and CircleCI. Examples for zero-trust supply chain install, test impact analysis, secret scanning, coverage gates, and PR review.'
 ---
 
 # CI/CD Integration
@@ -32,8 +32,8 @@ jobs:
             -o /usr/local/bin/greengate
           chmod +x /usr/local/bin/greengate
 
-      # Replaces plain `npm ci` — halts if a postinstall script drops and deletes a binary
-      - name: Supply-chain safe install
+      # Zero-trust supply chain gate: static script scan + runtime dropper detection
+      - name: Zero-trust supply chain install
         run: greengate watch-install npm ci
 
       - name: Secret, PII & SAST Scan
@@ -43,6 +43,17 @@ jobs:
 
       - name: Dependency Audit (OSV)
         run: greengate audit
+
+      # Test impact analysis — run only tests affected by this PR's diff
+      - name: Test Impact Analysis
+        if: github.event_name == 'pull_request'
+        run: |
+          TESTS=$(greengate tia --base "${{ github.event.pull_request.base.sha }}")
+          if [ -n "$TESTS" ]; then
+            pytest $TESTS
+          else
+            echo "No affected tests — skipping"
+          fi
 
       - name: PR Review (Complexity + Coverage Gaps)
         if: github.event_name == 'pull_request'
