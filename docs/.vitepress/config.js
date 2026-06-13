@@ -1,5 +1,28 @@
 import { defineConfig } from 'vitepress'
 
+// Escape {{ }} in rendered code blocks so Vue's template compiler doesn't
+// try to evaluate GitHub Actions / shell expressions as interpolations.
+function escapeTemplateInterpolations(md) {
+  const escapeOutput = (html) =>
+    html.replace(/\{\{/g, '&#123;&#123;').replace(/\}\}/g, '&#125;&#125;')
+
+  const fence = md.renderer.rules.fence?.bind(md.renderer.rules)
+  md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+    const result = fence
+      ? fence(tokens, idx, options, env, self)
+      : self.renderToken(tokens, idx, options)
+    return escapeOutput(result)
+  }
+
+  const codeInline = md.renderer.rules.code_inline?.bind(md.renderer.rules)
+  md.renderer.rules.code_inline = (tokens, idx, options, env, self) => {
+    const result = codeInline
+      ? codeInline(tokens, idx, options, env, self)
+      : self.renderToken(tokens, idx, options)
+    return escapeOutput(result)
+  }
+}
+
 export default defineConfig({
   title: 'GreenGate',
   description: 'Rust CLI for zero-trust supply chain protection (npm/pip/cargo), secret scanning, AST-based SAST, AI-assisted triage, SBOM attestation, CI config linting, test impact analysis, coverage gates, and OTLP metrics — single zero-dependency binary.',
@@ -22,6 +45,10 @@ export default defineConfig({
     ['link', { rel: 'icon', href: '/greengate/favicon.ico' }],
     ['link', { rel: 'canonical', href: 'https://thinkgrid-labs.github.io/greengate/' }],
   ],
+
+  markdown: {
+    config: escapeTemplateInterpolations,
+  },
 
   themeConfig: {
     logo: null,
