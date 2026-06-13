@@ -23,6 +23,8 @@ features:
     details: "26 built-in secret patterns (AWS, GitHub, Stripe, GCP, Azure, JWT, private keys…) plus Shannon entropy detection for unrecognised credentials. AST-based SAST via tree-sitter for JS, TS, Python, Go, and Rust — no false positives from comments or string literals in other languages."
   - title: 🤖 AI False-Positive Triage
     details: "greengate scan --triage sends each finding to an LLM with surrounding source context and classifies it as likely-real, likely-false-positive, or uncertain. Configurable auto-suppression threshold. Works with Claude, OpenAI, or any local model via Ollama — no data leaves your machine with local models."
+  - title: 🐳 Container Image Scanning
+    details: "greengate image-scan <image> unpacks every OCI layer and runs the full regex + entropy scan on all text files — catching secrets baked in at build time that never appear in the source repo. Finds .env files, credentials in /etc/environment, .ssh/ keys, and TLS certificates. Requires Docker."
   - title: 🛡️ CI Config Security Linting
     details: "greengate ci-lint scans GitHub Actions workflows for pipeline poisoning vectors: unpinned action refs, pull_request_target misuse, expression injection in run steps, and job-level secret leakage. Emits SARIF for Code Scanning."
   - title: 📋 SBOM + Sigstore Attestation

@@ -52,6 +52,7 @@ export default defineConfig({
           { text: '🦀 cargo-add', link: '/commands/cargo-add' },
           { text: 'scan', link: '/commands/scan' },
           { text: 'ci-lint', link: '/commands/ci-lint' },
+          { text: 'image-scan', link: '/commands/image-scan' },
           { text: 'audit', link: '/commands/audit' },
           { text: 'sbom', link: '/commands/sbom' },
         ],

@@ -7,6 +7,7 @@ pub mod coverage;
 pub mod docker_lint;
 pub mod github;
 pub mod hooks;
+pub mod image_scan;
 pub mod init;
 pub mod k8s_lint;
 pub mod perf_lighthouse;

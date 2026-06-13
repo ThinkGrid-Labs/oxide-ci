@@ -222,6 +222,20 @@ enum Commands {
         #[arg(long)]
         no_fail: bool,
     },
+    /// Scan a Docker/OCI container image for secrets and credentials baked into
+    /// image layers. Requires Docker to be running. Pulls the image if not cached locally.
+    /// Example: greengate image-scan nginx:latest
+    ImageScan {
+        /// Image reference to scan (e.g. nginx:latest, ghcr.io/org/app:sha-abc123)
+        #[arg(value_name = "IMAGE")]
+        image: String,
+        /// Output format: text (default), json, sarif, junit, gitlab
+        #[arg(long, default_value = "text")]
+        format: String,
+        /// Report findings but do not exit non-zero
+        #[arg(long)]
+        no_fail: bool,
+    },
     /// Determines which test files are affected by changed source files using
     /// AST-based import analysis. Output is newline-separated by default so it
     /// can be piped directly into a test runner:
@@ -557,6 +571,25 @@ fn main() -> anyhow::Result<()> {
                 args,
                 no_fail,
                 allow_crates: cfg.supply_chain.allow_cargo_crates,
+            })?;
+        }
+        Commands::ImageScan {
+            image,
+            format,
+            no_fail,
+        } => {
+            let output_format = match format.as_str() {
+                "json" => OutputFormat::Json,
+                "sarif" => OutputFormat::Sarif,
+                "junit" => OutputFormat::Junit,
+                "gitlab" => OutputFormat::Gitlab,
+                _ => OutputFormat::Text,
+            };
+            modules::image_scan::run_image_scan(modules::image_scan::ImageScanOpts {
+                image,
+                format: output_format,
+                no_fail,
+                scan_cfg: &cfg.scan,
             })?;
         }
         Commands::WatchInstall {

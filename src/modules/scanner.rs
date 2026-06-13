@@ -1076,6 +1076,59 @@ pub fn collect_findings(opts: &ScanOpts) -> Result<Vec<Finding>> {
     Ok(all_findings)
 }
 
+// ── Image-scan helpers (public re-exports for image_scan module) ──────────────
+
+/// Compile built-in + extra patterns without a full ScanOpts.
+/// Used by `image_scan` to reuse the same pattern set.
+pub fn compile_patterns_for_scan(cfg: &ScanConfig) -> Result<Vec<(String, Regex)>> {
+    let mut patterns: Vec<(String, Regex)> = BUILTIN_PATTERNS
+        .iter()
+        .map(|(name, pat)| {
+            Regex::new(pat)
+                .with_context(|| format!("Invalid built-in pattern for '{}'", name))
+                .map(|re| (name.to_string(), re))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    for ep in &cfg.extra_patterns {
+        let re = Regex::new(&ep.regex)
+            .with_context(|| format!("Invalid extra_pattern regex for '{}'", ep.name))?;
+        patterns.push((ep.name.clone(), re));
+    }
+    Ok(patterns)
+}
+
+/// Scan a raw text string against pre-compiled patterns + entropy rules.
+/// `path_label` is used as the `path` field on returned `Finding`s.
+pub fn scan_text_content(
+    path_label: &std::path::Path,
+    content: &str,
+    patterns: &[(String, Regex)],
+    cfg: &ScanConfig,
+) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for (line_no, line) in content.lines().enumerate() {
+        for (name, regex) in patterns {
+            if regex.is_match(line) {
+                findings.push(make_finding(
+                    path_label.to_path_buf(),
+                    name.clone(),
+                    line_no + 1,
+                    None,
+                ));
+            }
+        }
+        for rule_id in check_entropy(line, cfg) {
+            findings.push(make_finding(
+                path_label.to_path_buf(),
+                rule_id,
+                line_no + 1,
+                None,
+            ));
+        }
+    }
+    findings
+}
+
 pub fn run_scan(opts: ScanOpts) -> Result<()> {
     let is_text = matches!(opts.format, OutputFormat::Text);
     if is_text {

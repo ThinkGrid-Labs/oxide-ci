@@ -29,6 +29,7 @@ No Node. No Python. No JVM. No Docker. Just copy the binary and run.
 - [Suppressing false positives](#suppressing-false-positives)
 - [AI triage](#ai-triage)
 - [SBOM attestation](#sbom-attestation)
+- [Container image scanning](#container-image-scanning)
 - [GitHub Actions](#github-actions)
 - [Configuration](#configuration)
 - [Documentation](#documentation)
@@ -97,6 +98,7 @@ Commands are grouped by concern. Each runs standalone or as a step in `greengate
 | Command | What it does |
 |---|---|
 | `greengate ci-lint` | Lint GitHub Actions workflow files for security misconfigurations: unpinned action refs (`actions/checkout@v4` instead of a commit SHA), `pull_request_target` + PR checkout (script injection), expression injection in `run:` steps, and secrets leaked via environment variables. Emits SARIF for Code Scanning. |
+| `greengate image-scan <image>` | Scan a Docker/OCI image for secrets baked into its layers. Calls `docker save`, unpacks every layer tar, and runs the full regex + entropy scan on all text files — including `.env`, `/etc/environment`, `.ssh/`, `.pem`, and `docker-compose` files. Findings include layer digest and path inside the layer. |
 | `greengate lint` | Kubernetes manifest linting — validates resource limits, security contexts, `latest` image tags, and missing probes. |
 | `greengate docker-lint` | Dockerfile best-practice checks — `latest` base images, running as root, missing `HEALTHCHECK`, `ADD` instead of `COPY`, etc. |
 | `greengate lighthouse` | Gate on Google PageSpeed Insights scores (Performance, Accessibility, Best Practices, SEO). |
@@ -265,6 +267,10 @@ greengate sbom --attest --output sbom.json
 
 # Verify a SBOM against its cosign bundle
 greengate sbom --verify sbom.json --bundle sbom.json.bundle.json
+
+# Scan a Docker image for secrets baked into its layers (requires Docker)
+greengate image-scan nginx:latest
+greengate image-scan ghcr.io/my-org/my-app:sha-abc123
 
 # Run all configured gates in order
 greengate run
@@ -556,6 +562,70 @@ greengate_command_success == 0
 # Slowest commands
 topk(5, greengate_command_duration_ms)
 ```
+
+---
+
+## Container image scanning
+
+Most applications ship as Docker images. Secrets baked in at build time — via `COPY .env /app/`, `ARG` values written to config files, or leaked into the shell environment — don't appear in your source repo but live in every deployed container. `greengate image-scan` catches them.
+
+### How it works
+
+1. **`docker save <image> -o image.tar`** — exports the full image to a local tar archive. The image is pulled from the registry if not already cached.
+2. **Unpack the outer tar** — extracts the OCI manifest and layer archives.
+3. **Unpack each layer** — extracts every `layer.tar` individually. OCI images contain one tar per filesystem layer.
+4. **Scan all text files** — runs the same 26 secret patterns and Shannon entropy scan used by `greengate scan` on every text file in every layer.
+5. **Deduplicate** — files that are unchanged across layers (a common OCI pattern) are reported only once.
+
+Findings are reported as `<image>::layer:<digest>::<path>`, e.g.:
+
+```
+nginx:latest::layer:a1b2c3d4e5f6::etc/environment:3  HIGH  AWS_ACCESS_KEY_ID
+```
+
+### Sensitive path promotion
+
+Files in sensitive locations have their severity automatically promoted one level (medium → high) to surface credentials that are more likely to be exploitable:
+
+| Promoted paths |
+|---|
+| `.env`, `*.env.*` |
+| `.aws/credentials` |
+| `.ssh/` directories |
+| `etc/environment` |
+| `*.pem`, `*.key`, `*.p12`, `*.pfx` |
+| `docker-compose*.yml` |
+
+### Usage
+
+```bash
+# Scan a public image
+greengate image-scan nginx:latest
+
+# Scan a private registry image (must be accessible via `docker pull`)
+greengate image-scan ghcr.io/my-org/my-app:sha-abc123
+
+# Output as JSON (for CI integration)
+greengate image-scan my-app:v1.2.3 --format json
+
+# Report findings but don't fail the build (audit mode)
+greengate image-scan my-app:v1.2.3 --no-fail
+```
+
+### GitHub Actions — scan image before push
+
+```yaml
+- name: Build image
+  run: docker build -t my-app:${{ github.sha }} .
+
+- name: Scan image layers for secrets
+  run: greengate image-scan my-app:${{ github.sha }}
+```
+
+### Requirements
+
+- **Docker** must be running and `docker` must be in `PATH`. `greengate image-scan` will print a helpful error with installation instructions if Docker is not found.
+- The image must be accessible locally (already pulled) or in a registry that the Docker daemon can pull from.
 
 ---
 
