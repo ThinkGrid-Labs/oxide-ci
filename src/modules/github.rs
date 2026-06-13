@@ -86,11 +86,16 @@ fn update_check_run_annotations(
     let annotations: Vec<serde_json::Value> = chunk
         .iter()
         .map(|f| {
+            let level = match f.severity.as_str() {
+                "critical" | "high" => "failure",
+                "medium" => "warning",
+                _ => "notice",
+            };
             serde_json::json!({
                 "path": f.path.to_string_lossy(),
                 "start_line": f.line,
                 "end_line": f.line,
-                "annotation_level": "warning",
+                "annotation_level": level,
                 "title": &f.rule_id,
                 "message": format!("[{}] Potential security issue detected.", f.rule_id),
             })

@@ -46,6 +46,13 @@ enum Commands {
         /// Enrich each finding with git blame info (author + commit)
         #[arg(long)]
         blame: bool,
+        /// Auto-redact detected secrets in-place (replaces matched values with <REDACTED>).
+        /// SAST and structural findings are listed but not modified.
+        #[arg(long)]
+        fix: bool,
+        /// Preview what --fix would change without writing to disk.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Validates Kubernetes YAML manifests for resource limits and security issues
     Lint {
@@ -112,11 +119,15 @@ enum Commands {
         #[arg(long)]
         threshold: Option<f64>,
     },
-    /// Interactive wizard that generates a .greengate.toml config file
+    /// Interactive wizard that generates a .greengate.toml config file.
+    /// Pass --ci github-actions to also scaffold a ready-to-use GitHub Actions workflow.
     Init {
         /// Overwrite an existing .greengate.toml without prompting
         #[arg(long)]
         force: bool,
+        /// Generate CI/CD integration scaffolding. Supported value: github-actions
+        #[arg(long, value_name = "PROVIDER")]
+        ci: Option<String>,
     },
     /// Re-runs scan automatically whenever source files change
     Watch {
@@ -136,6 +147,39 @@ enum Commands {
         /// Write SBOM to a file instead of stdout
         #[arg(short, long)]
         output: Option<String>,
+    },
+    /// Wraps `pip install` with typosquat detection, post-install RECORD scanning,
+    /// and executable-drop detection. Supports all pip install arguments.
+    /// Example: greengate pip-install requests flask==2.3.0
+    PipInstall {
+        /// Arguments forwarded verbatim to pip
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            value_name = "ARGS"
+        )]
+        args: Vec<String>,
+        /// pip / pip3 binary to invoke (default: pip)
+        #[arg(long, default_value = "pip")]
+        pip: String,
+        /// Report findings but do not exit non-zero
+        #[arg(long)]
+        no_fail: bool,
+    },
+    /// Wraps `cargo add` with typosquat detection, build.rs static analysis,
+    /// and transitive-dependency explosion guard.
+    /// Example: greengate cargo-add serde tokio@1.0
+    CargoAdd {
+        /// Arguments forwarded verbatim to `cargo add`
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            value_name = "ARGS"
+        )]
+        args: Vec<String>,
+        /// Report findings but do not exit non-zero
+        #[arg(long)]
+        no_fail: bool,
     },
     /// Wraps a package manager install and monitors for phantom dependencies
     /// (postinstall scripts that drop and delete binaries) and executable drops.
@@ -172,6 +216,15 @@ enum Commands {
         #[arg(long, default_value = "newline")]
         format: String,
     },
+    /// Lints GitHub Actions workflow files for security misconfigurations
+    CiLint {
+        /// Output format: text (default), json, sarif
+        #[arg(long, default_value = "text")]
+        format: String,
+        /// Path to a single workflow file to lint (instead of auto-discovering .github/workflows/)
+        #[arg(long)]
+        file: Option<String>,
+    },
     /// Analyzes a PR diff: outputs a Complexity Score and new-code coverage gaps
     Review {
         /// Diff base ref: commit, branch, or tag (default: HEAD~1)
@@ -200,7 +253,18 @@ enum Commands {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let mut cfg = utils::config::load();
+
+    // Suppress the "Loaded config" info message when emitting structured output
+    // so that JSON/SARIF/JUnit parsers don't see unexpected text on stderr.
+    let silent = matches!(
+        &cli.command,
+        Commands::Scan { format, .. } if matches!(format.as_str(), "json" | "sarif" | "junit" | "gitlab")
+    );
+    let mut cfg = if silent {
+        utils::config::load_silent()
+    } else {
+        utils::config::load()
+    };
 
     // Apply profile overrides on top of the loaded config
     if let Some(ref profile) = cli.profile {
@@ -217,6 +281,8 @@ fn main() -> anyhow::Result<()> {
             update_baseline,
             since_baseline,
             blame,
+            fix,
+            dry_run,
         } => {
             let output_format = match format.as_str() {
                 "json" => OutputFormat::Json,
@@ -244,6 +310,15 @@ fn main() -> anyhow::Result<()> {
             // Enrich with git blame if requested
             if blame {
                 modules::scanner::enrich_with_blame(&mut findings);
+            }
+
+            // --fix / --dry-run: redact secrets in-place before any other output
+            if fix || dry_run {
+                modules::scanner::apply_scan_fixes(&findings, &opts, dry_run)?;
+                // After fixing, re-scan to confirm what remains (or just exit clean)
+                if !dry_run {
+                    return Ok(());
+                }
             }
 
             // Baseline: save mode
@@ -361,8 +436,8 @@ fn main() -> anyhow::Result<()> {
                 threshold: resolved_threshold,
             })?;
         }
-        Commands::Init { force } => {
-            modules::init::run_init(force)?;
+        Commands::Init { force, ci } => {
+            modules::init::run_init(force, ci.as_deref())?;
         }
         Commands::Watch { staged, interval } => {
             modules::watch::run_watch(modules::watch::WatchOpts {
@@ -378,6 +453,21 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Sbom { output } => {
             modules::sbom::run_sbom(output.as_deref())?;
+        }
+        Commands::PipInstall { args, pip, no_fail } => {
+            modules::pip_audit::run_pip_install(modules::pip_audit::PipInstallOpts {
+                pip,
+                args,
+                no_fail,
+                allow_packages: cfg.supply_chain.allow_pip_packages,
+            })?;
+        }
+        Commands::CargoAdd { args, no_fail } => {
+            modules::cargo_audit::run_cargo_add(modules::cargo_audit::CargoAddOpts {
+                args,
+                no_fail,
+                allow_crates: cfg.supply_chain.allow_cargo_crates,
+            })?;
         }
         Commands::WatchInstall {
             package_manager,
@@ -405,6 +495,12 @@ fn main() -> anyhow::Result<()> {
                 },
                 &cfg.tia,
             )?;
+        }
+        Commands::CiLint { format, file } => {
+            modules::ci_lint::run_ci_lint(modules::ci_lint::CiLintOpts {
+                format: &format,
+                file,
+            })?;
         }
         Commands::Review {
             base,

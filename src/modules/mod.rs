@@ -1,6 +1,8 @@
 pub mod audit;
 pub mod baseline;
+pub mod cargo_audit;
 pub mod check_config;
+pub mod ci_lint;
 pub mod coverage;
 pub mod docker_lint;
 pub mod github;
@@ -8,6 +10,7 @@ pub mod hooks;
 pub mod init;
 pub mod k8s_lint;
 pub mod perf_lighthouse;
+pub mod pip_audit;
 pub mod pipeline;
 pub mod pr_review;
 pub mod reassure;

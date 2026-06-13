@@ -349,6 +349,12 @@ pub struct SupplyChainConfig {
     /// as warnings and do not trigger a failure.
     #[serde(default)]
     pub allow_postinstall: Vec<String>,
+    /// PyPI package names exempted from `greengate pip-install` checks.
+    #[serde(default)]
+    pub allow_pip_packages: Vec<String>,
+    /// Cargo crate names exempted from `greengate cargo-add` checks.
+    #[serde(default)]
+    pub allow_cargo_crates: Vec<String>,
 }
 
 impl Default for SupplyChainConfig {
@@ -357,6 +363,8 @@ impl Default for SupplyChainConfig {
             block_phantom_scripts: default_supply_chain_block_phantom(),
             enforce_sandbox: default_supply_chain_sandbox(),
             allow_postinstall: Vec::new(),
+            allow_pip_packages: Vec::new(),
+            allow_cargo_crates: Vec::new(),
         }
     }
 }
@@ -405,13 +413,28 @@ fn default_tia_test_patterns() -> Vec<String> {
 }
 
 /// Load `.greengate.toml` from the current directory, falling back to defaults.
+/// Prints a status message to stderr (suitable for text/interactive output).
+/// Use [`load_silent`] when emitting structured output (JSON, SARIF, JUnit).
 pub fn load() -> Config {
+    load_inner(true)
+}
+
+/// Like [`load`] but suppresses the "Loaded config" info message.
+/// Use this when the caller is emitting machine-readable output so that the
+/// info line does not pollute parsers that capture stderr alongside stdout.
+pub fn load_silent() -> Config {
+    load_inner(false)
+}
+
+fn load_inner(verbose: bool) -> Config {
     let path = std::path::Path::new(".greengate.toml");
     if path.exists() {
         match std::fs::read_to_string(path) {
             Ok(content) => match toml::from_str(&content) {
                 Ok(cfg) => {
-                    eprintln!("ℹ️  Loaded config from .greengate.toml");
+                    if verbose {
+                        eprintln!("ℹ️  Loaded config from .greengate.toml");
+                    }
                     return cfg;
                 }
                 Err(e) => eprintln!("⚠️  Failed to parse .greengate.toml: {}", e),
@@ -434,6 +457,10 @@ pub fn apply_profile(cfg: &mut Config, profile: &str) {
             // Raise coverage threshold to 90 % if not already higher
             if cfg.coverage.min < 90.0 {
                 cfg.coverage.min = 90.0;
+            }
+            // Also tighten the review command's new-code coverage gate
+            if cfg.review.min_new_code_coverage < 90.0 {
+                cfg.review.min_new_code_coverage = 90.0;
             }
             // Lower entropy threshold → more sensitive secret detection
             if cfg.scan.entropy_threshold > 3.5 {

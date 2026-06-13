@@ -140,10 +140,19 @@ pub fn severity_for_rule(rule_id: &str) -> &'static str {
         }
         r if r == "SAST/PythonPickle"
             || r == "SAST/PythonSubprocessShell"
-            || r == "SAST/GoExecCommand" =>
+            || r == "SAST/GoExecCommand"
+            || r == "SAST/RustCommandNew" =>
         {
             "high"
         }
+        "SAST/RustUnsafeBlock" => "medium",
+        r if r == "SAST/RustUnwrap" || r == "SAST/RustExpect" => "low",
+        r if r.starts_with("CI/ExpressionInjection")
+            || r == "CI/PullRequestTargetWithCheckout" =>
+        {
+            "critical"
+        }
+        r if r.starts_with("CI/") => "medium",
         r if r.starts_with("SAST/") => "high",
         r if r.starts_with("SMELL/") => "low",
 
@@ -206,11 +215,11 @@ pub struct ScanOpts<'a> {
     pub sast_config: &'a SastConfig,
 }
 
-/// Returns true for files handled by the SAST scanner (JS/TS, Python, Go).
+/// Returns true for files handled by the SAST scanner (JS/TS, Python, Go, Rust).
 pub(crate) fn is_sast_file(path: &std::path::Path) -> bool {
     matches!(
         path.extension().and_then(|e| e.to_str()),
-        Some("ts" | "tsx" | "js" | "jsx" | "py" | "go")
+        Some("ts" | "tsx" | "js" | "jsx" | "py" | "go" | "rs")
     )
 }
 
@@ -532,8 +541,22 @@ fn run_regex_scan(
         .flat_map(|path| {
             let mut file_findings: Vec<Finding> = Vec::new();
             if let Ok(content) = fs::read_to_string(path) {
+                let mut suppress_next = false;
                 for (line_no, line) in content.lines().enumerate() {
                     if line.contains("greengate: ignore") {
+                        // A standalone comment line (no other content) suppresses the NEXT
+                        // line. An inline trailing comment suppresses only THIS line.
+                        let is_standalone = line
+                            .trim()
+                            .trim_start_matches("//")
+                            .trim_start_matches('#')
+                            .trim()
+                            .starts_with("greengate: ignore");
+                        suppress_next = is_standalone;
+                        continue;
+                    }
+                    if suppress_next {
+                        suppress_next = false;
                         continue;
                     }
                     for (name, regex) in all_patterns {
@@ -601,6 +624,162 @@ fn sarif_level(severity: &str) -> &'static str {
         "medium" => "warning",
         _ => "note",
     }
+}
+
+// ── Auto-fix: in-place secret redaction ──────────────────────────────────────
+
+/// Redact secrets detected by the scan in the source files.
+///
+/// For each regex-matched finding the pattern is re-run on the flagged line and
+/// the matched substring is replaced with `<REDACTED>`.  High-entropy token
+/// findings are handled by re-running the entropy check and replacing the first
+/// flagged token.  SAST / structural findings cannot be auto-redacted and are
+/// reported as requiring manual attention.
+///
+/// When `dry_run` is true the changes are printed but not written to disk.
+pub fn apply_scan_fixes(findings: &[Finding], opts: &ScanOpts, dry_run: bool) -> Result<()> {
+    use std::collections::HashMap;
+
+    // Recompile patterns so we can match the exact substring to replace.
+    let all_patterns = compile_patterns(opts)?;
+
+    // Only fix filesystem findings — history/commit findings cannot be rewritten.
+    let fixable: Vec<&Finding> = findings
+        .iter()
+        .filter(|f| f.commit.is_none() && !f.path.as_os_str().is_empty())
+        .collect();
+
+    if fixable.is_empty() {
+        terminal::info(
+            "No fixable findings (history findings cannot be auto-redacted; fix them with `git filter-repo`).",
+        );
+        return Ok(());
+    }
+
+    // Group by file path.
+    let mut by_file: HashMap<std::path::PathBuf, Vec<&Finding>> = HashMap::new();
+    for f in &fixable {
+        by_file.entry(f.path.clone()).or_default().push(f);
+    }
+
+    let prefix = if dry_run { "[dry-run] " } else { "" };
+    let mut total_redacted = 0usize;
+    let mut total_skipped = 0usize;
+
+    let mut paths: Vec<std::path::PathBuf> = by_file.keys().cloned().collect();
+    paths.sort();
+
+    eprintln!();
+    for path in &paths {
+        let file_findings = &by_file[path];
+        let content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("  ⚠️  Cannot read {}: {}", path.display(), e);
+                continue;
+            }
+        };
+
+        let mut lines: Vec<String> = content.lines().map(str::to_string).collect();
+        let trailing_newline = content.ends_with('\n');
+        let mut file_redacted = 0usize;
+
+        for f in file_findings.iter() {
+            let idx = f.line.saturating_sub(1);
+            if idx >= lines.len() {
+                continue;
+            }
+
+            let original = lines[idx].clone();
+            let mut redacted = original.clone();
+
+            // Regex findings: find the exact matching pattern and replace the match.
+            for (name, re) in &all_patterns {
+                if *name == f.rule_id {
+                    if let Some(m) = re.find(&redacted) {
+                        redacted = format!(
+                            "{}{}{}",
+                            &redacted[..m.start()],
+                            "<REDACTED>",
+                            &redacted[m.end()..]
+                        );
+                    }
+                    break;
+                }
+            }
+
+            // Entropy findings: re-locate the high-entropy token and replace it.
+            if redacted == original && f.rule_id.contains("High Entropy") {
+                for token in original.split(['=', ':', '"', '\'', ' ', '\t', ',', ';']) {
+                    if token.len() < opts.config.entropy_min_length {
+                        continue;
+                    }
+                    let e = shannon_entropy(token);
+                    let is_flagged = match classify_charset(token) {
+                        CharsetKind::Base64Like => e > opts.config.entropy_threshold,
+                        CharsetKind::HexLike => e > 3.5 && token.len() >= 32,
+                        CharsetKind::Other => false,
+                    };
+                    if is_flagged {
+                        redacted = original.replacen(token, "<REDACTED>", 1);
+                        break;
+                    }
+                }
+            }
+
+            if redacted != original {
+                eprintln!("  {}{}:{}  [{}]", prefix, path.display(), f.line, f.rule_id);
+                eprintln!("    - {}", original.trim_start());
+                eprintln!("    + {}", redacted.trim_start());
+                lines[idx] = redacted;
+                file_redacted += 1;
+                total_redacted += 1;
+            } else if f.rule_id.starts_with("SAST/") || f.rule_id.starts_with("SMELL/") {
+                eprintln!(
+                    "  ⚠️  {}:{} [{}] — requires manual fix (structural/code finding)",
+                    path.display(),
+                    f.line,
+                    f.rule_id
+                );
+                total_skipped += 1;
+            }
+        }
+
+        if !dry_run && file_redacted > 0 {
+            let new_content = lines.join("\n");
+            let final_content = if trailing_newline {
+                format!("{}\n", new_content)
+            } else {
+                new_content
+            };
+            fs::write(path, final_content)?;
+        }
+    }
+
+    eprintln!();
+    if dry_run {
+        terminal::info(&format!(
+            "[dry-run] {} finding(s) would be redacted across {} file(s); {} require manual fixes. \
+             Re-run without --dry-run to apply.",
+            total_redacted,
+            paths.len(),
+            total_skipped,
+        ));
+    } else if total_redacted > 0 {
+        terminal::success(&format!(
+            "{} finding(s) redacted across {} file(s). Run `git diff` to review before committing.",
+            total_redacted,
+            paths.len(),
+        ));
+        if total_skipped > 0 {
+            terminal::warn(&format!(
+                "{} SAST/structural finding(s) still require manual remediation.",
+                total_skipped
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 fn output_sarif(findings: &[Finding]) -> Result<()> {

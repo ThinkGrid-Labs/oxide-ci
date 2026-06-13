@@ -1,6 +1,6 @@
-# GreenGate — Rust DevOps CLI for CI Quality Gates
+# greengate
 
-> A blazing-fast DevOps security CLI built in Rust — zero-trust supply chain protection, test impact analysis, secret scanning, AST-based SAST, PR review intelligence, Kubernetes linting, coverage gates, and dependency auditing — in a single zero-dependency binary.
+**One binary. Zero runtimes. Every security and quality gate your CI pipeline needs.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build](https://img.shields.io/github/actions/workflow/status/thinkgrid-labs/greengate/ci.yml?branch=main)](https://github.com/thinkgrid-labs/greengate/actions)
@@ -8,19 +8,25 @@
 [![Crates.io](https://img.shields.io/crates/v/greengate)](https://crates.io/crates/greengate)
 [![Downloads](https://img.shields.io/crates/d/greengate)](https://crates.io/crates/greengate)
 [![MSRV](https://img.shields.io/badge/MSRV-1.85-orange)](https://www.rust-lang.org)
-[![GitHub Stars](https://img.shields.io/github/stars/thinkgrid-labs/greengate?style=social)](https://github.com/thinkgrid-labs/greengate/stargazers)
 
-**[Documentation](https://thinkgrid-labs.github.io/greengate)** · [Commands](https://thinkgrid-labs.github.io/greengate/commands/watch-install) · [CI Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration) · [Config Reference](https://thinkgrid-labs.github.io/greengate/reference/config)
+**[Docs](https://thinkgrid-labs.github.io/greengate)** · [Config Reference](https://thinkgrid-labs.github.io/greengate/reference/config) · [CI Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration) · [SAST Rules](https://thinkgrid-labs.github.io/greengate/reference/sast-rules)
 
-GreenGate is a single compiled Rust binary that replaces a collection of loosely connected CI security scripts. It intercepts npm/yarn/pnpm/bun installs with a zero-trust supply chain gate, detects hardcoded secrets and PII with 26 built-in patterns, runs AST-based SAST with taint tracking, selects only the tests affected by a diff, and enforces coverage and complexity thresholds — all from one tool with no Node, Python, or JVM runtime required.
+---
+
+Most teams accumulate a different tool for each concern: a secret scanner, a SAST runner, a CVE auditor, a coverage gate, a supply chain monitor, a CI config linter — each with its own runtime, its own config format, and its own way of breaking. greengate replaces all of them with a single compiled Rust binary you drop into any CI pipeline in under 30 seconds.
+
+No Node. No Python. No JVM. No Docker. Just copy the binary and run.
 
 ---
 
 ## Contents
 
+- [Why greengate?](#why-greengate)
 - [What it does](#what-it-does)
+- [Supported languages](#supported-languages)
 - [Installation](#installation)
 - [Quick start](#quick-start)
+- [Suppressing false positives](#suppressing-false-positives)
 - [GitHub Actions](#github-actions)
 - [Configuration](#configuration)
 - [Documentation](#documentation)
@@ -28,23 +34,134 @@ GreenGate is a single compiled Rust binary that replaces a collection of loosely
 
 ---
 
+## Why greengate?
+
+**Security tools are fragmented.** A typical CI pipeline strings together `gitleaks`, `semgrep`, `npm audit`, `trivy`, `opa`, `pylint`, `jest --coverage` — each installed separately, each needing its own version pin, each producing output in a different format. When one of them breaks the build on a Friday you spend an hour figuring out which one.
+
+**greengate is the alternative:** one tool, one config file, one exit code. Every gate — secrets, SAST, supply chain, coverage, complexity, CI config hygiene — runs in a single fast pass.
+
+**Key properties:**
+- **Single static binary** — ships as a single musl-linked executable for Linux, macOS, and Windows. Copy it to `/usr/local/bin` and it works.
+- **AST-accurate SAST** — uses tree-sitter to parse real ASTs instead of fragile regex over source text. No false positives from comments or string literals.
+- **Supply chain aware** — intercepts `npm`, `yarn`, `pnpm`, `bun`, `pip`, and `cargo` installs to detect typosquats, malicious postinstall scripts, and phantom executable drops before they can run.
+- **CI-native output** — emits SARIF, JUnit XML, GitLab SAST JSON, and GitHub Check Run annotations with per-line findings. Plugs into Code Scanning, GitLab Security Dashboard, and SonarQube out of the box.
+- **Zero configuration required** — sensible defaults work on any repo; `.greengate.toml` is optional.
+
+---
+
 ## What it does
 
-| Command | Purpose |
+Commands are grouped by concern. Each runs standalone or as a step in `greengate run`.
+
+### Secrets & Code Security
+
+| Command | What it does |
 |---|---|
-| `greengate watch-install` | **Zero-trust supply chain gate** — 3-layer protection: pre-flight script scan (entropy + network/eval patterns), runtime phantom-file detection, post-install exec-drop detection |
-| `greengate tia` | **Test impact analysis** — AST import parsing determines exactly which tests are affected by a diff; pipe into pytest/jest/go test |
-| `greengate scan` | Secrets, PII & AST-based SAST for JS/TS/Python/Go |
-| `greengate audit` | OSV dependency vulnerability audit (npm, Cargo, PyPI, Go, Maven, NuGet) |
-| `greengate review` | PR Complexity Score + new-code coverage gaps with GitHub Check Run annotations |
-| `greengate lint` | Kubernetes manifest linting |
-| `greengate docker-lint` | Dockerfile best-practice checks |
-| `greengate coverage` | LCOV / Cobertura coverage threshold gate |
-| `greengate lighthouse` | PageSpeed Insights performance gate |
-| `greengate reassure` | React component render regression gate |
-| `greengate sbom` | CycloneDX 1.5 SBOM generation |
-| `greengate run` | Run all quality gates from `.greengate.toml` |
-| `greengate install-hooks` | Install as git pre-commit hook |
+| `greengate scan` | Scan for hardcoded secrets, PII, and SAST issues. 26 built-in secret patterns (AWS keys, GitHub tokens, private keys, JWTs, etc.) plus Shannon entropy detection for unrecognised credentials. AST-based SAST for unsafe patterns in JS/TS/Python/Go/Rust. |
+| `greengate scan --fix` | Auto-redact detected secrets in-place — replaces matched values with `<REDACTED>`. Use `--dry-run` first to preview changes. |
+| `greengate scan --history` | Scan the full git commit history for secrets (catches credentials that were committed then deleted). |
+| `greengate scan --staged` | Scan only staged files — ideal as a pre-commit hook. |
+| `greengate scan --format sarif` | Emit SARIF 2.1.0 for GitHub Code Scanning / SonarQube upload. Also supports `json`, `junit`, `gitlab`. |
+
+### Supply Chain Protection
+
+| Command | What it does |
+|---|---|
+| `greengate watch-install <pm> <args>` | Wrap any npm/yarn/pnpm/bun install. Three layers: pre-flight lifecycle script scan (entropy + network/eval patterns), runtime phantom-file detection (files created then deleted by postinstall), post-install exec-drop detection. |
+| `greengate pip-install <args>` | Wrap `pip install`. Typosquat detection against the 60 most-downloaded PyPI packages, post-install `.dist-info/RECORD` Python source scan, executable-drop detection. Halts before pip runs if a typosquat is found. |
+| `greengate cargo-add <args>` | Wrap `cargo add`. Typosquat detection against the 60 most-downloaded crates.io crates, `build.rs` static analysis for every newly added crate (network access, subprocess spawning, env exfiltration), transitive dependency explosion guard (> 50 new transitive deps triggers a warning). |
+
+### Dependencies
+
+| Command | What it does |
+|---|---|
+| `greengate audit` | Query the [OSV database](https://osv.dev) for known vulnerabilities in your project's dependencies. Supports `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, `requirements.txt`, `go.sum`, `pom.xml`, and `*.csproj`. |
+| `greengate sbom` | Generate a [CycloneDX 1.5](https://cyclonedx.org) SBOM from the project's lock file. |
+
+### Code Quality & Review
+
+| Command | What it does |
+|---|---|
+| `greengate review` | Analyse a PR diff: Complexity Score (cyclomatic + cognitive) and new-code coverage gaps. Posts a GitHub Check Run with per-line annotations. Fails if complexity exceeds `complexity_budget` or new code coverage falls below `min_new_code_coverage`. |
+| `greengate coverage` | Parse LCOV or Cobertura XML and fail if total coverage is below a configurable threshold. |
+| `greengate tia` | Test Impact Analysis — use AST import parsing to determine exactly which test files are affected by a diff. Pipe the output directly into pytest, jest, or go test to skip unaffected tests. |
+| `greengate reassure` | Parse a [Reassure](https://github.com/callstack/reassure) performance report and fail if any React component's mean render time regresses beyond a threshold. |
+
+### Infrastructure & CI
+
+| Command | What it does |
+|---|---|
+| `greengate ci-lint` | Lint GitHub Actions workflow files for security misconfigurations: unpinned action refs (`actions/checkout@v4` instead of a commit SHA), `pull_request_target` + PR checkout (script injection), expression injection in `run:` steps, and secrets leaked via environment variables. Emits SARIF for Code Scanning. |
+| `greengate lint` | Kubernetes manifest linting — validates resource limits, security contexts, `latest` image tags, and missing probes. |
+| `greengate docker-lint` | Dockerfile best-practice checks — `latest` base images, running as root, missing `HEALTHCHECK`, `ADD` instead of `COPY`, etc. |
+| `greengate lighthouse` | Gate on Google PageSpeed Insights scores (Performance, Accessibility, Best Practices, SEO). |
+
+### Workflow
+
+| Command | What it does |
+|---|---|
+| `greengate run` | Run all pipeline steps defined in `[pipeline]` of `.greengate.toml` in order. One command to run every gate. |
+| `greengate init` | Interactive wizard that generates `.greengate.toml`. Pass `--ci github-actions` to also scaffold a ready-to-use workflow and `dependabot.yml`. |
+| `greengate install-hooks` | Install greengate as a git pre-commit hook (runs `scan --staged` on every commit). |
+| `greengate watch` | Re-run `scan` automatically whenever source files change (file-watcher mode for local development). |
+| `greengate check-config` | Validate `.greengate.toml` and print all resolved configuration values. |
+
+---
+
+## Supported languages
+
+### Secret scanning
+
+Secret scanning uses regex patterns and Shannon entropy — it is **language-agnostic** and runs on any file type, including config files, `.env` files, shell scripts, and binary-adjacent formats.
+
+### SAST (AST-based)
+
+SAST uses [tree-sitter](https://tree-sitter.github.io/tree-sitter/) to parse a real AST, so findings are accurate even when the pattern appears inside a comment or a string in another language.
+
+| Language | File extensions | SAST rules |
+|---|---|---|
+| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs` | `eval()`, `innerHTML`, `dangerouslySetInnerHTML`, `document.write`, `setTimeout(string)`, `child_process.exec` |
+| TypeScript | `.ts`, `.tsx` | Same as JavaScript |
+| Python | `.py` | `exec()`, `eval()`, `subprocess` with shell=True, `pickle.loads`, `yaml.load` (unsafe), `os.system` |
+| Go | `.go` | `os/exec` command injection, `fmt.Sprintf` in SQL, `http.ListenAndServe` without TLS |
+| Rust | `.rs` | `unsafe {}` blocks, `std::process::Command`, `.unwrap()` and `.expect()` in library code |
+
+### Test Impact Analysis
+
+TIA walks the import graph using AST parsing to find which test files transitively import a changed source file.
+
+| Language | Import resolution |
+|---|---|
+| JavaScript / TypeScript | `import` / `require` (relative paths, bare specifiers) |
+| Python | `import` / `from … import` |
+| Go | `import "…"` (full package path) |
+
+### Dependency audit (OSV)
+
+| Ecosystem | Lock file |
+|---|---|
+| Node.js (npm) | `package-lock.json` |
+| Node.js (Yarn) | `yarn.lock` |
+| Node.js (pnpm) | `pnpm-lock.yaml` |
+| Rust | `Cargo.lock` |
+| Python | `requirements.txt` |
+| Go | `go.sum` |
+| Java (Maven) | `pom.xml` |
+| .NET | `*.csproj` |
+
+### Supply chain wrapping
+
+| Package manager | Command | Typosquat detection | Script scanning | Exec-drop detection |
+|---|---|---|---|---|
+| npm / yarn / pnpm / bun | `greengate watch-install` | — | postinstall scripts | |
+| pip | `greengate pip-install` | 60 popular PyPI packages | `.py` files via RECORD | venv `bin/` |
+| Cargo | `greengate cargo-add` | 60 popular crates.io crates | `build.rs` | — |
+
+### CI config linting
+
+| Platform | File pattern |
+|---|---|
+| GitHub Actions | `.github/workflows/*.yml` |
 
 ---
 
@@ -52,25 +169,26 @@ GreenGate is a single compiled Rust binary that replaces a collection of loosely
 
 **macOS (Apple Silicon):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-macos-arm64 \
+curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-aarch64-apple-darwin \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **macOS (Intel):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-macos-amd64 \
+curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-x86_64-apple-darwin \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
-**Linux (x64):**
+**Linux (x64, musl — works in Alpine/Docker):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-x86_64-unknown-linux-musl \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Windows (x64) — PowerShell:**
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-windows-amd64.exe" `
+Invoke-WebRequest `
+  -Uri "https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-x86_64-pc-windows-msvc.exe" `
   -OutFile "$env:USERPROFILE\.local\bin\greengate.exe"
 ```
 
@@ -84,111 +202,221 @@ cargo install --git https://github.com/thinkgrid-labs/greengate
 ## Quick start
 
 ```bash
-# Zero-trust supply chain gate — static script scan + runtime dropper detection
-greengate watch-install npm ci
+# Generate a .greengate.toml and a GitHub Actions workflow in one step
+greengate init --ci github-actions
 
-# Scan for hardcoded secrets, PII, and SAST issues
+# Scan the current directory for secrets, PII, and SAST issues
 greengate scan
 
-# Audit dependencies for known CVEs (OSV database)
+# Preview what --fix would change (no files written)
+greengate scan --dry-run
+
+# Auto-redact detected secrets in-place
+greengate scan --fix
+
+# Audit dependencies for known CVEs (reads any supported lock file)
 greengate audit
 
-# Test impact analysis — run only tests affected by changes since main
+# Zero-trust npm install (static scan + runtime phantom-file watcher)
+greengate watch-install npm ci
+
+# Zero-trust pip install with typosquat detection
+greengate pip-install -r requirements.txt
+
+# Zero-trust cargo add with build.rs analysis
+greengate cargo-add serde tokio
+
+# Lint GitHub Actions workflows for security misconfigurations
+greengate ci-lint
+
+# Test impact analysis — run only affected tests
 pytest $(greengate tia --base main)
+npx jest $(greengate tia --base main --format newline)
 
-# Analyze a PR: complexity score + new-code coverage gaps
-greengate review --base main --coverage-file coverage/lcov.info
+# PR complexity score + coverage gaps (posts GitHub Check Run annotations)
+greengate review --base main --coverage-file coverage/lcov.info --annotate
 
-# Enforce 80% minimum coverage
+# Gate on 80% minimum coverage
 greengate coverage --file coverage/lcov.info --min 80
 
 # Lint Kubernetes manifests
 greengate lint --dir ./k8s
 
+# Generate a CycloneDX SBOM
+greengate sbom --output sbom.json
+
+# Run all configured gates in order
+greengate run
+
 # Install as a git pre-commit hook
 greengate install-hooks
+```
 
-# Run all gates from config
-greengate run
+---
+
+## Suppressing false positives
+
+### Inline suppression
+
+Add `// greengate: ignore` on the same line as a finding to suppress it:
+
+```javascript
+const TEST_KEY = "AKIAIOSFODNN7EXAMPLE"; // greengate: ignore
+```
+
+### Next-line suppression
+
+Put the comment on the line above to suppress the next line:
+
+```python
+# greengate: ignore
+AWS_KEY = load_from_env("AWS_ACCESS_KEY_ID")
+```
+
+### Auto-redact
+
+Use `--fix` to replace detected secrets with `<REDACTED>` in-place. Preview first with `--dry-run`:
+
+```bash
+greengate scan --dry-run   # preview changes
+greengate scan --fix       # apply redactions
+git diff                   # review before committing
+```
+
+### Baseline
+
+Save current findings as an accepted baseline and only fail on *new* findings:
+
+```bash
+greengate scan --update-baseline   # save current state
+greengate scan --since-baseline    # fail only on new findings
 ```
 
 ---
 
 ## GitHub Actions
 
+The fastest setup: `greengate init --ci github-actions` writes a ready-to-use workflow. Or wire it in manually:
+
 ```yaml
-- name: Install GreenGate
-  run: |
-    curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
-      -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
+name: greengate
 
-# Zero-trust supply chain gate — static script scan + runtime dropper detection
-- name: Zero-trust supply chain install
-  run: greengate watch-install npm ci
+on: [push, pull_request]
 
-- name: Secret, PII & SAST scan
-  run: greengate scan --annotate
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+permissions:
+  contents: read
+  checks: write
+  security-events: write
 
-- name: Dependency audit (OSV)
-  run: greengate audit
+jobs:
+  greengate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-- name: Test impact analysis
-  if: github.event_name == 'pull_request'
-  run: |
-    TESTS=$(greengate tia --base "${{ github.event.pull_request.base.sha }}")
-    if [ -n "$TESTS" ]; then pytest $TESTS; fi
+      - name: Install greengate
+        run: |
+          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-x86_64-unknown-linux-musl \
+            -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
-- name: PR review (complexity + coverage gaps)
-  if: github.event_name == 'pull_request'
-  run: |
-    greengate review \
-      --base "${{ github.event.pull_request.base.sha }}" \
-      --coverage-file coverage/lcov.info \
-      --min-coverage 80 \
-      --annotate
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    GITHUB_REPOSITORY: ${{ github.repository }}
-    GITHUB_SHA: ${{ github.sha }}
+      # Scan for secrets/SAST and upload results to GitHub Code Scanning
+      - name: Scan (SARIF)
+        run: greengate scan --format sarif > greengate.sarif || true
 
-- name: Coverage gate
-  run: greengate coverage --file coverage/lcov.info --min 80
+      - name: Upload to Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: greengate.sarif
+
+      # Lint CI workflows for security misconfigurations
+      - name: CI lint
+        run: greengate ci-lint
+
+      # Zero-trust install — catches supply chain attacks at install time
+      - name: Zero-trust install
+        run: greengate watch-install npm ci
+
+      # Dependency CVE audit
+      - name: Audit
+        run: greengate audit
+
+      # Coverage gate
+      - name: Coverage
+        run: greengate coverage --file coverage/lcov.info --min 80
+
+      # PR complexity + coverage gaps (pull_request only)
+      - name: Review
+        if: github.event_name == 'pull_request'
+        run: |
+          greengate review \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --coverage-file coverage/lcov.info \
+            --annotate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
 ```
 
-> See [CI/CD Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration) for full GitHub Actions, GitLab CI, Bitbucket, and CircleCI examples.
+Or use the **composite action** (zero download boilerplate):
+
+```yaml
+- uses: ThinkGrid-Labs/greengate@v0
+  with:
+    profile: ci
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+> See [CI/CD Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration) for GitLab CI, Bitbucket Pipelines, and CircleCI examples.
 
 ---
 
 ## Configuration
 
-Create `.greengate.toml` in your repo root. All fields are optional:
+Run `greengate init` for an interactive wizard, or create `.greengate.toml` manually. Every field is optional — greengate works with zero config.
 
 ```toml
+[scan]
+entropy             = true
+entropy_threshold   = 4.5          # higher = fewer false positives
+exclude_patterns    = ["tests/**", "*.test.ts", "fixtures/**"]
+
+[sast]
+enabled = true
+
 [supply_chain]
 block_phantom_scripts = true
 enforce_sandbox       = true
-allow_postinstall     = ["esbuild", "prisma", "@swc/core"]
-
-[tia]
-test_patterns = ["**/*.test.ts", "**/*.test.js", "**/test_*.py", "**/*_test.go"]
-
-[scan]
-exclude_patterns = ["tests/**", "*.test.ts", "vendor/**"]
-entropy = true
-entropy_threshold = 4.5
+allow_postinstall     = ["esbuild", "prisma", "@swc/core"]  # npm
+allow_pip_packages    = ["grpcio"]                           # pip
+allow_cargo_crates    = ["openssl"]                          # cargo
 
 [coverage]
 file = "coverage/lcov.info"
-min = 80.0
+min  = 80.0
 
 [review]
-min_new_code_coverage = 80
-complexity_budget = 0   # 0 = warn only; > 0 = hard fail threshold
+min_new_code_coverage = 80    # new lines must be covered at this % (PR gate)
+complexity_budget     = 0     # 0 = warn only; > 0 = hard fail threshold
+
+[tia]
+test_patterns = [
+  "**/*.test.ts",
+  "**/*.test.js",
+  "**/test_*.py",
+  "**/*_test.go",
+]
 
 [pipeline]
-steps = ["scan", "review --base main --coverage-file coverage/lcov.info", "coverage", "audit"]
+steps = [
+  "scan",
+  "ci-lint",
+  "audit",
+  "coverage",
+  "review --base main --coverage-file coverage/lcov.info",
+]
 ```
 
 Full reference → [Configuration Reference](https://thinkgrid-labs.github.io/greengate/reference/config)
@@ -197,22 +425,24 @@ Full reference → [Configuration Reference](https://thinkgrid-labs.github.io/gr
 
 ## Documentation
 
-Full guides, command references, and CI examples live in the **[docs site](https://thinkgrid-labs.github.io/greengate)**:
-
 - [Getting Started](https://thinkgrid-labs.github.io/greengate/guide/getting-started)
 - [CI/CD Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration)
-- [Use Cases](https://thinkgrid-labs.github.io/greengate/guide/use-cases)
-- **Commands:** [watch-install](https://thinkgrid-labs.github.io/greengate/commands/watch-install) · [tia](https://thinkgrid-labs.github.io/greengate/commands/tia) · [scan](https://thinkgrid-labs.github.io/greengate/commands/scan) · [audit](https://thinkgrid-labs.github.io/greengate/commands/audit) · [review](https://thinkgrid-labs.github.io/greengate/commands/review) · [coverage](https://thinkgrid-labs.github.io/greengate/commands/coverage) · [lint](https://thinkgrid-labs.github.io/greengate/commands/lint) · [docker-lint](https://thinkgrid-labs.github.io/greengate/commands/docker-lint) · [lighthouse](https://thinkgrid-labs.github.io/greengate/commands/lighthouse) · [reassure](https://thinkgrid-labs.github.io/greengate/commands/reassure) · [sbom](https://thinkgrid-labs.github.io/greengate/commands/sbom) · [run](https://thinkgrid-labs.github.io/greengate/commands/run)
-- **Reference:** [Config](https://thinkgrid-labs.github.io/greengate/reference/config) · [Secret Patterns](https://thinkgrid-labs.github.io/greengate/reference/secret-patterns) · [SAST Rules](https://thinkgrid-labs.github.io/greengate/reference/sast-rules) · [Output Formats](https://thinkgrid-labs.github.io/greengate/reference/output-formats) · [Exit Codes](https://thinkgrid-labs.github.io/greengate/reference/exit-codes) · [Roadmap](https://thinkgrid-labs.github.io/greengate/reference/roadmap)
+- [Secret Patterns](https://thinkgrid-labs.github.io/greengate/reference/secret-patterns)
+- [SAST Rules](https://thinkgrid-labs.github.io/greengate/reference/sast-rules)
+- [Output Formats](https://thinkgrid-labs.github.io/greengate/reference/output-formats) — SARIF, JUnit, GitLab, JSON
+- [Exit Codes](https://thinkgrid-labs.github.io/greengate/reference/exit-codes)
+- [Roadmap](https://thinkgrid-labs.github.io/greengate/reference/roadmap)
 
 ---
 
 ## Contributing
 
-GreenGate is open source under the [MIT License](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) for details on adding secret patterns, SAST rules, and running tests.
+greengate is open source under the [MIT License](LICENSE). Contributions welcome — especially new secret patterns, SAST rules, and CI platform support.
 
 ```bash
-cargo test          # unit + integration tests
+cargo test          # 72 unit + integration tests
 cargo clippy        # lint
 cargo fmt --check   # formatting
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add patterns, SAST rules, and run the full test suite.

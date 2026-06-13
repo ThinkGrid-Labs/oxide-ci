@@ -179,9 +179,39 @@ fn dispatch(command: &str, args: &[&str], cfg: &config::Config) -> Result<()> {
             })
         }
 
+        "tia" => {
+            let base = flag_value(args, "--base").unwrap_or("HEAD~1").to_string();
+            let staged = args.contains(&"--staged");
+            let format = flag_value(args, "--format")
+                .unwrap_or("newline")
+                .to_string();
+            crate::modules::tia::run_tia(
+                crate::modules::tia::TiaOpts {
+                    base,
+                    staged,
+                    format,
+                },
+                &cfg.tia,
+            )
+        }
+
+        "sbom" => {
+            let output = flag_value(args, "--output").map(str::to_string);
+            crate::modules::sbom::run_sbom(output.as_deref())
+        }
+
+        "ci-lint" => {
+            let format = flag_value(args, "--format").unwrap_or("text");
+            let file = flag_value(args, "--file").map(str::to_string);
+            crate::modules::ci_lint::run_ci_lint(crate::modules::ci_lint::CiLintOpts {
+                format,
+                file,
+            })
+        }
+
         other => {
             anyhow::bail!(
-                "Unknown pipeline step '{}'. Valid steps: scan, lint, docker-lint, coverage, audit, lighthouse, reassure, review",
+                "Unknown pipeline step '{}'. Valid steps: scan, lint, docker-lint, coverage, audit, lighthouse, reassure, review, tia, sbom, ci-lint",
                 other
             )
         }
