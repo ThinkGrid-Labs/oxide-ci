@@ -129,7 +129,7 @@ context_lines           = 10
 # endpoint = "http://localhost:11434/v1/chat/completions"  # Ollama / any OpenAI-compat
 ```
 
-See [AI Triage reference](/reference/triage) for full configuration and local model setup.
+See the [triage configuration](/reference/config#triage) section for full options and local model setup.
 
 ## AST-based SAST
 

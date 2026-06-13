@@ -75,7 +75,7 @@ Emitted after every command (`coverage`, `audit`, `ci-lint`, etc.):
 
 ## Example Grafana queries
 
-```promql
+```txt
 # Finding rate over the last 7 days
 rate(greengate_scan_findings_total{severity="high"}[7d])
 
