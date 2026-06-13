@@ -142,11 +142,28 @@ enum Commands {
     Run,
     /// Validates .greengate.toml and prints all resolved configuration values
     CheckConfig,
-    /// Generates a CycloneDX 1.5 SBOM from the project's lock file
+    /// Generates a CycloneDX 1.5 SBOM from the project's lock file.
+    /// Use --attest to sign with Sigstore keyless signing (requires cosign in PATH).
+    /// Use --verify to check an existing SBOM against a cosign bundle.
     Sbom {
-        /// Write SBOM to a file instead of stdout
+        /// Write SBOM to a file instead of stdout (default when --attest is set: sbom.json)
         #[arg(short, long)]
         output: Option<String>,
+        /// Sign the generated SBOM with Sigstore keyless signing via cosign
+        #[arg(long, conflicts_with = "verify")]
+        attest: bool,
+        /// Path for the cosign bundle file (default: <output>.bundle.json)
+        #[arg(long, value_name = "FILE")]
+        bundle: Option<String>,
+        /// Verify an existing SBOM against a cosign bundle instead of generating one
+        #[arg(long, value_name = "SBOM_FILE", conflicts_with = "attest")]
+        verify: Option<String>,
+        /// Expected OIDC issuer for --verify, e.g. https://token.actions.githubusercontent.com
+        #[arg(long, value_name = "ISSUER")]
+        certificate_oidc_issuer: Option<String>,
+        /// Expected signer identity for --verify (exact match)
+        #[arg(long, value_name = "IDENTITY")]
+        certificate_identity: Option<String>,
     },
     /// Wraps `pip install` with typosquat detection, post-install RECORD scanning,
     /// and executable-drop detection. Supports all pip install arguments.
@@ -478,8 +495,34 @@ fn main() -> anyhow::Result<()> {
         Commands::CheckConfig => {
             modules::check_config::run_check_config()?;
         }
-        Commands::Sbom { output } => {
-            modules::sbom::run_sbom(output.as_deref())?;
+        Commands::Sbom {
+            output,
+            attest,
+            bundle,
+            verify,
+            certificate_oidc_issuer,
+            certificate_identity,
+        } => {
+            if let Some(sbom_file) = verify {
+                // Verify mode: check existing SBOM against a bundle.
+                let bundle_path = bundle.unwrap_or_else(|| format!("{}.bundle.json", sbom_file));
+                // Fall back to config-level identity constraints if not supplied on CLI.
+                let issuer = certificate_oidc_issuer
+                    .as_deref()
+                    .or(cfg.sbom.expected_issuer.as_deref());
+                let identity = certificate_identity
+                    .as_deref()
+                    .or(cfg.sbom.expected_identity.as_deref());
+                modules::sbom::run_sbom_verify(&sbom_file, &bundle_path, issuer, identity)?;
+            } else if attest {
+                // Attest mode: generate SBOM then sign it.
+                let sbom_out = output.unwrap_or_else(|| cfg.sbom.default_output.clone());
+                let bundle_out = bundle.unwrap_or_else(|| format!("{}.bundle.json", sbom_out));
+                modules::sbom::run_sbom(Some(&sbom_out))?;
+                modules::sbom::run_sbom_attest(&sbom_out, &bundle_out)?;
+            } else {
+                modules::sbom::run_sbom(output.as_deref())?;
+            }
         }
         Commands::PipInstall { args, pip, no_fail } => {
             modules::pip_audit::run_pip_install(modules::pip_audit::PipInstallOpts {

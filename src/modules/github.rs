@@ -283,7 +283,7 @@ mod tests {
             match &self.prev {
                 // SAFETY: single-threaded test context — restoring env on drop
                 Some(v) => unsafe { std::env::set_var(self.key, v) }, // greengate: ignore
-                None => unsafe { std::env::remove_var(self.key) }, // greengate: ignore
+                None => unsafe { std::env::remove_var(self.key) },    // greengate: ignore
             }
         }
     }

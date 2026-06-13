@@ -28,6 +28,8 @@ pub struct Config {
     pub tia: TiaConfig,
     #[serde(default)]
     pub telemetry: TelemetryConfig,
+    #[serde(default)]
+    pub sbom: SbomConfig,
 }
 
 /// Audit settings loaded from `.greengate.toml` under `[audit]`.
@@ -455,6 +457,39 @@ fn default_telemetry_enabled() -> bool {
 
 fn default_telemetry_service_name() -> String {
     "greengate".to_string()
+}
+
+// ── SBOM config ───────────────────────────────────────────────────────────────
+
+/// Settings for `greengate sbom` loaded from `.greengate.toml` under `[sbom]`.
+#[derive(Deserialize, Clone)]
+pub struct SbomConfig {
+    /// Default output path for generated SBOMs (default: "sbom.json").
+    #[serde(default = "default_sbom_output")]
+    pub default_output: String,
+    /// Expected OIDC issuer when verifying attestations, e.g.
+    /// "https://token.actions.githubusercontent.com". Leave empty to accept any.
+    #[serde(default)]
+    pub expected_issuer: Option<String>,
+    /// Expected signer identity when verifying attestations, e.g.
+    /// "https://github.com/acme/repo/.github/workflows/release.yml@refs/heads/main".
+    /// Leave empty to accept any. Treated as an exact match.
+    #[serde(default)]
+    pub expected_identity: Option<String>,
+}
+
+impl Default for SbomConfig {
+    fn default() -> Self {
+        Self {
+            default_output: default_sbom_output(),
+            expected_issuer: None,
+            expected_identity: None,
+        }
+    }
+}
+
+fn default_sbom_output() -> String {
+    "sbom.json".to_string()
 }
 
 /// Load `.greengate.toml` from the current directory, falling back to defaults.
