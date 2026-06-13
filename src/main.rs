@@ -46,6 +46,18 @@ enum Commands {
         /// Enrich each finding with git blame info (author + commit)
         #[arg(long)]
         blame: bool,
+        /// Auto-redact detected secrets in-place (replaces matched values with <REDACTED>).
+        /// SAST and structural findings are listed but not modified.
+        #[arg(long)]
+        fix: bool,
+        /// Preview what --fix would change without writing to disk.
+        #[arg(long)]
+        dry_run: bool,
+        /// Call an LLM to triage each finding as likely-real, likely-false-positive, or
+        /// uncertain. Requires an API key in the env var set by [triage] api_key_env
+        /// (default: ANTHROPIC_API_KEY). Configure model and endpoint in .greengate.toml.
+        #[arg(long)]
+        triage: bool,
     },
     /// Validates Kubernetes YAML manifests for resource limits and security issues
     Lint {
@@ -112,11 +124,15 @@ enum Commands {
         #[arg(long)]
         threshold: Option<f64>,
     },
-    /// Interactive wizard that generates a .greengate.toml config file
+    /// Interactive wizard that generates a .greengate.toml config file.
+    /// Pass --ci github-actions to also scaffold a ready-to-use GitHub Actions workflow.
     Init {
         /// Overwrite an existing .greengate.toml without prompting
         #[arg(long)]
         force: bool,
+        /// Generate CI/CD integration scaffolding. Supported value: github-actions
+        #[arg(long, value_name = "PROVIDER")]
+        ci: Option<String>,
     },
     /// Re-runs scan automatically whenever source files change
     Watch {
@@ -131,11 +147,61 @@ enum Commands {
     Run,
     /// Validates .greengate.toml and prints all resolved configuration values
     CheckConfig,
-    /// Generates a CycloneDX 1.5 SBOM from the project's lock file
+    /// Generates a CycloneDX 1.5 SBOM from the project's lock file.
+    /// Use --attest to sign with Sigstore keyless signing (requires cosign in PATH).
+    /// Use --verify to check an existing SBOM against a cosign bundle.
     Sbom {
-        /// Write SBOM to a file instead of stdout
+        /// Write SBOM to a file instead of stdout (default when --attest is set: sbom.json)
         #[arg(short, long)]
         output: Option<String>,
+        /// Sign the generated SBOM with Sigstore keyless signing via cosign
+        #[arg(long, conflicts_with = "verify")]
+        attest: bool,
+        /// Path for the cosign bundle file (default: <output>.bundle.json)
+        #[arg(long, value_name = "FILE")]
+        bundle: Option<String>,
+        /// Verify an existing SBOM against a cosign bundle instead of generating one
+        #[arg(long, value_name = "SBOM_FILE", conflicts_with = "attest")]
+        verify: Option<String>,
+        /// Expected OIDC issuer for --verify, e.g. https://token.actions.githubusercontent.com
+        #[arg(long, value_name = "ISSUER")]
+        certificate_oidc_issuer: Option<String>,
+        /// Expected signer identity for --verify (exact match)
+        #[arg(long, value_name = "IDENTITY")]
+        certificate_identity: Option<String>,
+    },
+    /// Wraps `pip install` with typosquat detection, post-install RECORD scanning,
+    /// and executable-drop detection. Supports all pip install arguments.
+    /// Example: greengate pip-install requests flask==2.3.0
+    PipInstall {
+        /// Arguments forwarded verbatim to pip
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            value_name = "ARGS"
+        )]
+        args: Vec<String>,
+        /// pip / pip3 binary to invoke (default: pip)
+        #[arg(long, default_value = "pip")]
+        pip: String,
+        /// Report findings but do not exit non-zero
+        #[arg(long)]
+        no_fail: bool,
+    },
+    /// Wraps `cargo add` with typosquat detection, build.rs static analysis,
+    /// and transitive-dependency explosion guard.
+    /// Example: greengate cargo-add serde tokio@1.0
+    CargoAdd {
+        /// Arguments forwarded verbatim to `cargo add`
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            value_name = "ARGS"
+        )]
+        args: Vec<String>,
+        /// Report findings but do not exit non-zero
+        #[arg(long)]
+        no_fail: bool,
     },
     /// Wraps a package manager install and monitors for phantom dependencies
     /// (postinstall scripts that drop and delete binaries) and executable drops.
@@ -156,6 +222,20 @@ enum Commands {
         #[arg(long)]
         no_fail: bool,
     },
+    /// Scan a Docker/OCI container image for secrets and credentials baked into
+    /// image layers. Requires Docker to be running. Pulls the image if not cached locally.
+    /// Example: greengate image-scan nginx:latest
+    ImageScan {
+        /// Image reference to scan (e.g. nginx:latest, ghcr.io/org/app:sha-abc123)
+        #[arg(value_name = "IMAGE")]
+        image: String,
+        /// Output format: text (default), json, sarif, junit, gitlab
+        #[arg(long, default_value = "text")]
+        format: String,
+        /// Report findings but do not exit non-zero
+        #[arg(long)]
+        no_fail: bool,
+    },
     /// Determines which test files are affected by changed source files using
     /// AST-based import analysis. Output is newline-separated by default so it
     /// can be piped directly into a test runner:
@@ -171,6 +251,15 @@ enum Commands {
         /// Output format: newline (default, pipe-friendly), text, or json
         #[arg(long, default_value = "newline")]
         format: String,
+    },
+    /// Lints GitHub Actions workflow files for security misconfigurations
+    CiLint {
+        /// Output format: text (default), json, sarif
+        #[arg(long, default_value = "text")]
+        format: String,
+        /// Path to a single workflow file to lint (instead of auto-discovering .github/workflows/)
+        #[arg(long)]
+        file: Option<String>,
     },
     /// Analyzes a PR diff: outputs a Complexity Score and new-code coverage gaps
     Review {
@@ -199,8 +288,20 @@ enum Commands {
 }
 
 fn main() -> anyhow::Result<()> {
+    let t0 = std::time::Instant::now();
     let cli = Cli::parse();
-    let mut cfg = utils::config::load();
+
+    // Suppress the "Loaded config" info message when emitting structured output
+    // so that JSON/SARIF/JUnit parsers don't see unexpected text on stderr.
+    let silent = matches!(
+        &cli.command,
+        Commands::Scan { format, .. } if matches!(format.as_str(), "json" | "sarif" | "junit" | "gitlab")
+    );
+    let mut cfg = if silent {
+        utils::config::load_silent()
+    } else {
+        utils::config::load()
+    };
 
     // Apply profile overrides on top of the loaded config
     if let Some(ref profile) = cli.profile {
@@ -217,6 +318,9 @@ fn main() -> anyhow::Result<()> {
             update_baseline,
             since_baseline,
             blame,
+            fix,
+            dry_run,
+            triage,
         } => {
             let output_format = match format.as_str() {
                 "json" => OutputFormat::Json,
@@ -239,11 +343,22 @@ fn main() -> anyhow::Result<()> {
                 config: &cfg.scan,
                 sast_config: &cfg.sast,
             };
+            let scan_t0 = std::time::Instant::now();
             let mut findings = modules::scanner::collect_findings(&opts)?;
+            let scan_duration_ms = scan_t0.elapsed().as_millis() as u64;
 
             // Enrich with git blame if requested
             if blame {
                 modules::scanner::enrich_with_blame(&mut findings);
+            }
+
+            // --fix / --dry-run: redact secrets in-place before any other output
+            if fix || dry_run {
+                modules::scanner::apply_scan_fixes(&findings, &opts, dry_run)?;
+                // After fixing, re-scan to confirm what remains (or just exit clean)
+                if !dry_run {
+                    return Ok(());
+                }
             }
 
             // Baseline: save mode
@@ -280,6 +395,26 @@ fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
+            // Telemetry — fire and forget, never fails the build
+            modules::telemetry::emit(
+                &modules::telemetry::scan_metrics(&findings, scan_duration_ms),
+                &cfg.telemetry,
+            );
+
+            // Triage path — LLM annotates each finding before printing
+            if triage && cfg.triage.enabled {
+                let triage_results = modules::triage::triage_findings(&findings, &cfg.triage);
+                let effective = modules::triage::emit_triaged(
+                    &findings,
+                    &triage_results,
+                    cfg.triage.auto_suppress_threshold,
+                );
+                if effective > 0 {
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+
             // Normal scan path
             if annotate
                 && let Some(env) = modules::github::detect_github_env()
@@ -300,13 +435,31 @@ fn main() -> anyhow::Result<()> {
         Commands::Coverage { file, min } => {
             let lcov_file = file.unwrap_or(cfg.coverage.file);
             let threshold = min.unwrap_or(cfg.coverage.min);
-            modules::coverage::run_coverage(&lcov_file, threshold)?;
+            let result = modules::coverage::run_coverage(&lcov_file, threshold);
+            modules::telemetry::emit(
+                &modules::telemetry::command_metrics(
+                    "coverage",
+                    t0.elapsed().as_millis() as u64,
+                    result.is_ok(),
+                ),
+                &cfg.telemetry,
+            );
+            result?;
         }
         Commands::InstallHooks { force } => {
             modules::hooks::run_install_hooks(force)?;
         }
         Commands::Audit => {
-            modules::audit::run_audit()?;
+            let result = modules::audit::run_audit();
+            modules::telemetry::emit(
+                &modules::telemetry::command_metrics(
+                    "audit",
+                    t0.elapsed().as_millis() as u64,
+                    result.is_ok(),
+                ),
+                &cfg.telemetry,
+            );
+            result?;
         }
         Commands::Lighthouse {
             url,
@@ -361,8 +514,8 @@ fn main() -> anyhow::Result<()> {
                 threshold: resolved_threshold,
             })?;
         }
-        Commands::Init { force } => {
-            modules::init::run_init(force)?;
+        Commands::Init { force, ci } => {
+            modules::init::run_init(force, ci.as_deref())?;
         }
         Commands::Watch { staged, interval } => {
             modules::watch::run_watch(modules::watch::WatchOpts {
@@ -376,8 +529,68 @@ fn main() -> anyhow::Result<()> {
         Commands::CheckConfig => {
             modules::check_config::run_check_config()?;
         }
-        Commands::Sbom { output } => {
-            modules::sbom::run_sbom(output.as_deref())?;
+        Commands::Sbom {
+            output,
+            attest,
+            bundle,
+            verify,
+            certificate_oidc_issuer,
+            certificate_identity,
+        } => {
+            if let Some(sbom_file) = verify {
+                // Verify mode: check existing SBOM against a bundle.
+                let bundle_path = bundle.unwrap_or_else(|| format!("{}.bundle.json", sbom_file));
+                // Fall back to config-level identity constraints if not supplied on CLI.
+                let issuer = certificate_oidc_issuer
+                    .as_deref()
+                    .or(cfg.sbom.expected_issuer.as_deref());
+                let identity = certificate_identity
+                    .as_deref()
+                    .or(cfg.sbom.expected_identity.as_deref());
+                modules::sbom::run_sbom_verify(&sbom_file, &bundle_path, issuer, identity)?;
+            } else if attest {
+                // Attest mode: generate SBOM then sign it.
+                let sbom_out = output.unwrap_or_else(|| cfg.sbom.default_output.clone());
+                let bundle_out = bundle.unwrap_or_else(|| format!("{}.bundle.json", sbom_out));
+                modules::sbom::run_sbom(Some(&sbom_out))?;
+                modules::sbom::run_sbom_attest(&sbom_out, &bundle_out)?;
+            } else {
+                modules::sbom::run_sbom(output.as_deref())?;
+            }
+        }
+        Commands::PipInstall { args, pip, no_fail } => {
+            modules::pip_audit::run_pip_install(modules::pip_audit::PipInstallOpts {
+                pip,
+                args,
+                no_fail,
+                allow_packages: cfg.supply_chain.allow_pip_packages,
+            })?;
+        }
+        Commands::CargoAdd { args, no_fail } => {
+            modules::cargo_audit::run_cargo_add(modules::cargo_audit::CargoAddOpts {
+                args,
+                no_fail,
+                allow_crates: cfg.supply_chain.allow_cargo_crates,
+            })?;
+        }
+        Commands::ImageScan {
+            image,
+            format,
+            no_fail,
+        } => {
+            let output_format = match format.as_str() {
+                "json" => OutputFormat::Json,
+                "sarif" => OutputFormat::Sarif,
+                "junit" => OutputFormat::Junit,
+                "gitlab" => OutputFormat::Gitlab,
+                _ => OutputFormat::Text,
+            };
+            modules::image_scan::run_image_scan(modules::image_scan::ImageScanOpts {
+                image,
+                format: output_format,
+                no_fail,
+                scan_cfg: &cfg.scan,
+            })?;
         }
         Commands::WatchInstall {
             package_manager,
@@ -405,6 +618,21 @@ fn main() -> anyhow::Result<()> {
                 },
                 &cfg.tia,
             )?;
+        }
+        Commands::CiLint { format, file } => {
+            let result = modules::ci_lint::run_ci_lint(modules::ci_lint::CiLintOpts {
+                format: &format,
+                file,
+            });
+            modules::telemetry::emit(
+                &modules::telemetry::command_metrics(
+                    "ci-lint",
+                    t0.elapsed().as_millis() as u64,
+                    result.is_ok(),
+                ),
+                &cfg.telemetry,
+            );
+            result?;
         }
         Commands::Review {
             base,

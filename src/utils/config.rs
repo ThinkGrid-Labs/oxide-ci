@@ -26,6 +26,12 @@ pub struct Config {
     pub supply_chain: SupplyChainConfig,
     #[serde(default)]
     pub tia: TiaConfig,
+    #[serde(default)]
+    pub telemetry: TelemetryConfig,
+    #[serde(default)]
+    pub sbom: SbomConfig,
+    #[serde(default)]
+    pub triage: TriageConfig,
 }
 
 /// Audit settings loaded from `.greengate.toml` under `[audit]`.
@@ -349,6 +355,12 @@ pub struct SupplyChainConfig {
     /// as warnings and do not trigger a failure.
     #[serde(default)]
     pub allow_postinstall: Vec<String>,
+    /// PyPI package names exempted from `greengate pip-install` checks.
+    #[serde(default)]
+    pub allow_pip_packages: Vec<String>,
+    /// Cargo crate names exempted from `greengate cargo-add` checks.
+    #[serde(default)]
+    pub allow_cargo_crates: Vec<String>,
 }
 
 impl Default for SupplyChainConfig {
@@ -357,6 +369,8 @@ impl Default for SupplyChainConfig {
             block_phantom_scripts: default_supply_chain_block_phantom(),
             enforce_sandbox: default_supply_chain_sandbox(),
             allow_postinstall: Vec::new(),
+            allow_pip_packages: Vec::new(),
+            allow_cargo_crates: Vec::new(),
         }
     }
 }
@@ -404,14 +418,164 @@ fn default_tia_test_patterns() -> Vec<String> {
     ]
 }
 
+// ── Telemetry config ──────────────────────────────────────────────────────────
+
+/// Settings for metrics export loaded from `.greengate.toml` under `[telemetry]`.
+#[derive(Deserialize, Clone)]
+pub struct TelemetryConfig {
+    /// Master switch — set to false to disable all telemetry (default: true)
+    #[serde(default = "default_telemetry_enabled")]
+    pub enabled: bool,
+    /// OTLP HTTP endpoint, e.g. "http://localhost:4318". Leave unset to disable.
+    /// Accepts any OTLP-compatible collector: OpenTelemetry Collector, Grafana
+    /// Agent, Datadog Agent OTLP intake, Honeycomb, etc.
+    #[serde(default)]
+    pub otlp_endpoint: Option<String>,
+    /// Service name attached to every metric as the `service.name` resource
+    /// attribute (default: "greengate").
+    #[serde(default = "default_telemetry_service_name")]
+    pub service_name: String,
+    /// Path to write a Prometheus text-format `.prom` file after each command.
+    /// Point Prometheus node_exporter's `--collector.textfile.directory` at the
+    /// containing directory. Leave unset to disable.
+    #[serde(default)]
+    pub metrics_file: Option<String>,
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_telemetry_enabled(),
+            otlp_endpoint: None,
+            service_name: default_telemetry_service_name(),
+            metrics_file: None,
+        }
+    }
+}
+
+fn default_telemetry_enabled() -> bool {
+    true
+}
+
+fn default_telemetry_service_name() -> String {
+    "greengate".to_string()
+}
+
+// ── SBOM config ───────────────────────────────────────────────────────────────
+
+/// Settings for `greengate sbom` loaded from `.greengate.toml` under `[sbom]`.
+#[derive(Deserialize, Clone)]
+pub struct SbomConfig {
+    /// Default output path for generated SBOMs (default: "sbom.json").
+    #[serde(default = "default_sbom_output")]
+    pub default_output: String,
+    /// Expected OIDC issuer when verifying attestations, e.g.
+    /// "https://token.actions.githubusercontent.com". Leave empty to accept any.
+    #[serde(default)]
+    pub expected_issuer: Option<String>,
+    /// Expected signer identity when verifying attestations, e.g.
+    /// "https://github.com/acme/repo/.github/workflows/release.yml@refs/heads/main".
+    /// Leave empty to accept any. Treated as an exact match.
+    #[serde(default)]
+    pub expected_identity: Option<String>,
+}
+
+impl Default for SbomConfig {
+    fn default() -> Self {
+        Self {
+            default_output: default_sbom_output(),
+            expected_issuer: None,
+            expected_identity: None,
+        }
+    }
+}
+
+fn default_sbom_output() -> String {
+    "sbom.json".to_string()
+}
+
+// ── Triage config ─────────────────────────────────────────────────────────────
+
+/// Settings for `greengate scan --triage` loaded from `.greengate.toml` under `[triage]`.
+#[derive(Deserialize, Clone)]
+pub struct TriageConfig {
+    /// Master switch — set to false to disable triage even when --triage is passed (default: true)
+    #[serde(default = "default_triage_enabled")]
+    pub enabled: bool,
+    /// LLM model to use. Default: claude-haiku-4-5-20251001 (fast, cheap, accurate enough).
+    /// For OpenAI-compatible endpoints use the model name expected by that API.
+    #[serde(default = "default_triage_model")]
+    pub model: String,
+    /// Name of the environment variable that holds the API key (default: ANTHROPIC_API_KEY).
+    #[serde(default = "default_triage_api_key_env")]
+    pub api_key_env: String,
+    /// LLM API endpoint. Leave unset to use the Anthropic Messages API.
+    /// Set to an OpenAI-compatible URL (e.g. http://localhost:11434/v1/chat/completions)
+    /// to use a local model via Ollama or any other OpenAI-compatible server.
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    /// Automatically suppress findings where the LLM is ≥ this confident they are false
+    /// positives. 0.0 = never auto-suppress (just annotate). 0.9 is a good starting point.
+    #[serde(default)]
+    pub auto_suppress_threshold: f64,
+    /// Number of source lines before and after the flagged line to include as context
+    /// in the LLM prompt (default: 10).
+    #[serde(default = "default_triage_context_lines")]
+    pub context_lines: usize,
+}
+
+impl Default for TriageConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_triage_enabled(),
+            model: default_triage_model(),
+            api_key_env: default_triage_api_key_env(),
+            endpoint: None,
+            auto_suppress_threshold: 0.0,
+            context_lines: default_triage_context_lines(),
+        }
+    }
+}
+
+fn default_triage_enabled() -> bool {
+    true
+}
+
+fn default_triage_model() -> String {
+    "claude-haiku-4-5-20251001".to_string()
+}
+
+fn default_triage_api_key_env() -> String {
+    "ANTHROPIC_API_KEY".to_string()
+}
+
+fn default_triage_context_lines() -> usize {
+    10
+}
+
 /// Load `.greengate.toml` from the current directory, falling back to defaults.
+/// Prints a status message to stderr (suitable for text/interactive output).
+/// Use [`load_silent`] when emitting structured output (JSON, SARIF, JUnit).
 pub fn load() -> Config {
+    load_inner(true)
+}
+
+/// Like [`load`] but suppresses the "Loaded config" info message.
+/// Use this when the caller is emitting machine-readable output so that the
+/// info line does not pollute parsers that capture stderr alongside stdout.
+pub fn load_silent() -> Config {
+    load_inner(false)
+}
+
+fn load_inner(verbose: bool) -> Config {
     let path = std::path::Path::new(".greengate.toml");
     if path.exists() {
         match std::fs::read_to_string(path) {
             Ok(content) => match toml::from_str(&content) {
                 Ok(cfg) => {
-                    eprintln!("ℹ️  Loaded config from .greengate.toml");
+                    if verbose {
+                        eprintln!("ℹ️  Loaded config from .greengate.toml");
+                    }
                     return cfg;
                 }
                 Err(e) => eprintln!("⚠️  Failed to parse .greengate.toml: {}", e),
@@ -434,6 +598,10 @@ pub fn apply_profile(cfg: &mut Config, profile: &str) {
             // Raise coverage threshold to 90 % if not already higher
             if cfg.coverage.min < 90.0 {
                 cfg.coverage.min = 90.0;
+            }
+            // Also tighten the review command's new-code coverage gate
+            if cfg.review.min_new_code_coverage < 90.0 {
+                cfg.review.min_new_code_coverage = 90.0;
             }
             // Lower entropy threshold → more sensitive secret detection
             if cfg.scan.entropy_threshold > 3.5 {

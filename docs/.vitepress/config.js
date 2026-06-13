@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: 'GreenGate',
-  description: 'Rust CLI for zero-trust supply chain protection, secret scanning, AST-based SAST, test impact analysis, Kubernetes linting, coverage gates, and dependency auditing — single zero-dependency binary.',
+  description: 'Rust CLI for zero-trust supply chain protection (npm/pip/cargo), secret scanning, AST-based SAST, AI-assisted triage, SBOM attestation, CI config linting, test impact analysis, coverage gates, and OTLP metrics — single zero-dependency binary.',
   base: '/greengate/',
 
   head: [
@@ -45,31 +45,47 @@ export default defineConfig({
         ],
       },
       {
-        text: 'Commands',
+        text: 'Commands — Security',
         items: [
           { text: '🔒 watch-install', link: '/commands/watch-install' },
-          { text: '🎯 tia', link: '/commands/tia' },
+          { text: '🐍 pip-install', link: '/commands/pip-install' },
+          { text: '🦀 cargo-add', link: '/commands/cargo-add' },
           { text: 'scan', link: '/commands/scan' },
+          { text: 'ci-lint', link: '/commands/ci-lint' },
+          { text: 'image-scan', link: '/commands/image-scan' },
           { text: 'audit', link: '/commands/audit' },
+          { text: 'sbom', link: '/commands/sbom' },
+        ],
+      },
+      {
+        text: 'Commands — Quality',
+        items: [
+          { text: '🎯 tia', link: '/commands/tia' },
           { text: 'review', link: '/commands/review' },
+          { text: 'coverage', link: '/commands/coverage' },
           { text: 'lint', link: '/commands/lint' },
           { text: 'docker-lint', link: '/commands/docker-lint' },
-          { text: 'coverage', link: '/commands/coverage' },
-          { text: 'install-hooks', link: '/commands/install-hooks' },
           { text: 'lighthouse', link: '/commands/lighthouse' },
           { text: 'reassure', link: '/commands/reassure' },
-          { text: 'sbom', link: '/commands/sbom' },
-          { text: 'init', link: '/commands/init' },
-          { text: 'watch', link: '/commands/watch' },
+        ],
+      },
+      {
+        text: 'Commands — Workflow',
+        items: [
           { text: 'run', link: '/commands/run' },
+          { text: 'init', link: '/commands/init' },
+          { text: 'install-hooks', link: '/commands/install-hooks' },
+          { text: 'watch', link: '/commands/watch' },
           { text: 'check-config', link: '/commands/check-config' },
         ],
       },
       {
         text: 'Reference',
         items: [
+          { text: 'Configuration', link: '/reference/config' },
           { text: 'Secret Patterns', link: '/reference/secret-patterns' },
           { text: 'SAST Rules', link: '/reference/sast-rules' },
+          { text: 'Telemetry & Metrics', link: '/reference/telemetry' },
           { text: 'Exit Codes', link: '/reference/exit-codes' },
           { text: 'Output Formats', link: '/reference/output-formats' },
           { text: 'Limitations', link: '/reference/limitations' },

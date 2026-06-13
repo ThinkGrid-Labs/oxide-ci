@@ -47,9 +47,10 @@ fn parse_cargo_lock(content: &str, source: PathBuf) -> Vec<Package> {
         .filter_map(|pkg| {
             let name = pkg.get("name")?.as_str()?.to_string();
             let version = pkg.get("version")?.as_str()?.to_string();
-            // Only include packages from crates.io registry
+            // Only include packages from crates.io registry; skip local path/workspace deps
+            // (they have empty source in Cargo.lock but are not published to crates.io).
             let src = pkg.get("source").and_then(|s| s.as_str()).unwrap_or("");
-            if src.contains("crates.io-index") || src.is_empty() {
+            if src.contains("crates.io-index") {
                 Some(Package {
                     name,
                     version,
@@ -337,7 +338,7 @@ fn cache_dir() -> Option<PathBuf> {
     Some(dir)
 }
 
-/// Fallback: parse HOME from /etc/passwd on Unix if $HOME is unset.
+/// Windows fallback: reads %USERPROFILE% when $HOME is unset.
 fn dirs_home() -> Option<PathBuf> {
     std::env::var("USERPROFILE").ok().map(PathBuf::from)
 }
@@ -505,8 +506,7 @@ fn query_osv(packages: &[Package]) -> Result<Vec<Vulnerability>> {
         .unwrap_or(&empty);
 
     let mut vulns = Vec::new();
-    for (i, result_entry) in results.iter().enumerate() {
-        let pkg = &packages[i];
+    for (result_entry, pkg) in results.iter().zip(packages.iter()) {
         let vuln_array: &Vec<Value> =
             match result_entry.get("vulns").and_then(|v: &Value| v.as_array()) {
                 Some(a) => a,
@@ -539,7 +539,7 @@ fn query_osv(packages: &[Package]) -> Result<Vec<Vulnerability>> {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 pub fn run_audit() -> Result<()> {
-    let cfg = config::load();
+    let cfg = config::load_silent();
     let ignored: std::collections::HashSet<String> = cfg
         .audit
         .ignore_advisories

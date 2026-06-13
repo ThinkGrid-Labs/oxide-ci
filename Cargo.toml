@@ -1,6 +1,6 @@
 [package]
 name = "greengate"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 
 [dependencies]
@@ -20,6 +20,7 @@ tree-sitter-javascript = "0.23"
 tree-sitter-typescript = "0.23"
 tree-sitter-python = "0.23"
 tree-sitter-go = "0.23"
+tree-sitter-rust = "0.23"
 ureq = { version = "2", features = ["json"] }
 roxmltree = "0.20"
 globset = "0.4"

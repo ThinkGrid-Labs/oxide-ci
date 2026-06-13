@@ -51,6 +51,7 @@ fn language_for(path: &Path) -> Option<Language> {
         Some("js" | "jsx") => Some(tree_sitter_javascript::LANGUAGE.into()),
         Some("py") => Some(tree_sitter_python::LANGUAGE.into()),
         Some("go") => Some(tree_sitter_go::LANGUAGE.into()),
+        Some("rs") => Some(tree_sitter_rust::LANGUAGE.into()),
         _ => None,
     }
 }
@@ -83,11 +84,21 @@ const GO_STRING_QUERY: &str = r#"
     ]
 "#;
 
+/// Rust: string content lives inside `string_literal` and `raw_string_literal` nodes.
+/// The `string_content` child holds the actual characters (excluding delimiters).
+const RUST_STRING_QUERY: &str = r#"
+    [
+        (string_literal (string_content) @literal)
+        (raw_string_literal (raw_string_literal_content) @literal)
+    ]
+"#;
+
 fn string_query_for(path: &Path) -> Option<&'static str> {
     match path.extension().and_then(|e| e.to_str()) {
         Some("js" | "jsx" | "ts" | "tsx") => Some(JS_TS_STRING_QUERY),
         Some("py") => Some(PYTHON_STRING_QUERY),
         Some("go") => Some(GO_STRING_QUERY),
+        Some("rs") => Some(RUST_STRING_QUERY),
         _ => None,
     }
 }
@@ -390,10 +401,56 @@ const GO_RULES: &[SastRule] = &[
     },
 ];
 
+// ── Rust SAST rules ───────────────────────────────────────────────────────────
+
+const RUST_RULES: &[SastRule] = &[
+    SastRule {
+        id: "SAST/RustUnsafeBlock",
+        // Any `unsafe { ... }` block — may bypass memory safety guarantees.
+        // Requires manual review to verify correctness.
+        query: r#"
+            (unsafe_block) @match
+        "#,
+    },
+    SastRule {
+        id: "SAST/RustCommandNew",
+        // `Command::new(...)` — spawns an OS process; flag for review of
+        // argument sources to prevent command injection.
+        // Matches: Command::new, process::Command::new, tokio::process::Command::new, etc.
+        query: r#"
+            (call_expression
+              function: (scoped_identifier) @_fn
+              (#match? @_fn "Command::new")) @match
+        "#,
+    },
+    SastRule {
+        id: "SAST/RustUnwrap",
+        // `.unwrap()` — panics if the value is `Err`/`None`.
+        // Should use `?`, `unwrap_or`, or proper error handling in production code.
+        query: r#"
+            (call_expression
+              function: (field_expression
+                field: (field_identifier) @_field
+                (#eq? @_field "unwrap"))) @match
+        "#,
+    },
+    SastRule {
+        id: "SAST/RustExpect",
+        // `.expect("msg")` — panics with a message; same concern as `.unwrap()`.
+        query: r#"
+            (call_expression
+              function: (field_expression
+                field: (field_identifier) @_field
+                (#eq? @_field "expect"))) @match
+        "#,
+    },
+];
+
 fn rules_for_path(path: &Path) -> &'static [SastRule] {
     match path.extension().and_then(|e| e.to_str()) {
         Some("py") => PYTHON_RULES,
         Some("go") => GO_RULES,
+        Some("rs") => RUST_RULES,
         _ => RULES,
     }
 }

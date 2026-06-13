@@ -86,11 +86,16 @@ fn update_check_run_annotations(
     let annotations: Vec<serde_json::Value> = chunk
         .iter()
         .map(|f| {
+            let level = match f.severity.as_str() {
+                "critical" | "high" => "failure",
+                "medium" => "warning",
+                _ => "notice",
+            };
             serde_json::json!({
                 "path": f.path.to_string_lossy(),
                 "start_line": f.line,
                 "end_line": f.line,
-                "annotation_level": "warning",
+                "annotation_level": level,
                 "title": &f.rule_id,
                 "message": format!("[{}] Potential security issue detected.", f.rule_id),
             })
@@ -263,22 +268,22 @@ mod tests {
         fn set(key: &'static str, val: &str) -> Self {
             let prev = std::env::var(key).ok();
             // SAFETY: single-threaded test context
-            unsafe { std::env::set_var(key, val) };
+            unsafe { std::env::set_var(key, val) }; // greengate: ignore
             Self { key, prev }
         }
         fn remove(key: &'static str) -> Self {
             let prev = std::env::var(key).ok();
             // SAFETY: single-threaded test context
-            unsafe { std::env::remove_var(key) };
+            unsafe { std::env::remove_var(key) }; // greengate: ignore
             Self { key, prev }
         }
     }
     impl Drop for ScopedEnv {
         fn drop(&mut self) {
             match &self.prev {
-                // SAFETY: single-threaded test context
-                Some(v) => unsafe { std::env::set_var(self.key, v) },
-                None => unsafe { std::env::remove_var(self.key) },
+                // SAFETY: single-threaded test context — restoring env on drop
+                Some(v) => unsafe { std::env::set_var(self.key, v) }, // greengate: ignore
+                None => unsafe { std::env::remove_var(self.key) },    // greengate: ignore
             }
         }
     }

@@ -145,6 +145,136 @@ fn detect_and_parse() -> Result<(Vec<SbomPackage>, String)> {
     )
 }
 
+// ── Sigstore / cosign attestation ─────────────────────────────────────────────
+
+/// Verify cosign is in PATH. Returns a helpful installation hint if not found.
+fn require_cosign() -> Result<()> {
+    let result = std::process::Command::new("cosign") // greengate: ignore
+        .arg("version")
+        .output();
+    if result.is_err() {
+        anyhow::bail!(
+            "cosign not found in PATH.\n\
+             \n\
+             Install it:\n\
+               macOS:   brew install sigstore/tap/cosign\n\
+               Linux:   https://github.com/sigstore/cosign/releases (download cosign-linux-amd64)\n\
+             \n\
+             In GitHub Actions, add a step before greengate:\n\
+               - uses: sigstore/cosign-installer@v3"
+        );
+    }
+    Ok(())
+}
+
+/// Sign `sbom_path` with Sigstore keyless signing and write the bundle to `bundle_path`.
+///
+/// Uses `cosign sign-blob`. In CI with OIDC ambient credentials (GitHub Actions with
+/// `id-token: write`) this is fully non-interactive. Locally it opens a browser for OAuth.
+pub fn run_sbom_attest(sbom_path: &str, bundle_path: &str) -> Result<()> {
+    require_cosign()?;
+
+    crate::utils::terminal::info(&format!(
+        "Signing {} with Sigstore keyless signing...",
+        sbom_path
+    ));
+
+    let status = std::process::Command::new("cosign") // greengate: ignore
+        .args(["sign-blob", "--yes", "--bundle", bundle_path, sbom_path])
+        .status()
+        .context("Failed to spawn cosign sign-blob")?;
+
+    if !status.success() {
+        anyhow::bail!(
+            "cosign sign-blob exited with code {}",
+            status.code().unwrap_or(-1)
+        );
+    }
+
+    crate::utils::terminal::success(&format!("Bundle written to {}", bundle_path));
+    crate::utils::terminal::info(
+        "The bundle contains the certificate chain and Rekor transparency log entry.",
+    );
+    crate::utils::terminal::info(&format!(
+        "Distribute both {} and {} — verifiers need both files.",
+        sbom_path, bundle_path
+    ));
+    Ok(())
+}
+
+/// Verify `sbom_path` against a cosign bundle. Returns an error if verification fails.
+///
+/// When `issuer` / `identity` are `None` the check uses regexp wildcards, which is
+/// permissive but still validates the Rekor log entry and certificate chain. For
+/// production use always set both to tighten the policy.
+pub fn run_sbom_verify(
+    sbom_path: &str,
+    bundle_path: &str,
+    issuer: Option<&str>,
+    identity: Option<&str>,
+) -> Result<()> {
+    require_cosign()?;
+
+    crate::utils::terminal::info(&format!(
+        "Verifying {} against bundle {}...",
+        sbom_path, bundle_path
+    ));
+
+    let mut cmd = std::process::Command::new("cosign"); // greengate: ignore
+    cmd.args(["verify-blob", "--bundle", bundle_path]);
+
+    match (issuer, identity) {
+        (Some(iss), Some(id)) => {
+            cmd.args([
+                "--certificate-oidc-issuer",
+                iss,
+                "--certificate-identity",
+                id,
+            ]);
+        }
+        (Some(iss), None) => {
+            cmd.args([
+                "--certificate-oidc-issuer",
+                iss,
+                "--certificate-identity-regexp",
+                ".*",
+            ]);
+        }
+        (None, Some(id)) => {
+            cmd.args([
+                "--certificate-oidc-issuer-regexp",
+                ".*",
+                "--certificate-identity",
+                id,
+            ]);
+        }
+        (None, None) => {
+            cmd.args([
+                "--certificate-oidc-issuer-regexp",
+                ".*",
+                "--certificate-identity-regexp",
+                ".*",
+            ]);
+        }
+    }
+
+    cmd.arg(sbom_path);
+
+    let status = cmd.status().context("Failed to spawn cosign verify-blob")?;
+
+    if !status.success() {
+        anyhow::bail!(
+            "SBOM attestation FAILED — the SBOM may have been tampered with or the \
+             signing identity does not match the expected policy."
+        );
+    }
+
+    crate::utils::terminal::success(
+        "Attestation verified. Signature is valid and anchored in the Rekor transparency log.",
+    );
+    Ok(())
+}
+
 // ── CycloneDX output ──────────────────────────────────────────────────────────
 
 pub fn run_sbom(output_file: Option<&str>) -> Result<()> {
@@ -256,4 +386,79 @@ fn format_timestamp(unix: u64) -> String {
         "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
         year, month, day, hours, mins, secs
     )
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn require_cosign_fails_gracefully_when_not_found() {
+        // If cosign happens to be installed the function succeeds; that's fine.
+        // What we're testing is that it doesn't panic on either path.
+        let _ = require_cosign();
+    }
+
+    #[test]
+    fn attest_errors_when_sbom_file_missing() {
+        // cosign sign-blob will fail if the file doesn't exist.
+        // We only run this if cosign is actually present.
+        if require_cosign().is_err() {
+            return; // cosign not installed — skip
+        }
+        let result = run_sbom_attest("/tmp/__nonexistent_sbom_xyz.json", "/tmp/out.bundle.json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn verify_errors_when_bundle_file_missing() {
+        // cosign verify-blob will fail if the bundle doesn't exist.
+        if require_cosign().is_err() {
+            return;
+        }
+        let result = run_sbom_verify(
+            "/tmp/__nonexistent_sbom_xyz.json",
+            "/tmp/__nonexistent.bundle.json",
+            None,
+            None,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn format_timestamp_epoch() {
+        assert_eq!(format_timestamp(0), "1970-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn format_timestamp_known_date() {
+        // 2024-01-15T12:00:00Z = 1705320000
+        let ts = format_timestamp(1705320000);
+        assert!(ts.starts_with("2024-01-15T"), "got: {}", ts);
+    }
+
+    #[test]
+    fn parse_cargo_lock_basic() {
+        let input = r#"
+[[package]]
+name = "serde"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+"#;
+        let pkgs = parse_cargo_lock(input);
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "serde");
+        assert_eq!(pkgs[0].purl, "pkg:cargo/serde@1.0.0");
+    }
+
+    #[test]
+    fn parse_requirements_txt_basic() {
+        let input = "requests==2.31.0\nflask==3.0.0\n# comment\n";
+        let pkgs = parse_requirements_txt(input);
+        assert_eq!(pkgs.len(), 2);
+        assert_eq!(pkgs[0].purl, "pkg:pypi/requests@2.31.0");
+        assert_eq!(pkgs[1].purl, "pkg:pypi/flask@3.0.0");
+    }
 }

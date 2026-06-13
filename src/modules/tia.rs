@@ -114,12 +114,12 @@ pub fn run_tia(opts: TiaOpts, cfg: &TiaConfig) -> Result<()> {
 
 fn changed_files(base: &str, staged: bool) -> Result<Vec<String>> {
     let output = if staged {
-        Command::new("git")
+        Command::new("git") // greengate: ignore — running git to compute the file diff for TIA
             .args(["diff", "--cached", "--name-only", "--diff-filter=ACM"])
             .output()
             .context("Failed to run git diff --cached --name-only")?
     } else {
-        let out = Command::new("git")
+        let out = Command::new("git") // greengate: ignore
             .args([
                 "diff",
                 &format!("{}...HEAD", base),
@@ -132,8 +132,7 @@ fn changed_files(base: &str, staged: bool) -> Result<Vec<String>> {
         if out.status.success() {
             out
         } else {
-            // Fallback: two-dot diff (works when base is a branch name on remote)
-            Command::new("git")
+            Command::new("git") // greengate: ignore — fallback git diff for TIA
                 .args(["diff", base, "HEAD", "--name-only", "--diff-filter=ACM"])
                 .output()
                 .context("Failed to run git diff (fallback)")?

@@ -1,0 +1,98 @@
+name: greengate
+description: >-
+  Zero-trust DevOps security gate — scans for secrets, SAST issues,
+  vulnerable dependencies, coverage gaps, CI misconfigurations, and more
+  in one fast Rust binary. No Docker required.
+author: ThinkGrid Labs
+branding:
+  icon: shield
+  color: green
+
+inputs:
+  version:
+    description: >-
+      greengate release tag to download, e.g. "v0.3.2".
+      Use "latest" to always pull the newest release
+      (pin to a specific version for reproducible CI).
+    required: false
+    default: latest
+  profile:
+    description: >-
+      Quality profile to apply: "strict" (90 % coverage, tighter entropy),
+      "relaxed" (70 % coverage), or "ci" (default — 80 % + SAST enabled,
+      code-smell rules silenced to reduce noise).
+    required: false
+    default: ci
+  args:
+    description: Extra arguments forwarded verbatim to `greengate run`.
+    required: false
+    default: ''
+
+outputs:
+  findings:
+    description: Total number of findings reported across all pipeline steps.
+    value: ${{ steps.run.outputs.findings }}
+
+runs:
+  using: composite
+  steps:
+    # ── Download the correct binary for the runner platform ───────────────────
+    - name: Install greengate
+      id: install
+      shell: bash
+      env:
+        GREENGATE_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        VERSION="$GREENGATE_VERSION"
+        if [ "$VERSION" = "latest" ]; then
+          VERSION=$(curl -sSfL \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/ThinkGrid-Labs/greengate/releases/latest" \
+            | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not resolve latest greengate version. Set inputs.version explicitly."
+            exit 1
+          fi
+        fi
+
+        OS="$(uname -s)"
+        ARCH="$(uname -m)"
+        case "${OS}-${ARCH}" in
+          Linux-x86_64)   TRIPLE="x86_64-unknown-linux-musl" ;;
+          Darwin-arm64)   TRIPLE="aarch64-apple-darwin"      ;;
+          Darwin-x86_64)  TRIPLE="x86_64-apple-darwin"       ;;
+          *)
+            echo "::error::greengate action: unsupported platform ${OS}-${ARCH}"
+            exit 1
+            ;;
+        esac
+
+        INSTALL_DIR="${HOME}/.local/bin"
+        mkdir -p "$INSTALL_DIR"
+
+        URL="https://github.com/ThinkGrid-Labs/greengate/releases/download/${VERSION}/greengate-${VERSION}-${TRIPLE}"
+        echo "Downloading greengate ${VERSION} (${TRIPLE})..."
+        curl -sSfL "$URL" -o "${INSTALL_DIR}/greengate"
+        chmod +x "${INSTALL_DIR}/greengate"
+        echo "${INSTALL_DIR}" >> "$GITHUB_PATH"
+
+        echo "greengate ${VERSION} installed to ${INSTALL_DIR}"
+        echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+    # ── Execute the pipeline defined in .greengate.toml ───────────────────────
+    - name: Run greengate
+      id: run
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+
+        PROFILE_ARG=""
+        if [ -n "${{ inputs.profile }}" ]; then
+          PROFILE_ARG="--profile ${{ inputs.profile }}"
+        fi
+
+        greengate run $PROFILE_ARG ${{ inputs.args }}

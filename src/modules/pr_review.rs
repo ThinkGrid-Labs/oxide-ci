@@ -144,12 +144,12 @@ pub fn run_review(opts: ReviewOpts) -> Result<()> {
 
 fn parse_diff(base: &str, staged: bool) -> Result<Vec<DiffFile>> {
     let output = if staged {
-        Command::new("git")
+        Command::new("git") // greengate: ignore — running git to parse the PR diff
             .args(["diff", "--cached", "-U0"])
             .output()
             .with_context(|| "Failed to run git diff --cached")?
     } else {
-        Command::new("git")
+        Command::new("git") // greengate: ignore
             .args(["diff", &format!("{}...HEAD", base), "-U0"])
             .output()
             .with_context(|| format!("Failed to run git diff {}...HEAD", base))?
@@ -157,13 +157,12 @@ fn parse_diff(base: &str, staged: bool) -> Result<Vec<DiffFile>> {
 
     if !output.status.success() {
         // Fallback: try two-dot diff (works when base is a branch name)
-        let output2 = Command::new("git")
+        let output2 = Command::new("git") // greengate: ignore — fallback git diff for PR review
             .args(["diff", base, "HEAD", "-U0"])
             .output()
             .with_context(|| format!("Failed to run git diff {} HEAD", base))?;
         if !output2.status.success() {
-            // Still try one more form: just diff against the base directly
-            let output3 = Command::new("git")
+            let output3 = Command::new("git") // greengate: ignore — final fallback diff form
                 .args(["diff", base, "-U0"])
                 .output()
                 .with_context(|| format!("Failed to run git diff {}", base))?;

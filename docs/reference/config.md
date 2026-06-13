@@ -1,6 +1,6 @@
 ---
 title: 'Configuration Reference — .greengate.toml'
-description: 'Full .greengate.toml reference: supply_chain (zero-trust gate), tia (test patterns), scan (entropy, secrets), coverage, audit, review, sast, lint, lighthouse, and all default values.'
+description: 'Full .greengate.toml reference: scan, sast, supply_chain (npm/pip/cargo), tia, triage (AI false-positive), sbom attestation, telemetry (OTLP/Prometheus), coverage, audit, review, and all default values.'
 ---
 
 # Configuration File (.greengate.toml)
@@ -106,6 +106,16 @@ allow_postinstall = [
   # "@swc/core",
 ]
 
+# PyPI package names exempted from greengate pip-install typosquat and source scanning.
+allow_pip_packages = [
+  # "my-internal-requests-wrapper",
+]
+
+# Cargo crate names exempted from greengate cargo-add typosquat and build.rs scanning.
+allow_cargo_crates = [
+  # "openssl",   # legitimate complex build.rs for system lib detection
+]
+
 [tia]
 # Glob patterns that identify test files for Test Impact Analysis.
 # Uses standard glob syntax with ** for recursive matching.
@@ -124,6 +134,54 @@ test_patterns = [
   "tests/**/*.py",
   "**/*_test.go",
 ]
+
+[triage]
+# Master switch — set to false to disable even when --triage is passed (default: true)
+enabled = true
+
+# LLM model. Default: claude-haiku-4-5-20251001 (fast, cheap, accurate for triage).
+# For OpenAI-compatible endpoints use the model name expected by that API.
+model = "claude-haiku-4-5-20251001"
+
+# Environment variable that holds the API key (default: ANTHROPIC_API_KEY).
+api_key_env = "ANTHROPIC_API_KEY"
+
+# LLM API endpoint. Leave unset to use the Anthropic Messages API.
+# Set to an OpenAI-compatible URL to use Ollama, OpenAI, or any compatible server.
+# endpoint = "http://localhost:11434/v1/chat/completions"
+
+# Automatically suppress findings where the LLM is >= this confident they are false
+# positives. 0.0 = never auto-suppress (annotate only). Start here, raise once you
+# trust the results for your codebase.
+auto_suppress_threshold = 0.0
+
+# Source lines before and after the flagged line to include as context (default: 10).
+context_lines = 10
+
+[sbom]
+# Default output path for generated SBOMs (default: "sbom.json").
+default_output = "sbom.json"
+
+# For greengate sbom --verify: expected OIDC issuer of the signing certificate.
+# Leave unset to accept any Sigstore identity (permissive but still validates Rekor).
+# expected_issuer = "https://token.actions.githubusercontent.com"
+
+# For greengate sbom --verify: expected signer identity (exact match).
+# Typically the full workflow URL including ref, e.g.:
+# expected_identity = "https://github.com/acme/repo/.github/workflows/release.yml@refs/heads/main"
+
+[telemetry]
+# Master switch (default: true — but nothing is sent unless an endpoint or file is set)
+enabled = true
+
+# Service name attached to every metric as the service.name resource attribute.
+service_name = "my-service"
+
+# OTLP HTTP/JSON endpoint (port 4318, not gRPC 4317). Leave unset to disable.
+# otlp_endpoint = "http://localhost:4318"
+
+# Prometheus text-format .prom file. Leave unset to disable.
+# metrics_file = "/var/lib/node_exporter/textfile/greengate.prom"
 ```
 
 ## Precedence
