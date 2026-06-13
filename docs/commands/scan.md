@@ -1,13 +1,13 @@
 ---
-title: 'scan — Secret & PII Scanning'
-description: 'Scan your codebase for hardcoded secrets, credentials, and PII using 26 built-in patterns plus AST-based SAST for JS, TS, Python, and Go with taint tracking.'
+title: 'scan — Secret, PII & SAST Scanning'
+description: 'Scan your codebase for hardcoded secrets, credentials, and PII using 26 built-in patterns plus AST-based SAST for JS, TS, Python, Go, and Rust. Supports --fix auto-redaction and --triage LLM false-positive classification.'
 ---
 
-# scan — Secret & PII Scanning
+# scan — Secret, PII & SAST Scanning
 
-Recursively scans every file in the current directory for hardcoded secrets, credentials, and PII using 26 built-in regex patterns. Respects `.gitignore` automatically.
+Recursively scans every file in the current directory for hardcoded secrets, credentials, and PII using 26 built-in regex patterns plus Shannon entropy detection. Respects `.gitignore` automatically.
 
-For JavaScript, TypeScript, Python, and Go files the scanner automatically runs an AST-based SAST pass using tree-sitter. This eliminates false positives from comments and string non-literals, and additionally flags dangerous API patterns (XSS sinks, eval, command injection, unsafe deserialization).
+For JavaScript, TypeScript, Python, Go, and Rust files the scanner additionally runs an AST-based SAST pass using tree-sitter, eliminating false positives from comments and string non-literals.
 
 ## Usage
 
@@ -25,6 +25,10 @@ Options:
   --update-baseline    Save current findings as the baseline (.greengate-baseline.json)
   --since-baseline     Only fail on findings not present in the saved baseline
   --blame              Enrich each finding with git blame info (author + commit)
+  --fix                Auto-redact detected secrets in-place (replaces matched values with <REDACTED>)
+  --dry-run            Preview what --fix would change without writing to disk
+  --triage             Call an LLM to classify each finding as likely-real,
+                       likely-false-positive, or uncertain
   -h, --help           Print help
 ```
 
@@ -56,31 +60,91 @@ greengate scan --format gitlab > gl-sast-report.json
 greengate scan --blame
 
 # Post findings directly to the GitHub Checks tab + PR summary comment
-GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
-GITHUB_REPOSITORY=owner/repo \
-GITHUB_SHA=${{ github.sha }} \
+GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repo GITHUB_SHA=abc123 \
 greengate scan --annotate
+
+# Preview what auto-redaction would change (no files written)
+greengate scan --dry-run
+
+# Auto-redact detected secrets in-place
+greengate scan --fix
+
+# Triage each finding with an LLM (requires ANTHROPIC_API_KEY by default)
+greengate scan --triage
 ```
 
-## AST-Based SAST for JS/TS/Python/Go
+## Auto-fix (`--fix` / `--dry-run`)
 
-When scanning `.js`, `.jsx`, `.ts`, `.tsx`, `.py`, or `.go` files, greengate uses tree-sitter to parse each file into a real AST. This provides:
+`--fix` rewrites files in-place, replacing the matched secret value with `<REDACTED>`. SAST findings are listed but not modified — only secret/PII patterns that have a clearly bounded matched value are redacted.
 
-**1. String-literal scoping** — secret patterns only fire inside string and template literals, not comments or JSX text:
+**Workflow:**
+
+```bash
+# 1. Preview changes (no writes)
+greengate scan --dry-run
+
+# 2. Review the diff output, then apply
+greengate scan --fix
+
+# 3. Verify the result
+git diff
+```
+
+`--dry-run` prints a unified diff-style preview showing exactly which characters would be replaced. No files are written.
+
+## AI triage (`--triage`)
+
+When enabled, each finding is sent to an LLM along with ~10 lines of surrounding context. The LLM classifies it as likely-real, likely-false-positive, or uncertain and gives a one-sentence reason.
+
+```
+⚠️  Found 3 potential issue(s) — 1 triaged as false positive(s) and auto-suppressed, 2 require attention:
+
+  - [HIGH] [SAST/CommandInjection] ./src/admin/shell.rs:88
+    → Triage: LIKELY REAL (94%) — User-controlled cmd flows into Command::new with no sanitization.
+
+  - [HIGH] [Secret/AwsAccessKey] ./tests/fixtures/creds.rs:12 [AUTO-SUPPRESSED]
+    → Triage: LIKELY FALSE POSITIVE (91%) — Matches canonical AWS example key in test fixture.
+
+  - [MEDIUM] [SAST/EvalUsage] ./src/utils/eval.rs:44
+    → Triage: UNCERTAIN (55%) — eval() usage but surrounding context does not clarify intent.
+
+  Triage summary: 1 likely real · 1 uncertain · 1 false positive (suppressed: 1) · 0 unavailable
+```
+
+**Setup:**
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...   # Claude (default)
+greengate scan --triage
+```
+
+Configure model, endpoint, and auto-suppression threshold in `.greengate.toml`:
+
+```toml
+[triage]
+model                   = "claude-haiku-4-5-20251001"
+api_key_env             = "ANTHROPIC_API_KEY"
+auto_suppress_threshold = 0.90   # suppress when ≥ 90% confident it's a false positive
+context_lines           = 10
+# endpoint = "http://localhost:11434/v1/chat/completions"  # Ollama / any OpenAI-compat
+```
+
+See [AI Triage reference](/reference/triage) for full configuration and local model setup.
+
+## AST-based SAST
+
+When scanning `.js`, `.jsx`, `.ts`, `.tsx`, `.py`, `.go`, or `.rs` files, greengate uses tree-sitter to parse a real AST. This provides:
+
+**String-literal scoping** — secret patterns only fire inside string and template literals, not comments or JSX text:
 
 ```ts
-// AKIAIOSFODNN7EXAMPLE123       ← comment: NOT flagged
+// AKIAIOSFODNN7EXAMPLE123          ← comment: NOT flagged
 const key = "AKIAIOSFODNN7EXAMPLE123";  // ← string literal: flagged
 ```
 
-```tsx
-<p>contact@example.com</p>               // ← JSX text: NOT flagged
-<Input placeholder="name@example.com" /> // ← string attribute: flagged
-```
+**Dangerous pattern detection** — structural rules that catch XSS, eval, command injection, unsafe deserialization, and more. See [SAST Rules](/reference/sast-rules) for the full list.
 
-**2. Dangerous pattern detection** — structural rules that catch XSS, eval, command injection, unsafe deserialization, and more regardless of whether arguments are literals. See [SAST Rules](/reference/sast-rules) for the full list.
-
-**3. Code smell rules** — flags long functions, too many parameters, and deep nesting (JS/TS only). See [SAST Rules](/reference/sast-rules).
+**Code smell rules** — flags long functions, too many parameters, and deep nesting (JS/TS only).
 
 ## Baseline mode
 
@@ -100,8 +164,6 @@ greengate scan --since-baseline
 # Only fails if new findings are introduced vs the baseline
 ```
 
-The baseline file stores `(file, rule, line)` fingerprints. If a secret moves to a different line, it appears as a new finding and is re-reviewed.
-
 ```yaml
 # GitHub Actions example
 - name: Save baseline (main branch only)
@@ -120,6 +182,20 @@ Add `// greengate: ignore` on the same line to suppress a specific finding:
 ```ts
 const legacyKey = "AKIAIOSFODNN7EXAMPLE123"; // greengate: ignore
 el.innerHTML = sanitizedHtml;                 // greengate: ignore
+```
+
+Or on the line above to suppress the next line:
+
+```python
+# greengate: ignore
+AWS_KEY = load_from_env("AWS_ACCESS_KEY_ID")
+```
+
+Suppress an entire rule class across the repo via `[sast]` in `.greengate.toml`:
+
+```toml
+[sast]
+disabled_rules = ["SAST/RustUnwrap", "SMELL/LongFunction"]
 ```
 
 ## Sample output
