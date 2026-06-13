@@ -20,5 +20,6 @@ pub mod scanner;
 pub mod taint;
 pub mod telemetry;
 pub mod tia;
+pub mod triage;
 pub mod watch;
 pub mod watch_install;

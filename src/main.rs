@@ -53,6 +53,11 @@ enum Commands {
         /// Preview what --fix would change without writing to disk.
         #[arg(long)]
         dry_run: bool,
+        /// Call an LLM to triage each finding as likely-real, likely-false-positive, or
+        /// uncertain. Requires an API key in the env var set by [triage] api_key_env
+        /// (default: ANTHROPIC_API_KEY). Configure model and endpoint in .greengate.toml.
+        #[arg(long)]
+        triage: bool,
     },
     /// Validates Kubernetes YAML manifests for resource limits and security issues
     Lint {
@@ -301,6 +306,7 @@ fn main() -> anyhow::Result<()> {
             blame,
             fix,
             dry_run,
+            triage,
         } => {
             let output_format = match format.as_str() {
                 "json" => OutputFormat::Json,
@@ -380,6 +386,20 @@ fn main() -> anyhow::Result<()> {
                 &modules::telemetry::scan_metrics(&findings, scan_duration_ms),
                 &cfg.telemetry,
             );
+
+            // Triage path — LLM annotates each finding before printing
+            if triage && cfg.triage.enabled {
+                let triage_results = modules::triage::triage_findings(&findings, &cfg.triage);
+                let effective = modules::triage::emit_triaged(
+                    &findings,
+                    &triage_results,
+                    cfg.triage.auto_suppress_threshold,
+                );
+                if effective > 0 {
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
 
             // Normal scan path
             if annotate

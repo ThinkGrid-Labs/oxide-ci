@@ -27,6 +27,7 @@ No Node. No Python. No JVM. No Docker. Just copy the binary and run.
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Suppressing false positives](#suppressing-false-positives)
+- [AI triage](#ai-triage)
 - [SBOM attestation](#sbom-attestation)
 - [GitHub Actions](#github-actions)
 - [Configuration](#configuration)
@@ -63,6 +64,7 @@ Commands are grouped by concern. Each runs standalone or as a step in `greengate
 | `greengate scan --history` | Scan the full git commit history for secrets (catches credentials that were committed then deleted). |
 | `greengate scan --staged` | Scan only staged files — ideal as a pre-commit hook. |
 | `greengate scan --format sarif` | Emit SARIF 2.1.0 for GitHub Code Scanning / SonarQube upload. Also supports `json`, `junit`, `gitlab`. |
+| `greengate scan --triage` | Call an LLM to classify each finding as likely-real, likely-false-positive, or uncertain. Shows confidence % and a one-sentence reason. Supports Claude (default), any OpenAI-compatible API, or a local model via Ollama. |
 
 ### Supply Chain Protection
 
@@ -252,6 +254,9 @@ greengate coverage --file coverage/lcov.info --min 80
 # Lint Kubernetes manifests
 greengate lint --dir ./k8s
 
+# Triage findings with an LLM (requires ANTHROPIC_API_KEY)
+greengate scan --triage
+
 # Generate a CycloneDX SBOM
 greengate sbom --output sbom.json
 
@@ -307,6 +312,90 @@ Save current findings as an accepted baseline and only fail on *new* findings:
 greengate scan --update-baseline   # save current state
 greengate scan --since-baseline    # fail only on new findings
 ```
+
+---
+
+## AI triage
+
+False positives are the #1 reason developers disable security tools. `--triage` sends each finding to an LLM along with its surrounding source code and asks: *"Is this a real issue or a false positive, and why?"*
+
+```
+⚠️  Found 3 potential issue(s) — 1 triaged as false positive(s) and auto-suppressed, 2 require attention:
+
+  - [HIGH] [SAST/CommandInjection] ./src/admin/shell.rs:88
+    → Triage: LIKELY REAL (94%) — User-controlled cmd flows into Command::new with no sanitization.
+
+  - [HIGH] [Secret/AwsAccessKey] ./tests/fixtures/creds.rs:12 [AUTO-SUPPRESSED]
+    → Triage: LIKELY FALSE POSITIVE (91%) — Matches canonical AWS example key in test fixture.
+
+  - [MEDIUM] [SAST/EvalUsage] ./src/utils/eval.rs:44
+    → Triage: UNCERTAIN (55%) — eval() usage but surrounding context does not clarify intent.
+
+  Triage summary: 1 likely real · 1 uncertain · 1 false positive (suppressed: 1) · 0 unavailable
+```
+
+### Setup
+
+Set the API key for your chosen model:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...   # Claude (default)
+export OPENAI_API_KEY=sk-...          # OpenAI-compatible
+```
+
+Then run:
+
+```bash
+greengate scan --triage
+```
+
+No additional dependencies — greengate calls the API directly using its built-in HTTP client.
+
+### Configuration
+
+```toml
+[triage]
+model                   = "claude-haiku-4-5-20251001"  # fast and cheap; accurate enough for triage
+api_key_env             = "ANTHROPIC_API_KEY"           # env var that holds the key
+auto_suppress_threshold = 0.0                           # 0 = annotate only; 0.9 = auto-suppress high-confidence FPs
+context_lines           = 10                            # source lines before/after the finding sent as context
+# endpoint = "http://localhost:11434/v1/chat/completions"  # Ollama or any OpenAI-compatible API
+```
+
+### `auto_suppress_threshold`
+
+When set above `0.0`, findings where the LLM is at least that confident they are false positives are automatically suppressed — they appear in output tagged `[AUTO-SUPPRESSED]` but do not cause a non-zero exit code.
+
+| Value | Behaviour |
+|---|---|
+| `0.0` (default) | Annotate all findings; never suppress. Safe for first use. |
+| `0.90` | Suppress findings the LLM is ≥ 90% confident are false positives. |
+| `1.0` | Only suppress when the LLM is 100% confident — effectively off. |
+
+Start at `0.0` to see the triage output, then raise the threshold once you trust the results for your codebase.
+
+### Local models via Ollama
+
+Run triage entirely offline — no data leaves your machine:
+
+```bash
+ollama pull mistral
+```
+
+```toml
+[triage]
+model       = "mistral"
+api_key_env = "UNUSED"                                           # Ollama doesn't require a key
+endpoint    = "http://localhost:11434/v1/chat/completions"
+```
+
+Any model that supports the OpenAI `/v1/chat/completions` format works: Mistral, Llama 3, Phi-3, Gemma, etc.
+
+### How triage errors are handled
+
+- **API key missing** — prints a warning and falls through to normal scan output. Findings are never silently swallowed.
+- **API call fails for one finding** — that finding shows `Triage: unavailable` and is counted as non-suppressed. The scan continues.
+- **Triage errors never affect the scan exit code** — if LLM calls all fail, the exit code is determined entirely by the raw findings.
 
 ---
 
@@ -593,6 +682,13 @@ steps = [
   "coverage",
   "review --base main --coverage-file coverage/lcov.info",
 ]
+
+[triage]
+model                   = "claude-haiku-4-5-20251001"
+api_key_env             = "ANTHROPIC_API_KEY"
+auto_suppress_threshold = 0.0      # raise to 0.9 once you've reviewed triage output
+context_lines           = 10
+# endpoint = "http://localhost:11434/v1/chat/completions"  # Ollama
 
 [sbom]
 default_output    = "sbom.json"

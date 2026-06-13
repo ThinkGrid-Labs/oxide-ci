@@ -30,6 +30,8 @@ pub struct Config {
     pub telemetry: TelemetryConfig,
     #[serde(default)]
     pub sbom: SbomConfig,
+    #[serde(default)]
+    pub triage: TriageConfig,
 }
 
 /// Audit settings loaded from `.greengate.toml` under `[audit]`.
@@ -490,6 +492,65 @@ impl Default for SbomConfig {
 
 fn default_sbom_output() -> String {
     "sbom.json".to_string()
+}
+
+// ── Triage config ─────────────────────────────────────────────────────────────
+
+/// Settings for `greengate scan --triage` loaded from `.greengate.toml` under `[triage]`.
+#[derive(Deserialize, Clone)]
+pub struct TriageConfig {
+    /// Master switch — set to false to disable triage even when --triage is passed (default: true)
+    #[serde(default = "default_triage_enabled")]
+    pub enabled: bool,
+    /// LLM model to use. Default: claude-haiku-4-5-20251001 (fast, cheap, accurate enough).
+    /// For OpenAI-compatible endpoints use the model name expected by that API.
+    #[serde(default = "default_triage_model")]
+    pub model: String,
+    /// Name of the environment variable that holds the API key (default: ANTHROPIC_API_KEY).
+    #[serde(default = "default_triage_api_key_env")]
+    pub api_key_env: String,
+    /// LLM API endpoint. Leave unset to use the Anthropic Messages API.
+    /// Set to an OpenAI-compatible URL (e.g. http://localhost:11434/v1/chat/completions)
+    /// to use a local model via Ollama or any other OpenAI-compatible server.
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    /// Automatically suppress findings where the LLM is ≥ this confident they are false
+    /// positives. 0.0 = never auto-suppress (just annotate). 0.9 is a good starting point.
+    #[serde(default)]
+    pub auto_suppress_threshold: f64,
+    /// Number of source lines before and after the flagged line to include as context
+    /// in the LLM prompt (default: 10).
+    #[serde(default = "default_triage_context_lines")]
+    pub context_lines: usize,
+}
+
+impl Default for TriageConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_triage_enabled(),
+            model: default_triage_model(),
+            api_key_env: default_triage_api_key_env(),
+            endpoint: None,
+            auto_suppress_threshold: 0.0,
+            context_lines: default_triage_context_lines(),
+        }
+    }
+}
+
+fn default_triage_enabled() -> bool {
+    true
+}
+
+fn default_triage_model() -> String {
+    "claude-haiku-4-5-20251001".to_string()
+}
+
+fn default_triage_api_key_env() -> String {
+    "ANTHROPIC_API_KEY".to_string()
+}
+
+fn default_triage_context_lines() -> usize {
+    10
 }
 
 /// Load `.greengate.toml` from the current directory, falling back to defaults.
