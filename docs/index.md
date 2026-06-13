@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: greengate
+  name: Greengate
   text: One binary. Zero runtimes. Every security and quality gate your CI pipeline needs.
   tagline: Most teams string together 6+ tools for secret scanning, SAST, supply chain, coverage, and CI linting — each with its own runtime and config format. greengate replaces all of them with a single compiled Rust binary you drop into any pipeline in under 30 seconds.
   actions:
