@@ -26,6 +26,8 @@ pub struct Config {
     pub supply_chain: SupplyChainConfig,
     #[serde(default)]
     pub tia: TiaConfig,
+    #[serde(default)]
+    pub telemetry: TelemetryConfig,
 }
 
 /// Audit settings loaded from `.greengate.toml` under `[audit]`.
@@ -410,6 +412,49 @@ fn default_tia_test_patterns() -> Vec<String> {
         "tests/**/*.py".to_string(),
         "**/*_test.go".to_string(),
     ]
+}
+
+// ── Telemetry config ──────────────────────────────────────────────────────────
+
+/// Settings for metrics export loaded from `.greengate.toml` under `[telemetry]`.
+#[derive(Deserialize, Clone)]
+pub struct TelemetryConfig {
+    /// Master switch — set to false to disable all telemetry (default: true)
+    #[serde(default = "default_telemetry_enabled")]
+    pub enabled: bool,
+    /// OTLP HTTP endpoint, e.g. "http://localhost:4318". Leave unset to disable.
+    /// Accepts any OTLP-compatible collector: OpenTelemetry Collector, Grafana
+    /// Agent, Datadog Agent OTLP intake, Honeycomb, etc.
+    #[serde(default)]
+    pub otlp_endpoint: Option<String>,
+    /// Service name attached to every metric as the `service.name` resource
+    /// attribute (default: "greengate").
+    #[serde(default = "default_telemetry_service_name")]
+    pub service_name: String,
+    /// Path to write a Prometheus text-format `.prom` file after each command.
+    /// Point Prometheus node_exporter's `--collector.textfile.directory` at the
+    /// containing directory. Leave unset to disable.
+    #[serde(default)]
+    pub metrics_file: Option<String>,
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_telemetry_enabled(),
+            otlp_endpoint: None,
+            service_name: default_telemetry_service_name(),
+            metrics_file: None,
+        }
+    }
+}
+
+fn default_telemetry_enabled() -> bool {
+    true
+}
+
+fn default_telemetry_service_name() -> String {
+    "greengate".to_string()
 }
 
 /// Load `.greengate.toml` from the current directory, falling back to defaults.

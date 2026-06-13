@@ -186,7 +186,7 @@ pub fn run_cargo_add(opts: CargoAddOpts) -> Result<()> {
     let pre_lock_crates = parse_cargo_lock("Cargo.lock");
 
     // ── Run cargo add ─────────────────────────────────────────────────────────
-    let status = std::process::Command::new("cargo")
+    let status = std::process::Command::new("cargo") // greengate: ignore — intentionally wrapping cargo to intercept the add
         .arg("add")
         .args(&opts.args)
         .status();
@@ -207,8 +207,7 @@ pub fn run_cargo_add(opts: CargoAddOpts) -> Result<()> {
         _ => {}
     }
 
-    // Fetch new crates so registry sources are populated
-    let _ = std::process::Command::new("cargo")
+    let _ = std::process::Command::new("cargo") // greengate: ignore — fetching registry sources after add
         .args(["fetch", "--quiet"])
         .status();
 

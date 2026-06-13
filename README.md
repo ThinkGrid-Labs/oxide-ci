@@ -106,6 +106,13 @@ Commands are grouped by concern. Each runs standalone or as a step in `greengate
 | `greengate watch` | Re-run `scan` automatically whenever source files change (file-watcher mode for local development). |
 | `greengate check-config` | Validate `.greengate.toml` and print all resolved configuration values. |
 
+### Observability
+
+| Feature | How it works |
+|---|---|
+| **OTLP metrics export** | After each command, greengate POSTs structured metrics to any OpenTelemetry-compatible collector (Grafana, Datadog, Honeycomb, etc.) via OTLP HTTP/JSON. Configure `otlp_endpoint` in `[telemetry]`. |
+| **Prometheus text format** | Writes a `.prom` file after each command. Point `node_exporter --collector.textfile.directory` at the same directory and metrics are scraped automatically. Configure `metrics_file` in `[telemetry]`. |
+
 ---
 
 ## Supported languages
@@ -294,6 +301,64 @@ greengate scan --since-baseline    # fail only on new findings
 
 ---
 
+## Telemetry
+
+greengate emits metrics after every command run. Both backends are **opt-in, optional, and independent** — telemetry errors are printed as warnings and never cause a command to fail.
+
+### OTLP (OpenTelemetry)
+
+```toml
+[telemetry]
+enabled       = true
+otlp_endpoint = "http://localhost:4318"   # OTLP HTTP/JSON (port 4318, not gRPC 4317)
+service_name  = "my-api"                  # attached as service.name resource attribute
+```
+
+Metrics are posted to `{otlp_endpoint}/v1/metrics` after each run. Compatible with:
+
+| Backend | How to connect |
+|---|---|
+| **OpenTelemetry Collector** | Set `otlp_endpoint` to the collector's OTLP HTTP receiver |
+| **Grafana Cloud** | Use the Grafana Agent OTLP endpoint, or the Cloud OTLP gateway URL |
+| **Datadog** | Enable OTLP intake in the Datadog Agent (`otlp_config.receiver.protocols.http`) |
+| **Honeycomb** | `https://api.honeycomb.io` with `api-key` header (set via collector) |
+| **Self-hosted Grafana + Prometheus** | Use the Prometheus text format below instead |
+
+### Prometheus text format
+
+```toml
+[telemetry]
+enabled      = true
+service_name = "my-api"
+metrics_file = "/var/lib/node_exporter/textfile/greengate.prom"
+```
+
+Writes a `.prom` file with standard `# HELP` / `# TYPE` headers after each command. Add the containing directory to `node_exporter --collector.textfile.directory` and Prometheus will scrape it automatically.
+
+### Metrics reference
+
+| Metric | Type | Labels | Emitted by |
+|---|---|---|---|
+| `greengate_scan_findings_total` | counter | `severity`, `service` | `scan` |
+| `greengate_scan_duration_ms` | gauge | `service` | `scan` |
+| `greengate_command_duration_ms` | gauge | `command`, `success`, `service` | all commands |
+| `greengate_command_success` | gauge | `command`, `service` | all commands |
+
+**Example Grafana queries:**
+
+```promql
+# Finding rate over time
+rate(greengate_scan_findings_total{severity="critical"}[7d])
+
+# Commands failing in CI
+greengate_command_success == 0
+
+# Slowest commands
+topk(5, greengate_command_duration_ms)
+```
+
+---
+
 ## GitHub Actions
 
 The fastest setup: `greengate init --ci github-actions` writes a ready-to-use workflow. Or wire it in manually:
@@ -417,6 +482,12 @@ steps = [
   "coverage",
   "review --base main --coverage-file coverage/lcov.info",
 ]
+
+[telemetry]
+enabled       = true
+otlp_endpoint = "http://localhost:4318"   # OTLP HTTP — remove if not using
+# metrics_file = "/var/lib/node_exporter/textfile/greengate.prom"  # Prometheus
+service_name  = "my-service"
 ```
 
 Full reference → [Configuration Reference](https://thinkgrid-labs.github.io/greengate/reference/config)
@@ -440,7 +511,7 @@ Full reference → [Configuration Reference](https://thinkgrid-labs.github.io/gr
 greengate is open source under the [MIT License](LICENSE). Contributions welcome — especially new secret patterns, SAST rules, and CI platform support.
 
 ```bash
-cargo test          # 72 unit + integration tests
+cargo test          # 255 unit + integration tests
 cargo clippy        # lint
 cargo fmt --check   # formatting
 ```

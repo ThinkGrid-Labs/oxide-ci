@@ -252,6 +252,7 @@ enum Commands {
 }
 
 fn main() -> anyhow::Result<()> {
+    let t0 = std::time::Instant::now();
     let cli = Cli::parse();
 
     // Suppress the "Loaded config" info message when emitting structured output
@@ -305,7 +306,9 @@ fn main() -> anyhow::Result<()> {
                 config: &cfg.scan,
                 sast_config: &cfg.sast,
             };
+            let scan_t0 = std::time::Instant::now();
             let mut findings = modules::scanner::collect_findings(&opts)?;
+            let scan_duration_ms = scan_t0.elapsed().as_millis() as u64;
 
             // Enrich with git blame if requested
             if blame {
@@ -355,6 +358,12 @@ fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
+            // Telemetry — fire and forget, never fails the build
+            modules::telemetry::emit(
+                &modules::telemetry::scan_metrics(&findings, scan_duration_ms),
+                &cfg.telemetry,
+            );
+
             // Normal scan path
             if annotate
                 && let Some(env) = modules::github::detect_github_env()
@@ -375,13 +384,31 @@ fn main() -> anyhow::Result<()> {
         Commands::Coverage { file, min } => {
             let lcov_file = file.unwrap_or(cfg.coverage.file);
             let threshold = min.unwrap_or(cfg.coverage.min);
-            modules::coverage::run_coverage(&lcov_file, threshold)?;
+            let result = modules::coverage::run_coverage(&lcov_file, threshold);
+            modules::telemetry::emit(
+                &modules::telemetry::command_metrics(
+                    "coverage",
+                    t0.elapsed().as_millis() as u64,
+                    result.is_ok(),
+                ),
+                &cfg.telemetry,
+            );
+            result?;
         }
         Commands::InstallHooks { force } => {
             modules::hooks::run_install_hooks(force)?;
         }
         Commands::Audit => {
-            modules::audit::run_audit()?;
+            let result = modules::audit::run_audit();
+            modules::telemetry::emit(
+                &modules::telemetry::command_metrics(
+                    "audit",
+                    t0.elapsed().as_millis() as u64,
+                    result.is_ok(),
+                ),
+                &cfg.telemetry,
+            );
+            result?;
         }
         Commands::Lighthouse {
             url,
@@ -497,10 +524,19 @@ fn main() -> anyhow::Result<()> {
             )?;
         }
         Commands::CiLint { format, file } => {
-            modules::ci_lint::run_ci_lint(modules::ci_lint::CiLintOpts {
+            let result = modules::ci_lint::run_ci_lint(modules::ci_lint::CiLintOpts {
                 format: &format,
                 file,
-            })?;
+            });
+            modules::telemetry::emit(
+                &modules::telemetry::command_metrics(
+                    "ci-lint",
+                    t0.elapsed().as_millis() as u64,
+                    result.is_ok(),
+                ),
+                &cfg.telemetry,
+            );
+            result?;
         }
         Commands::Review {
             base,

@@ -268,22 +268,22 @@ mod tests {
         fn set(key: &'static str, val: &str) -> Self {
             let prev = std::env::var(key).ok();
             // SAFETY: single-threaded test context
-            unsafe { std::env::set_var(key, val) };
+            unsafe { std::env::set_var(key, val) }; // greengate: ignore
             Self { key, prev }
         }
         fn remove(key: &'static str) -> Self {
             let prev = std::env::var(key).ok();
             // SAFETY: single-threaded test context
-            unsafe { std::env::remove_var(key) };
+            unsafe { std::env::remove_var(key) }; // greengate: ignore
             Self { key, prev }
         }
     }
     impl Drop for ScopedEnv {
         fn drop(&mut self) {
             match &self.prev {
-                // SAFETY: single-threaded test context
-                Some(v) => unsafe { std::env::set_var(self.key, v) },
-                None => unsafe { std::env::remove_var(self.key) },
+                // SAFETY: single-threaded test context — restoring env on drop
+                Some(v) => unsafe { std::env::set_var(self.key, v) }, // greengate: ignore
+                None => unsafe { std::env::remove_var(self.key) }, // greengate: ignore
             }
         }
     }

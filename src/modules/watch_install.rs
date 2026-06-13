@@ -329,7 +329,7 @@ pub fn run_watch_install(opts: WatchInstallOpts) -> Result<()> {
 
     // 5. Run the wrapped package manager and inherit its stdio so the developer
     //    sees normal install output.
-    let pm_status = std::process::Command::new(&opts.package_manager)
+    let pm_status = std::process::Command::new(&opts.package_manager) // greengate: ignore — intentionally wrapping the package manager
         .args(&opts.args)
         .status();
 

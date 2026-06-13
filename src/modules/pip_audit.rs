@@ -191,7 +191,7 @@ pub fn run_pip_install(opts: PipInstallOpts) -> Result<()> {
     let pre_scripts = snapshot_scripts_dir(&site_packages_dirs);
 
     // ── Run pip ───────────────────────────────────────────────────────────────
-    let status = std::process::Command::new(&opts.pip)
+    let status = std::process::Command::new(&opts.pip) // greengate: ignore — intentionally wrapping pip to intercept the install
         .args(&opts.args)
         .status();
 
@@ -447,7 +447,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
 
 /// Discover Python site-packages directories by running `pip show pip`.
 fn discover_site_packages(pip: &str) -> Vec<PathBuf> {
-    let out = std::process::Command::new(pip)
+    let out = std::process::Command::new(pip) // greengate: ignore — querying pip to locate site-packages
         .args(["show", "--files", "pip"])
         .output();
 
