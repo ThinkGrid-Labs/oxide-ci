@@ -61,7 +61,7 @@ fn scan_exits_nonzero_on_secrets() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("config.env"),
-        "AWS_KEY=AKIAIOSFODNN7EXAMPLEKEY1\n",
+        "AWS_KEY=AKIA3KGXQW7ZP2MTV9CD\n",
     )
     .unwrap();
 
@@ -244,7 +244,7 @@ fn scan_suppressed_line_is_not_flagged() {
     // AWS key on a line marked with the suppression comment — must not be flagged
     std::fs::write(
         dir.path().join("config.env"),
-        "AWS_KEY=AKIAIOSFODNN7EXAMPLEKEY1  # greengate: ignore\n",
+        "AWS_KEY=AKIA3KGXQW7ZP2MTV9CD  # greengate: ignore\n",
     )
     .unwrap();
 
@@ -267,8 +267,8 @@ fn scan_suppression_only_on_marked_line() {
     std::fs::write(
         dir.path().join("config.env"),
         format!(
-            "SAFE=AKIAIOSFODNN7EXAMPLEKEY1  # greengate: ignore\n{}\n",
-            "REAL=AKIAIOSFODNN7EXAMPLEKEY1"
+            "SAFE=AKIA3KGXQW7ZP2MTV9CD  # greengate: ignore\n{}\n",
+            "REAL=AKIA3KGXQW7ZP2MTV9CD"
         ),
     )
     .unwrap();
@@ -528,7 +528,7 @@ fn sast_phase1_flags_secret_in_ts_string_literal() {
     // AWS key inside a TS string literal — SAST Phase 1 must flag it
     std::fs::write(
         dir.path().join("config.ts"),
-        "const key = \"AKIAIOSFODNN7EXAMPLEKEY1\";\n",
+        "const key = \"AKIA3KGXQW7ZP2MTV9CD\";\n",
     )
     .unwrap();
 
@@ -550,7 +550,7 @@ fn sast_phase1_does_not_flag_secret_in_ts_comment() {
     // Key is only in a comment — SAST Phase 1 must NOT flag it (no string_fragment node)
     std::fs::write(
         dir.path().join("config.ts"),
-        "// Example: AKIAIOSFODNN7EXAMPLEKEY1\nconst x = 1;\n",
+        "// Example: AKIA3KGXQW7ZP2MTV9CD\nconst x = 1;\n",
     )
     .unwrap();
 

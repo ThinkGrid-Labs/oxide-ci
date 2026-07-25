@@ -54,7 +54,7 @@ No Node. No Python. No JVM. No Docker. Just copy the binary and run.
 - **CI-native output** — emits SARIF, JUnit XML, GitLab SAST JSON, and GitHub Check Run annotations with per-line findings. Plugs into Code Scanning, GitLab Security Dashboard, and SonarQube out of the box.
 - **Zero configuration required** — sensible defaults work on any repo; `.greengate.toml` is optional.
 
-> **Where greengate is intentionally not the strongest tool:** on any single classic axis in isolation — raw secret-pattern count, deep inter-procedural taint, or a rules marketplace — a dedicated incumbent (gitleaks, Semgrep Pro) will go deeper. See [Known Limitations](https://thinkgrid-labs.github.io/greengate/reference/limitations) for exactly where those boundaries are. greengate's bet is the supply-chain gate plus good-enough coverage of everything else in one zero-dependency binary.
+> **Where greengate is intentionally not the strongest tool:** on any single classic axis in isolation — raw secret-pattern count, deep inter-procedural taint, or a rules marketplace — a dedicated incumbent (gitleaks, Semgrep Pro) will go deeper. Our own reproducible [secret-detection benchmark](bench/) publishes the numbers honestly, false positives included. See [Known Limitations](https://thinkgrid-labs.github.io/greengate/reference/limitations) for exactly where the boundaries are. greengate's bet is the supply-chain gate plus good-enough coverage of everything else in one zero-dependency binary.
 
 ---
 
@@ -817,6 +817,7 @@ Full reference → [Configuration Reference](https://thinkgrid-labs.github.io/gr
 - [Output Formats](https://thinkgrid-labs.github.io/greengate/reference/output-formats) — SARIF, JUnit, GitLab, JSON
 - [Exit Codes](https://thinkgrid-labs.github.io/greengate/reference/exit-codes)
 - [Roadmap](https://thinkgrid-labs.github.io/greengate/reference/roadmap)
+- [Benchmarks](bench/) — reproducible secret-detection precision/recall vs. other scanners
 
 ---
 

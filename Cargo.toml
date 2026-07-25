@@ -1,10 +1,10 @@
 [package]
 name = "greengate"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.102"
+anyhow = "1.0.103"
 clap = { version = "4.5.60", features = ["derive"] }
 ignore = "0.4.25"
 indicatif = "0.18.4"

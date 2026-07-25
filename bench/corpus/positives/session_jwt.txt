@@ -1,0 +1,2 @@
+# synthetic JWT for benchmark (public jwt.io sample)
+__GG_SECRET__

@@ -6,6 +6,7 @@ mod utils;
 
 #[derive(Parser)]
 #[command(name = "greengate")]
+#[command(version)]
 #[command(about = "A high-performance DevOps CLI tool in Rust", long_about = None)]
 struct Cli {
     /// Apply a preset quality profile: strict, relaxed, or ci
