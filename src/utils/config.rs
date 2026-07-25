@@ -361,6 +361,24 @@ pub struct SupplyChainConfig {
     /// Cargo crate names exempted from `greengate cargo-add` checks.
     #[serde(default)]
     pub allow_cargo_crates: Vec<String>,
+    /// Enable the slopsquat / hallucinated-package guard on install wrappers,
+    /// which scores registry metadata of newly-introduced packages (default: true).
+    #[serde(default = "default_slopsquat_check")]
+    pub slopsquat_check: bool,
+    /// A newly-introduced package registered fewer than this many days ago is
+    /// treated as suspicious (default: 90).
+    #[serde(default = "default_slopsquat_min_age_days")]
+    pub slopsquat_min_age_days: u64,
+    /// A newly-introduced package with fewer total downloads than this is
+    /// treated as suspicious (default: 1000).
+    #[serde(default = "default_slopsquat_min_downloads")]
+    pub slopsquat_min_downloads: u64,
+    /// Private/internal package names, npm scopes (`@myco`), or `prefix-*`
+    /// patterns owned by the caller. If one of these also resolves on the public
+    /// registry during an install, that's flagged as a dependency-confusion risk.
+    /// Empty (default) disables the confusion check.
+    #[serde(default)]
+    pub internal_packages: Vec<String>,
 }
 
 impl Default for SupplyChainConfig {
@@ -371,6 +389,10 @@ impl Default for SupplyChainConfig {
             allow_postinstall: Vec::new(),
             allow_pip_packages: Vec::new(),
             allow_cargo_crates: Vec::new(),
+            slopsquat_check: default_slopsquat_check(),
+            slopsquat_min_age_days: default_slopsquat_min_age_days(),
+            slopsquat_min_downloads: default_slopsquat_min_downloads(),
+            internal_packages: Vec::new(),
         }
     }
 }
@@ -380,6 +402,15 @@ fn default_supply_chain_block_phantom() -> bool {
 }
 fn default_supply_chain_sandbox() -> bool {
     true
+}
+fn default_slopsquat_check() -> bool {
+    true
+}
+fn default_slopsquat_min_age_days() -> u64 {
+    90
+}
+fn default_slopsquat_min_downloads() -> u64 {
+    1000
 }
 
 // ── TIA config ────────────────────────────────────────────────────────────────

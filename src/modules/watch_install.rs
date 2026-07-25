@@ -47,6 +47,14 @@ pub struct WatchInstallOpts {
     pub enforce_sandbox: bool,
     /// Package names whose postinstall scripts may legitimately create temp files
     pub allow_postinstall: Vec<String>,
+    /// Run the slopsquat / hallucinated-package guard (registry-metadata check)
+    pub slopsquat_check: bool,
+    /// Age threshold (days) below which a newly-installed package is suspicious
+    pub slopsquat_min_age_days: u64,
+    /// Download threshold below which a newly-installed package is suspicious
+    pub slopsquat_min_downloads: u64,
+    /// Internal package patterns for the dependency-confusion check
+    pub internal_packages: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -282,6 +290,38 @@ pub fn run_watch_install(opts: WatchInstallOpts) -> Result<()> {
         opts.package_manager,
         opts.args.join(" "),
     ));
+
+    // 0. Layer 0 — Slopsquat / hallucinated-package guard.
+    //    Score any explicitly-requested package name (novel invented names that
+    //    typosquat edit-distance would miss) before the manager runs. Lockfile
+    //    installs (`npm ci`) name no packages here, so this is a no-op for them.
+    if opts.slopsquat_check {
+        use crate::modules::slopsquat::{self, Ecosystem};
+        let names = slopsquat::npm_packages_from_args(&opts.args);
+        if !names.is_empty() {
+            let policy = slopsquat::GuardPolicy {
+                slop: slopsquat::SlopConfig {
+                    min_age_days: opts.slopsquat_min_age_days,
+                    min_downloads: opts.slopsquat_min_downloads,
+                },
+                internal_patterns: opts.internal_packages.clone(),
+            };
+            let in_lock = |name: &str| Path::new("node_modules").join(name).is_dir();
+            let reports = slopsquat::guard(
+                Ecosystem::Npm,
+                &names,
+                &opts.allow_postinstall,
+                &in_lock,
+                &policy,
+            );
+            let blocking = slopsquat::print_reports(Ecosystem::Npm, &reports);
+            if blocking > 0 && opts.block_phantom_scripts {
+                return Err(anyhow::anyhow!(
+                    "Zero-Trust Supply Chain Gate (npm): {blocking} high-suspicion slopsquat(s) — halting before install."
+                ));
+            }
+        }
+    }
 
     // 1. Layer 1 — Pre-flight static scan of already-present node_modules/.
     //    Catches suspicious scripts from a previous install or partial cache.

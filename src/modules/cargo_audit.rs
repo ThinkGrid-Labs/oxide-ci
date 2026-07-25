@@ -32,6 +32,14 @@ pub struct CargoAddOpts {
     pub no_fail: bool,
     /// Crate names whose findings are reported as warnings only
     pub allow_crates: Vec<String>,
+    /// Run the slopsquat / hallucinated-package guard (registry-metadata check)
+    pub slopsquat_check: bool,
+    /// Age threshold (days) below which a newly-introduced crate is suspicious
+    pub slopsquat_min_age_days: u64,
+    /// Download threshold below which a newly-introduced crate is suspicious
+    pub slopsquat_min_downloads: u64,
+    /// Internal package patterns for the dependency-confusion check
+    pub internal_packages: Vec<String>,
 }
 
 // ── Popular crates.io packages for typosquat detection ───────────────────────
@@ -178,6 +186,40 @@ pub fn run_cargo_add(opts: CargoAddOpts) -> Result<()> {
             return Err(anyhow::anyhow!(
                 "Zero-Trust Supply Chain Gate (cargo): {} potential typosquat(s) — halting before add.",
                 blocking
+            ));
+        }
+    }
+
+    // ── Layer 1.5: Slopsquat / hallucinated-package guard ─────────────────────
+    // Typosquat catches names *close to* a popular crate; a hallucinated name is
+    // often novel, so we also score registry metadata (age, downloads, existence)
+    // of any crate not already pinned in Cargo.lock.
+    if opts.slopsquat_check {
+        use crate::modules::slopsquat::{self, Ecosystem};
+        let policy = slopsquat::GuardPolicy {
+            slop: slopsquat::SlopConfig {
+                min_age_days: opts.slopsquat_min_age_days,
+                min_downloads: opts.slopsquat_min_downloads,
+            },
+            internal_patterns: opts.internal_packages.clone(),
+        };
+        let names: Vec<String> = crates_to_add
+            .iter()
+            .map(|k| k.split('@').next().unwrap_or(k).to_string())
+            .collect();
+        let lock = parse_cargo_lock("Cargo.lock");
+        let in_lock = |name: &str| lock.iter().any(|e| e.split(' ').next() == Some(name));
+        let reports = slopsquat::guard(
+            Ecosystem::Cargo,
+            &names,
+            &opts.allow_crates,
+            &in_lock,
+            &policy,
+        );
+        let blocking = slopsquat::print_reports(Ecosystem::Cargo, &reports);
+        if blocking > 0 && !opts.no_fail {
+            return Err(anyhow::anyhow!(
+                "Zero-Trust Supply Chain Gate (cargo): {blocking} high-suspicion slopsquat(s) — halting before add."
             ));
         }
     }
