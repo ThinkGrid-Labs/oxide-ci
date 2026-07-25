@@ -15,9 +15,11 @@
 
 CVE scanners and lock-file diffing share a blind spot: they only catch *known* vulnerabilities in packages that are *already* installed. They cannot see a malicious `postinstall` or `build.rs` script that drops a binary, exfiltrates your secrets, and deletes itself before the install finishes — the "phantom dropper" pattern. greengate watches the install as it happens and catches exactly that class of attack, for **npm, yarn, pnpm, bun, pip, and cargo**, in one static binary. No Docker, no daemon, no known-CVE database required.
 
+**Built for the AI-coding era.** When an agent writes your code, it also *picks your dependencies* — and LLMs hallucinate package names that don't exist. Attackers register those names ("**slopsquatting**") and wait for the next agent to install them. Edit-distance typosquat checks miss it, because the invented name isn't close to anything real. greengate's [slopsquat guard](#slopsquat--hallucinated-package-guard) scores registry metadata (does it exist? how new? how adopted?) on every package an install introduces, and halts before a hallucinated dependency lands.
+
 Once it's in your pipeline, the same binary also runs the rest of your security and quality gates — secret scanning, AST-based SAST, dependency CVE audit, SBOM attestation, coverage, and CI-config hygiene — so you don't string together six separate tools. But the reason to reach for greengate first is the supply-chain gate the others don't have.
 
-No Node. No Python. No JVM. No Docker. Just copy the binary and run.
+No Node. No Python. No JVM. The core gates need no Docker either — just copy the binary and run. (A few opt-in features add a dependency: image scanning needs Docker, SBOM signing needs cosign, and the registry/CVE checks need network access.)
 
 ---
 
@@ -54,7 +56,7 @@ No Node. No Python. No JVM. No Docker. Just copy the binary and run.
 - **CI-native output** — emits SARIF, JUnit XML, GitLab SAST JSON, and GitHub Check Run annotations with per-line findings. Plugs into Code Scanning, GitLab Security Dashboard, and SonarQube out of the box.
 - **Zero configuration required** — sensible defaults work on any repo; `.greengate.toml` is optional.
 
-> **Where greengate is intentionally not the strongest tool:** on any single classic axis in isolation — raw secret-pattern count, deep inter-procedural taint, or a rules marketplace — a dedicated incumbent (gitleaks, Semgrep Pro) will go deeper. Our own reproducible [secret-detection benchmark](bench/) publishes the numbers honestly, false positives included. See [Known Limitations](https://thinkgrid-labs.github.io/greengate/reference/limitations) for exactly where the boundaries are. greengate's bet is the supply-chain gate plus good-enough coverage of everything else in one zero-dependency binary.
+> **Where greengate is intentionally not the strongest tool:** on any single classic axis in isolation — raw secret-pattern count, deep inter-procedural taint, or a rules marketplace — a dedicated incumbent (gitleaks, Semgrep Pro) will go deeper. Our own reproducible [secret-detection benchmark](bench/) publishes the numbers honestly, false positives included. See [Known Limitations](https://thinkgrid-labs.github.io/greengate/reference/limitations) for exactly where the boundaries are. greengate's bet is the supply-chain gate plus good-enough coverage of everything else in a single self-contained binary (a few features — image scanning, SBOM signing, registry checks — additionally need Docker, cosign, or network access).
 
 ---
 
@@ -66,9 +68,11 @@ Commands are grouped by concern. Each runs standalone or as a step in `greengate
 
 | Command | What it does |
 |---|---|
-| `greengate watch-install <pm> <args>` | Wrap any npm/yarn/pnpm/bun install. Three layers: pre-flight lifecycle script scan (entropy + network/eval patterns), runtime phantom-file detection (files created then deleted by postinstall), post-install exec-drop detection. |
-| `greengate pip-install <args>` | Wrap `pip install`. Typosquat detection against the 60 most-downloaded PyPI packages, post-install `.dist-info/RECORD` Python source scan, executable-drop detection. Halts before pip runs if a typosquat is found. |
-| `greengate cargo-add <args>` | Wrap `cargo add`. Typosquat detection against the 60 most-downloaded crates.io crates, `build.rs` static analysis for every newly added crate (network access, subprocess spawning, env exfiltration), transitive dependency explosion guard (> 50 new transitive deps triggers a warning). |
+| `greengate watch-install <pm> <args>` | Wrap any npm/yarn/pnpm/bun install. **Slopsquat guard** on every requested package, pre-flight lifecycle script scan (entropy + network/eval patterns), runtime phantom-file detection (files created then deleted by postinstall), and post-install exec-drop detection. |
+| `greengate pip-install <args>` | Wrap `pip install`. **Slopsquat guard** + typosquat detection against the 60 most-downloaded PyPI packages, post-install `.dist-info/RECORD` Python source scan, executable-drop detection. Halts before pip runs. |
+| `greengate cargo-add <args>` | Wrap `cargo add`. **Slopsquat guard** + typosquat detection against the 60 most-downloaded crates.io crates, `build.rs` static analysis for every newly added crate (network access, subprocess spawning, env exfiltration), transitive dependency explosion guard (> 50 new transitive deps triggers a warning). |
+
+> **What is the slopsquat guard?** See [Slopsquat / hallucinated-package guard](#slopsquat--hallucinated-package-guard) below — the AI-era defense that catches invented package names typosquat detection can't.
 
 > **Scope of the runtime check:** phantom-file detection polls the install tree while the package manager runs, so it catches droppers that touch disk. A payload that exfiltrates purely over the network without writing a file is *not* caught by this layer — pair it with the pre-flight script scan (which flags network/eval patterns) and CI-runner egress controls. Full network isolation is on the [roadmap](https://thinkgrid-labs.github.io/greengate/reference/roadmap) as `sandbox-install`.
 
@@ -100,6 +104,7 @@ Commands are grouped by concern. Each runs standalone or as a step in `greengate
 | `greengate coverage` | Parse LCOV or Cobertura XML and fail if total coverage is below a configurable threshold. |
 | `greengate tia` | Test Impact Analysis — use AST import parsing to determine exactly which test files are affected by a diff. Pipe the output directly into pytest, jest, or go test to skip unaffected tests. |
 | `greengate reassure` | Parse a [Reassure](https://github.com/callstack/reassure) performance report and fail if any React component's mean render time regresses beyond a threshold. |
+| `greengate provenance` | Report the AI-authored vs human-authored split of a commit range (from commit trailers + author identity) and optionally fail when AI-generated code exceeds a share of new lines (`--max-ai-lines-pct`). Emits `--format text\|json\|sarif`. Differentiated governance for the AI-coding era. |
 
 ### Infrastructure & CI
 
@@ -437,6 +442,68 @@ Any model that supports the OpenAI `/v1/chat/completions` format works: Mistral,
 
 ---
 
+## Slopsquat / hallucinated-package guard
+
+AI coding assistants confidently suggest packages that **don't exist**. Attackers harvest these hallucinated names from public prompts and model outputs, register them on npm / PyPI / crates.io, and ship malware to whoever installs them next — a supply-chain attack class known as **slopsquatting**. Because the invented name isn't a near-miss of any real package, classic edit-distance typosquat detection can't see it.
+
+greengate's install wrappers score **registry metadata** for every package an install *introduces* (packages already pinned in your lock file are trusted and skipped):
+
+| Signal | Why it matters |
+|---|---|
+| **Does it exist?** | A name that 404s on the registry is very likely a pure hallucination. |
+| **How new is it?** | Slopsquat packages are registered *after* the model starts suggesting the name — a package a few days old is suspect. |
+| **How adopted is it?** | Near-zero downloads on a package your agent just reached for is a red flag. |
+| **Any source repo?** | Legitimate packages almost always declare one. |
+
+Signals combine into a suspicion level: **HIGH blocks the install, MEDIUM warns.** If the registry is unreachable the check fails **open** — it never breaks an offline or air-gapped build.
+
+```bash
+# An agent suggested a plausible-but-invented crate:
+$ greengate cargo-add fast-json-parser-turbo
+  [SLOPSQUAT] 'fast-json-parser-turbo' — High suspicion
+       · does not exist on the registry (possible hallucinated name)
+  If an AI assistant suggested this name, verify the exact crate at https://crates.io before adding.
+Error: 1 high-suspicion slopsquat(s) — halting before add.
+```
+
+Works across all three install wrappers:
+
+```bash
+greengate watch-install npm install <pkg>   # npm / yarn / pnpm / bun
+greengate pip-install <pkg>                  # PyPI
+greengate cargo-add <pkg>                    # crates.io
+```
+
+### Dependency confusion
+
+The same pre-flight also catches **dependency-confusion** attacks — where an attacker publishes a package to a *public* registry using the name of one of your *private/internal* packages, hoping a misconfigured install resolves the public (malicious) one. Declare what's yours and greengate flags any internal name that unexpectedly resolves on the public registry:
+
+```toml
+[supply_chain]
+internal_packages = ["@mycorp", "acme-internal-*", "acme-secret-db"]
+```
+
+Patterns may be an npm scope (`@mycorp` → matches `@mycorp/anything`), an exact name, or a `prefix-*` wildcard. Empty (default) disables the check.
+
+```
+[DEP-CONFUSION] '@mycorp/auth' — High suspicion
+     · declared internal, but '@mycorp/auth' also resolves on the public npm registry — dependency-confusion risk
+```
+
+### Configuration
+
+```toml
+[supply_chain]
+slopsquat_check         = true    # enable the guard (default: true)
+slopsquat_min_age_days  = 90      # registered more recently than this = suspicious
+slopsquat_min_downloads = 1000    # fewer total downloads than this = suspicious
+internal_packages       = []      # your private names/scopes/prefixes (dependency-confusion)
+```
+
+Add known-good internal package names to the relevant `allow_*` list (`allow_cargo_crates`, `allow_pip_packages`, `allow_postinstall`) to exempt them from the guard.
+
+---
+
 ## SBOM attestation
 
 Software Bill of Materials attestation lets you prove to customers, auditors, and your own security team that a published SBOM was generated by a specific, unmodified build — and that it hasn't been tampered with since.
@@ -754,11 +821,15 @@ exclude_patterns    = ["tests/**", "*.test.ts", "fixtures/**"]
 enabled = true
 
 [supply_chain]
-block_phantom_scripts = true
-enforce_sandbox       = true
-allow_postinstall     = ["esbuild", "prisma", "@swc/core"]  # npm
-allow_pip_packages    = ["grpcio"]                           # pip
-allow_cargo_crates    = ["openssl"]                          # cargo
+block_phantom_scripts   = true
+enforce_sandbox         = true
+allow_postinstall       = ["esbuild", "prisma", "@swc/core"]  # npm
+allow_pip_packages      = ["grpcio"]                           # pip
+allow_cargo_crates      = ["openssl"]                          # cargo
+slopsquat_check         = true    # hallucinated-package guard (all install wrappers)
+slopsquat_min_age_days  = 90      # registered more recently than this = suspicious
+slopsquat_min_downloads = 1000    # fewer total downloads than this = suspicious
+internal_packages       = ["@mycorp", "acme-internal-*"]  # dependency-confusion guard
 
 [coverage]
 file = "coverage/lcov.info"

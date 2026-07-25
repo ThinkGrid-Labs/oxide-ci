@@ -286,6 +286,19 @@ enum Commands {
         #[arg(long)]
         annotate: bool,
     },
+    /// Report the AI-authored vs human-authored split of a commit range, and
+    /// optionally fail when AI-authored code exceeds a share of new lines.
+    Provenance {
+        /// Base ref; the analysed range is `base..HEAD` (default: main)
+        #[arg(long, default_value = "main")]
+        base: String,
+        /// Fail if AI-authored code exceeds this percent of added lines (0-100)
+        #[arg(long)]
+        max_ai_lines_pct: Option<u8>,
+        /// Output format: text (default), json, sarif
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -565,6 +578,10 @@ fn main() -> anyhow::Result<()> {
                 args,
                 no_fail,
                 allow_packages: cfg.supply_chain.allow_pip_packages,
+                slopsquat_check: cfg.supply_chain.slopsquat_check,
+                slopsquat_min_age_days: cfg.supply_chain.slopsquat_min_age_days,
+                slopsquat_min_downloads: cfg.supply_chain.slopsquat_min_downloads,
+                internal_packages: cfg.supply_chain.internal_packages.clone(),
             })?;
         }
         Commands::CargoAdd { args, no_fail } => {
@@ -572,6 +589,10 @@ fn main() -> anyhow::Result<()> {
                 args,
                 no_fail,
                 allow_crates: cfg.supply_chain.allow_cargo_crates,
+                slopsquat_check: cfg.supply_chain.slopsquat_check,
+                slopsquat_min_age_days: cfg.supply_chain.slopsquat_min_age_days,
+                slopsquat_min_downloads: cfg.supply_chain.slopsquat_min_downloads,
+                internal_packages: cfg.supply_chain.internal_packages.clone(),
             })?;
         }
         Commands::ImageScan {
@@ -604,6 +625,10 @@ fn main() -> anyhow::Result<()> {
                 block_phantom_scripts: !no_fail && cfg.supply_chain.block_phantom_scripts,
                 enforce_sandbox: cfg.supply_chain.enforce_sandbox,
                 allow_postinstall: cfg.supply_chain.allow_postinstall,
+                slopsquat_check: cfg.supply_chain.slopsquat_check,
+                slopsquat_min_age_days: cfg.supply_chain.slopsquat_min_age_days,
+                slopsquat_min_downloads: cfg.supply_chain.slopsquat_min_downloads,
+                internal_packages: cfg.supply_chain.internal_packages.clone(),
             })?;
         }
         Commands::Tia {
@@ -634,6 +659,17 @@ fn main() -> anyhow::Result<()> {
                 &cfg.telemetry,
             );
             result?;
+        }
+        Commands::Provenance {
+            base,
+            max_ai_lines_pct,
+            format,
+        } => {
+            modules::provenance::run_provenance(modules::provenance::ProvenanceOpts {
+                base,
+                max_ai_lines_pct,
+                format,
+            })?;
         }
         Commands::Review {
             base,

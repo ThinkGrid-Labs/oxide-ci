@@ -33,6 +33,14 @@ pub struct PipInstallOpts {
     pub no_fail: bool,
     /// Package names whose findings are reported as warnings only
     pub allow_packages: Vec<String>,
+    /// Run the slopsquat / hallucinated-package guard (registry-metadata check)
+    pub slopsquat_check: bool,
+    /// Age threshold (days) below which a requested package is suspicious
+    pub slopsquat_min_age_days: u64,
+    /// Download threshold below which a requested package is suspicious
+    pub slopsquat_min_downloads: u64,
+    /// Internal package patterns for the dependency-confusion check
+    pub internal_packages: Vec<String>,
 }
 
 // ── Popular PyPI package list for typosquat detection ────────────────────────
@@ -181,6 +189,34 @@ pub fn run_pip_install(opts: PipInstallOpts) -> Result<()> {
             return Err(anyhow::anyhow!(
                 "Zero-Trust Supply Chain Gate: {} potential typosquat(s) — halting before install.",
                 blocking
+            ));
+        }
+    }
+
+    // ── Layer 1.5: Slopsquat / hallucinated-package guard ─────────────────────
+    // Catches plausible-but-invented names an AI assistant may have suggested,
+    // which edit-distance typosquat detection misses. Only explicitly-named
+    // packages are checked (`-r requirements.txt` deps are not expanded here).
+    if opts.slopsquat_check {
+        use crate::modules::slopsquat::{self, Ecosystem};
+        let policy = slopsquat::GuardPolicy {
+            slop: slopsquat::SlopConfig {
+                min_age_days: opts.slopsquat_min_age_days,
+                min_downloads: opts.slopsquat_min_downloads,
+            },
+            internal_patterns: opts.internal_packages.clone(),
+        };
+        let reports = slopsquat::guard(
+            Ecosystem::Pypi,
+            &packages_to_install,
+            &opts.allow_packages,
+            &|_| false,
+            &policy,
+        );
+        let blocking = slopsquat::print_reports(Ecosystem::Pypi, &reports);
+        if blocking > 0 && !opts.no_fail {
+            return Err(anyhow::anyhow!(
+                "Zero-Trust Supply Chain Gate (pip): {blocking} high-suspicion slopsquat(s) — halting before install."
             ));
         }
     }
