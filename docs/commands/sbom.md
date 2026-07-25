@@ -107,7 +107,7 @@ steps:
 
   - name: Install greengate
     run: |
-      curl -sL .../greengate-x86_64-unknown-linux-musl \
+      curl -sL .../greengate-linux-amd64 \
         -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
   - name: Generate and attest SBOM

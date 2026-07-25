@@ -1,6 +1,6 @@
 # greengate
 
-**One binary. Zero runtimes. Every security and quality gate your CI pipeline needs.**
+**Stop the supply-chain attacks your CVE scanner can't see — one static binary, no Docker.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build](https://img.shields.io/github/actions/workflow/status/thinkgrid-labs/greengate/ci.yml?branch=main)](https://github.com/thinkgrid-labs/greengate/actions)
@@ -13,7 +13,9 @@
 
 ---
 
-Most teams accumulate a different tool for each concern: a secret scanner, a SAST runner, a CVE auditor, a coverage gate, a supply chain monitor, a CI config linter — each with its own runtime, its own config format, and its own way of breaking. greengate replaces all of them with a single compiled Rust binary you drop into any CI pipeline in under 30 seconds.
+CVE scanners and lock-file diffing share a blind spot: they only catch *known* vulnerabilities in packages that are *already* installed. They cannot see a malicious `postinstall` or `build.rs` script that drops a binary, exfiltrates your secrets, and deletes itself before the install finishes — the "phantom dropper" pattern. greengate watches the install as it happens and catches exactly that class of attack, for **npm, yarn, pnpm, bun, pip, and cargo**, in one static binary. No Docker, no daemon, no known-CVE database required.
+
+Once it's in your pipeline, the same binary also runs the rest of your security and quality gates — secret scanning, AST-based SAST, dependency CVE audit, SBOM attestation, coverage, and CI-config hygiene — so you don't string together six separate tools. But the reason to reach for greengate first is the supply-chain gate the others don't have.
 
 No Node. No Python. No JVM. No Docker. Just copy the binary and run.
 
@@ -39,33 +41,26 @@ No Node. No Python. No JVM. No Docker. Just copy the binary and run.
 
 ## Why greengate?
 
-**Security tools are fragmented.** A typical CI pipeline strings together `gitleaks`, `semgrep`, `npm audit`, `trivy`, `opa`, `pylint`, `jest --coverage` — each installed separately, each needing its own version pin, each producing output in a different format. When one of them breaks the build on a Friday you spend an hour figuring out which one.
+**The gap incumbents leave open.** `npm audit`, Dependabot, and Trivy answer one question: *"do any installed packages have a known CVE?"* They are blind to a package that has no CVE but runs a malicious install script — the attack pattern behind most recent npm/PyPI compromises. That script writes and executes a payload, then deletes it, so a lock-file diff sees nothing and the CVE database has nothing to match. This is the gate greengate adds.
 
-**greengate is the alternative:** one tool, one config file, one exit code. Every gate — secrets, SAST, supply chain, coverage, complexity, CI config hygiene — runs in a single fast pass.
+**How the supply-chain gate works:** wrap your install (`greengate watch-install npm ci`, `greengate pip-install ...`, `greengate cargo-add ...`) and greengate runs three layers — a pre-flight static scan of lifecycle/`build.rs` scripts for network + eval + exfiltration patterns, runtime detection of files created-then-deleted during the install window (the phantom dropper), and post-install executable-drop detection — halting **before** the compromised code can reach the rest of your pipeline. No known-CVE database, no Docker required.
+
+**Then it replaces the rest of your stack too.** A typical pipeline also strings together `gitleaks`, `semgrep`, `trivy`, `jest --coverage`, and a CI-config linter — each installed separately, version-pinned separately, and emitting a different output format. greengate runs all of those gates from the same binary, one config file, one exit code. Breadth is what keeps it in your pipeline; the supply-chain gate is why it earns a place there.
 
 **Key properties:**
-- **Single static binary** — ships as a single musl-linked executable for Linux, macOS, and Windows. Copy it to `/usr/local/bin` and it works.
+- **Catches install-time supply-chain attacks** — the phantom-dropper / malicious-lifecycle-script class that CVE scanners and lock-file diffing structurally cannot detect, across npm/yarn/pnpm/bun/pip/cargo.
+- **Single static binary** — ships as a single musl-linked executable for Linux, macOS, and Windows. Copy it to `/usr/local/bin` and it works. Every release binary is keyless-signed with Sigstore ([verify it](#verifying-a-release-binary)).
 - **AST-accurate SAST** — uses tree-sitter to parse real ASTs instead of fragile regex over source text. No false positives from comments or string literals.
-- **Supply chain aware** — intercepts `npm`, `yarn`, `pnpm`, `bun`, `pip`, and `cargo` installs to detect typosquats, malicious postinstall scripts, and phantom executable drops before they can run.
 - **CI-native output** — emits SARIF, JUnit XML, GitLab SAST JSON, and GitHub Check Run annotations with per-line findings. Plugs into Code Scanning, GitLab Security Dashboard, and SonarQube out of the box.
 - **Zero configuration required** — sensible defaults work on any repo; `.greengate.toml` is optional.
+
+> **Where greengate is intentionally not the strongest tool:** on any single classic axis in isolation — raw secret-pattern count, deep inter-procedural taint, or a rules marketplace — a dedicated incumbent (gitleaks, Semgrep Pro) will go deeper. See [Known Limitations](https://thinkgrid-labs.github.io/greengate/reference/limitations) for exactly where those boundaries are. greengate's bet is the supply-chain gate plus good-enough coverage of everything else in one zero-dependency binary.
 
 ---
 
 ## What it does
 
-Commands are grouped by concern. Each runs standalone or as a step in `greengate run`.
-
-### Secrets & Code Security
-
-| Command | What it does |
-|---|---|
-| `greengate scan` | Scan for hardcoded secrets, PII, and SAST issues. 26 built-in secret patterns (AWS keys, GitHub tokens, private keys, JWTs, etc.) plus Shannon entropy detection for unrecognised credentials. AST-based SAST for unsafe patterns in JS/TS/Python/Go/Rust. |
-| `greengate scan --fix` | Auto-redact detected secrets in-place — replaces matched values with `<REDACTED>`. Use `--dry-run` first to preview changes. |
-| `greengate scan --history` | Scan the full git commit history for secrets (catches credentials that were committed then deleted). |
-| `greengate scan --staged` | Scan only staged files — ideal as a pre-commit hook. |
-| `greengate scan --format sarif` | Emit SARIF 2.1.0 for GitHub Code Scanning / SonarQube upload. Also supports `json`, `junit`, `gitlab`. |
-| `greengate scan --triage` | Call an LLM to classify each finding as likely-real, likely-false-positive, or uncertain. Shows confidence % and a one-sentence reason. Supports Claude (default), any OpenAI-compatible API, or a local model via Ollama. |
+Commands are grouped by concern. Each runs standalone or as a step in `greengate run`. The supply-chain gate is listed first because it's the one incumbent tools don't provide.
 
 ### Supply Chain Protection
 
@@ -74,6 +69,19 @@ Commands are grouped by concern. Each runs standalone or as a step in `greengate
 | `greengate watch-install <pm> <args>` | Wrap any npm/yarn/pnpm/bun install. Three layers: pre-flight lifecycle script scan (entropy + network/eval patterns), runtime phantom-file detection (files created then deleted by postinstall), post-install exec-drop detection. |
 | `greengate pip-install <args>` | Wrap `pip install`. Typosquat detection against the 60 most-downloaded PyPI packages, post-install `.dist-info/RECORD` Python source scan, executable-drop detection. Halts before pip runs if a typosquat is found. |
 | `greengate cargo-add <args>` | Wrap `cargo add`. Typosquat detection against the 60 most-downloaded crates.io crates, `build.rs` static analysis for every newly added crate (network access, subprocess spawning, env exfiltration), transitive dependency explosion guard (> 50 new transitive deps triggers a warning). |
+
+> **Scope of the runtime check:** phantom-file detection polls the install tree while the package manager runs, so it catches droppers that touch disk. A payload that exfiltrates purely over the network without writing a file is *not* caught by this layer — pair it with the pre-flight script scan (which flags network/eval patterns) and CI-runner egress controls. Full network isolation is on the [roadmap](https://thinkgrid-labs.github.io/greengate/reference/roadmap) as `sandbox-install`.
+
+### Secrets & Code Security
+
+| Command | What it does |
+|---|---|
+| `greengate scan` | Scan for hardcoded secrets, PII, and SAST issues. 26 built-in secret patterns (AWS keys, GitHub tokens, private keys, JWTs, etc.) plus Shannon entropy detection for unrecognised credentials. AST-based SAST for unsafe patterns in JS/TS/Python/Go/Rust. |
+| `greengate scan --history` | Scan the full git commit history for secrets (catches credentials that were committed then deleted). |
+| `greengate scan --staged` | Scan only staged files — ideal as a pre-commit hook. |
+| `greengate scan --format sarif` | Emit SARIF 2.1.0 for GitHub Code Scanning / SonarQube upload. Also supports `json`, `junit`, `gitlab`. |
+| `greengate scan --triage` | Call an LLM to classify each finding as likely-real, likely-false-positive, or uncertain. Shows confidence % and a one-sentence reason. Supports Claude (default), any OpenAI-compatible API, or a local model via Ollama. |
+| `greengate scan --dry-run` / `--fix` | Preview (`--dry-run`), then optionally auto-redact detected secrets in-place, replacing matched values with `<REDACTED>`. Always run `--dry-run` first — `--fix` rewrites your source. See [Auto-redact](#auto-redact). |
 
 ### Dependencies
 
@@ -183,26 +191,26 @@ TIA walks the import graph using AST parsing to find which test files transitive
 
 **macOS (Apple Silicon):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-aarch64-apple-darwin \
+curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-macos-arm64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **macOS (Intel):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-x86_64-apple-darwin \
+curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-macos-amd64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Linux (x64, musl — works in Alpine/Docker):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-x86_64-unknown-linux-musl \
+curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Windows (x64) — PowerShell:**
 ```powershell
 Invoke-WebRequest `
-  -Uri "https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-x86_64-pc-windows-msvc.exe" `
+  -Uri "https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-windows-amd64.exe" `
   -OutFile "$env:USERPROFILE\.local\bin\greengate.exe"
 ```
 
@@ -210,6 +218,28 @@ Invoke-WebRequest `
 ```bash
 cargo install --git https://github.com/thinkgrid-labs/greengate
 ```
+
+### Verifying a release binary
+
+Every release binary is signed with [Sigstore](https://sigstore.dev) keyless signing in the release workflow — the same mechanism `greengate sbom --attest` gives your own artifacts. Each asset ships with a `.sig` (signature) and `.pem` (signing certificate) alongside it. Verify a download before trusting it:
+
+```bash
+VERSION=v0.3.2   # the release you downloaded
+BASE="https://github.com/thinkgrid-labs/greengate/releases/download/${VERSION}"
+
+# Fetch the signature and certificate for your platform's asset
+curl -sLO "${BASE}/greengate-linux-amd64.sig"
+curl -sLO "${BASE}/greengate-linux-amd64.pem"
+
+cosign verify-blob \
+  --certificate greengate-linux-amd64.pem \
+  --signature   greengate-linux-amd64.sig \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/[Tt]hink[Gg]rid-[Ll]abs/greengate/.github/workflows/release.yml@refs/tags/' \
+  greengate-linux-amd64
+```
+
+A successful verification proves the binary was produced by greengate's own tagged release workflow and has not been modified since.
 
 ---
 
@@ -222,11 +252,11 @@ greengate init --ci github-actions
 # Scan the current directory for secrets, PII, and SAST issues
 greengate scan
 
-# Preview what --fix would change (no files written)
+# Preview what --fix would change (no files written) — always do this first
 greengate scan --dry-run
 
-# Auto-redact detected secrets in-place
-greengate scan --fix
+# Auto-redact detected secrets in-place (rewrites source; review the diff after)
+greengate scan --fix && git diff
 
 # Audit dependencies for known CVEs (reads any supported lock file)
 greengate audit
@@ -302,13 +332,15 @@ AWS_KEY = load_from_env("AWS_ACCESS_KEY_ID")
 
 ### Auto-redact
 
-Use `--fix` to replace detected secrets with `<REDACTED>` in-place. Preview first with `--dry-run`:
+`--fix` rewrites your working tree, replacing each detected secret with `<REDACTED>` in place. It is a convenience for cleaning up an accidental commit, **not** a gate to run unattended in CI — a false positive means real source gets overwritten. Always preview with `--dry-run`, run it on a clean tree, and review `git diff` before committing:
 
 ```bash
-greengate scan --dry-run   # preview changes
-greengate scan --fix       # apply redactions
-git diff                   # review before committing
+greengate scan --dry-run   # preview changes — no files written
+greengate scan --fix       # apply redactions (rewrites source)
+git diff                   # review every change before committing
 ```
+
+For most workflows, prefer [inline suppression](#inline-suppression) or a [baseline](#baseline) over `--fix`: they leave the (often still-needed) value in place and simply stop it failing the build.
 
 ### Baseline
 
@@ -471,7 +503,7 @@ steps:
 
   - name: Install greengate
     run: |
-      curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-x86_64-unknown-linux-musl \
+      curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
         -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
   - name: Generate and attest SBOM
@@ -651,7 +683,7 @@ jobs:
 
       - name: Install greengate
         run: |
-          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-x86_64-unknown-linux-musl \
+          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
       # Scan for secrets/SAST and upload results to GitHub Code Scanning
