@@ -1,0 +1,8 @@
+# Pinned scan settings so benchmark runs are reproducible.
+# SAST is disabled: this corpus measures SECRET detection only.
+[scan]
+entropy           = true
+entropy_threshold = 4.5
+
+[sast]
+enabled = false

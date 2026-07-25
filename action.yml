@@ -59,10 +59,12 @@ runs:
 
         OS="$(uname -s)"
         ARCH="$(uname -m)"
+        # Asset names must match those published by .github/workflows/release.yml.
         case "${OS}-${ARCH}" in
-          Linux-x86_64)   TRIPLE="x86_64-unknown-linux-musl" ;;
-          Darwin-arm64)   TRIPLE="aarch64-apple-darwin"      ;;
-          Darwin-x86_64)  TRIPLE="x86_64-apple-darwin"       ;;
+          Linux-x86_64)                       ASSET="greengate-linux-amd64"       ;;
+          Darwin-arm64)                       ASSET="greengate-macos-arm64"       ;;
+          Darwin-x86_64)                      ASSET="greengate-macos-amd64"       ;;
+          MINGW*-x86_64|MSYS*-x86_64|CYGWIN*-x86_64) ASSET="greengate-windows-amd64.exe" ;;
           *)
             echo "::error::greengate action: unsupported platform ${OS}-${ARCH}"
             exit 1
@@ -72,8 +74,8 @@ runs:
         INSTALL_DIR="${HOME}/.local/bin"
         mkdir -p "$INSTALL_DIR"
 
-        URL="https://github.com/ThinkGrid-Labs/greengate/releases/download/${VERSION}/greengate-${VERSION}-${TRIPLE}"
-        echo "Downloading greengate ${VERSION} (${TRIPLE})..."
+        URL="https://github.com/ThinkGrid-Labs/greengate/releases/download/${VERSION}/${ASSET}"
+        echo "Downloading greengate ${VERSION} (${ASSET})..."
         curl -sSfL "$URL" -o "${INSTALL_DIR}/greengate"
         chmod +x "${INSTALL_DIR}/greengate"
         echo "${INSTALL_DIR}" >> "$GITHUB_PATH"

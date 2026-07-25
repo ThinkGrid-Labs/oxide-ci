@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # required for keyless Sigstore signing of release binaries
 
 jobs:
   build:
@@ -102,12 +103,34 @@ jobs:
           echo "Release assets:"
           ls -lh release_assets/
 
+      # ── Dogfood our own supply-chain story: keyless-sign every release binary ──
+      # so consumers can cryptographically verify a greengate binary was built by
+      # this workflow and not tampered with. Produces a .sig + .pem per asset,
+      # anchored in the Rekor public transparency log. No private key to manage.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign release binaries (Sigstore keyless)
+        run: |
+          set -euo pipefail
+          for f in release_assets/*; do
+            [ -f "$f" ] || continue
+            echo "Signing $f ..."
+            cosign sign-blob --yes \
+              --output-signature "${f}.sig" \
+              --output-certificate "${f}.pem" \
+              "$f"
+          done
+          echo "Signed assets:"
+          ls -lh release_assets/
+
       - name: Create versioned GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           # tag_name is inferred from the triggering tag (e.g. v0.2.0)
           # Each tag produces a separate, permanent release entry.
           name: GreenGate ${{ github.ref_name }}
+          # Publishes the binaries plus their .sig/.pem Sigstore bundles.
           files: release_assets/*
           generate_release_notes: true
           fail_on_unmatched_files: true

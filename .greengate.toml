@@ -10,6 +10,9 @@
 exclude_patterns = [
     # Integration tests contain deliberate fake patterns as test fixtures
     "tests/**",
+    # Benchmark corpus + manifest are, by design, full of synthetic secrets
+    # (fixtures the scanner is measured against) — never self-scan them.
+    "bench/**",
     # Unit tests inside scanner.rs use fake patterns to verify detection works
     "src/modules/scanner.rs",
     # audit.rs test fixtures contain go.sum hash strings (not secrets)

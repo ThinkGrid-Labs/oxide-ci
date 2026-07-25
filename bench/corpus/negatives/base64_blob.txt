@@ -1,0 +1,2 @@
+# encoded asset manifest (not a secret)
+YXNzZXRfbWFuaWZlc3RfdmVyc2lvbl8xX2Jsb2Jfbm90X2Ffc2VjcmV0X2p1c3RfZGF0YQ==

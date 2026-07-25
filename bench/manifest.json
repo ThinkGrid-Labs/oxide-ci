@@ -1,0 +1,30 @@
+{
+  "_comment": "Ground truth for the greengate secret-detection benchmark. Positives are lines that ANY competent secret scanner should flag. Negatives are FP-trap files: high-entropy-but-harmless strings, placeholders, public/test keys, and documented example values. Any finding a tool reports that does not match a positive (file,line) is counted as a false positive. All secret VALUES are synthetic and non-functional.",
+  "_secrets_note": "To keep contiguous provider-format secrets out of the repository (and out of GitHub secret-scanning / push-protection), fixture files ship with a __GG_SECRET__ placeholder and the real synthetic value is base64-encoded in `secret_b64`. run.py materializes the corpus into a temp dir, substituting the decoded value on the same line, before any tool scans it. Line numbers are preserved.",
+  "line_tolerance": 2,
+  "placeholder": "__GG_SECRET__",
+  "positives": [
+    { "file": "positives/aws_config.py",     "line": 3, "category": "aws-access-key",      "secret_b64": "QUtJQTNLR1hRVzdaUDJNVFY5Q0Q=" },
+    { "file": "positives/github_ci.sh",       "line": 3, "category": "github-pat",          "secret_b64": "Z2hwX2FiY2RlZmdoaWowMTIzNDU2Nzg5QUJDREVGR0hJSjAxMjM0NQ==" },
+    { "file": "positives/stripe_pay.js",       "line": 3, "category": "stripe-secret-key",   "secret_b64": "c2tfbGl2ZV9hYmNkZWZnaGlqMDEyMzQ1Njc4OUFCQ0Q=" },
+    { "file": "positives/gmaps.ts",            "line": 2, "category": "google-api-key",       "secret_b64": "QUl6YWFiY2RlZmdoaWowMTIzNDU2Nzg5QUJDREVGR0hJSktMTU5P" },
+    { "file": "positives/slack_notify.py",     "line": 2, "category": "slack-webhook",        "secret_b64": "aHR0cHM6Ly9ob29rcy5zbGFjay5jb20vc2VydmljZXMvVDAwMDAwMDAwL0IwMDAwMDAwMC9hYmNkZWZBQkNERUYwMTIzNDU2Nzg5YWI=" },
+    { "file": "positives/sendgrid_mail.js",    "line": 2, "category": "sendgrid-api-key",     "secret_b64": "U0cuYWJjZGVmZ2hpajAxMjM0NTY3ODlBQi5hYmNkZWZnaGlqMDEyMzQ1Njc4OUFCQ0RFRkdISUowMTIzNDU2Nzg5YWJj" },
+    { "file": "positives/id_rsa.pem",          "line": 1, "category": "pem-private-key" },
+    { "file": "positives/session_jwt.txt",     "line": 2, "category": "jwt",                  "secret_b64": "ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnpkV0lpT2lJeE1qTTBOVFkzT0Rrd0luMC5kb3pqZ05yeVA0SjNqVm1OSGwwdzVOX1hnTDBuM0k5UGxGVVAwVEhzUjhV" },
+    { "file": "positives/aws_secret.env",      "line": 2, "category": "aws-secret-key",       "secret_b64": "YWJjZGVmZ2hpajAxMjM0NTY3ODlBQkNERUZHSElKMDEyMzQ1Njc4OQ==" },
+    { "file": "positives/google_sa.json",      "line": 2, "category": "gcp-service-account" }
+  ],
+  "negatives": [
+    { "file": "negatives/example_key_docs.md",   "trap": "documented AWS example key AKIAIOSFODNN7EXAMPLE" },
+    { "file": "negatives/package_lock_hash.txt",  "trap": "npm sha512 integrity hashes (high entropy)" },
+    { "file": "negatives/logo_data_uri.css",      "trap": "base64 PNG data URI (high entropy)" },
+    { "file": "negatives/uuids.py",               "trap": "UUIDs / correlation ids" },
+    { "file": "negatives/env_placeholder.env",    "trap": "placeholder env values (YOUR_API_KEY_HERE, changeme)" },
+    { "file": "negatives/git_sha.txt",            "trap": "40-char git commit hashes" },
+    { "file": "negatives/pubkey.pem",             "trap": "PUBLIC key header (must not match private-key rule)" },
+    { "file": "negatives/stripe_test_key.js",     "trap": "Stripe sk_test_ key (not a live secret)", "secret_b64": "c2tfdGVzdF9hYmNkZWZnaGlqMDEyMzQ1Njc4OUFCQ0Q=" },
+    { "file": "negatives/base64_blob.txt",        "trap": "harmless base64 asset blob" },
+    { "file": "negatives/mapbox_public.js",       "trap": "Mapbox pk. public token (client-side, not secret)" }
+  ]
+}

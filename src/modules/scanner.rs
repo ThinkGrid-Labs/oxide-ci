@@ -264,6 +264,77 @@ fn classify_charset(token: &str) -> CharsetKind {
     CharsetKind::Other
 }
 
+/// Substrings that mark a value as a documented example, a template placeholder,
+/// or a test fixture rather than a live credential. Matched case-insensitively
+/// against the secret value itself (not the surrounding line), so a real key that
+/// merely sits near the word "example" is unaffected. Covers the canonical AWS
+/// example key `AKIAIOSFODNN7EXAMPLE`, `YOUR_API_KEY_HERE`, `changeme`, etc.
+const PLACEHOLDER_MARKERS: &[&str] = &[
+    "example",
+    "changeme",
+    "placeholder",
+    "your_",
+    "yourkey",
+    "dummy",
+    "sample",
+    "notreal",
+    "redacted",
+    "xxxxxx",
+];
+
+/// Credential prefixes that are safe by construction — e.g. Stripe **test** keys,
+/// which are explicitly non-live and safe to commit. Matched case-insensitively
+/// against the start of the value.
+const SAFE_PREFIXES: &[&str] = &["sk_test_", "pk_test_", "rk_test_"];
+
+/// True when a matched secret value or high-entropy token is a known false
+/// positive: a documented example, a template placeholder, or a by-construction
+/// safe test key. Applied to BOTH regex and entropy findings so that, e.g., the
+/// AWS example key in documentation is not reported.
+pub(crate) fn is_known_false_positive(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    SAFE_PREFIXES.iter().any(|p| lower.starts_with(p))
+        || PLACEHOLDER_MARKERS.iter().any(|m| lower.contains(m))
+}
+
+/// True when a high-entropy token matches a well-known **non-secret** shape: a
+/// content hash / git object id, a package integrity digest, or base64 asset data
+/// from a data URI. These are high-entropy by nature but never credentials, and
+/// are the dominant source of entropy false positives. Regex secret patterns are
+/// unaffected — this only gates the entropy heuristic.
+fn is_entropy_noise(token: &str, line: &str) -> bool {
+    let lower = token.to_ascii_lowercase();
+    // Subresource / package-manager integrity digests: "sha512-…", "md5-…".
+    if ["sha1-", "sha256-", "sha384-", "sha512-", "md5-"]
+        .iter()
+        .any(|p| lower.starts_with(p))
+    {
+        return true;
+    }
+    // Content hashes / git object ids: pure hex of a canonical digest length
+    // (SHA-1 = 40, SHA-256 = 64, SHA-512 = 128). Length 32 (md5-shaped) is left
+    // detectable, since several API keys are 32 hex chars.
+    if token.chars().all(|c| c.is_ascii_hexdigit()) && matches!(token.len(), 40 | 64 | 128) {
+        return true;
+    }
+    // base64 payload of a data URI, e.g. `url(data:image/png;base64,iVBOR…)`.
+    if line.contains("base64,") {
+        return true;
+    }
+    false
+}
+
+/// True when a line opens or lies inside a PEM key block. Used to suppress the
+/// entropy heuristic on wrapped base64 key bodies (public keys, and the body of a
+/// private key whose `-----BEGIN … PRIVATE KEY-----` header the regex already
+/// caught) — without suppressing the header match itself.
+pub(crate) fn is_pem_boundary(line: &str) -> (bool, bool) {
+    let t = line.trim_start();
+    let begin = t.starts_with("-----BEGIN") && t.contains("KEY-----");
+    let end = t.starts_with("-----END") && t.contains("KEY-----");
+    (begin, end)
+}
+
 /// Check one source line for high-entropy tokens that may be unrecognised secrets.
 /// Returns rule IDs for each flagged token (may be empty).
 pub(crate) fn check_entropy(line: &str, config: &ScanConfig) -> Vec<String> {
@@ -272,6 +343,7 @@ pub(crate) fn check_entropy(line: &str, config: &ScanConfig) -> Vec<String> {
     }
     line.split(['=', ':', '"', '\'', ' ', '\t', ',', ';'])
         .filter(|s| s.len() >= config.entropy_min_length)
+        .filter(|token| !is_entropy_noise(token, line) && !is_known_false_positive(token))
         .flat_map(|token| {
             let e = shannon_entropy(token);
             match classify_charset(token) {
@@ -402,7 +474,10 @@ fn run_history_scan(opts: &ScanOpts, all_patterns: &[(String, Regex)]) -> Result
             }
 
             for (name, regex) in all_patterns {
-                if regex.is_match(line) {
+                if let Some(m) = regex.find(line) {
+                    if is_known_false_positive(m.as_str()) {
+                        continue;
+                    }
                     hits.push(make_finding(
                         path.clone(),
                         name.clone(),
@@ -542,6 +617,7 @@ fn run_regex_scan(
             let mut file_findings: Vec<Finding> = Vec::new();
             if let Ok(content) = fs::read_to_string(path) {
                 let mut suppress_next = false;
+                let mut in_pem_block = false;
                 for (line_no, line) in content.lines().enumerate() {
                     if line.contains("greengate: ignore") {
                         // A standalone comment line (no other content) suppresses the NEXT
@@ -559,8 +635,15 @@ fn run_regex_scan(
                         suppress_next = false;
                         continue;
                     }
+                    let (pem_begin, pem_end) = is_pem_boundary(line);
+                    if pem_begin {
+                        in_pem_block = true;
+                    }
                     for (name, regex) in all_patterns {
-                        if regex.is_match(line) {
+                        if let Some(m) = regex.find(line) {
+                            if is_known_false_positive(m.as_str()) {
+                                continue;
+                            }
                             file_findings.push(make_finding(
                                 path.to_path_buf(),
                                 name.clone(),
@@ -569,13 +652,21 @@ fn run_regex_scan(
                             ));
                         }
                     }
-                    for rule_id in check_entropy(line, opts.config) {
-                        file_findings.push(make_finding(
-                            path.to_path_buf(),
-                            rule_id,
-                            line_no + 1,
-                            None,
-                        ));
+                    // Skip the entropy heuristic on PEM key bodies: the header (if a
+                    // private key) is already caught by the regex above, and the wrapped
+                    // base64 body is not an independent secret.
+                    if !in_pem_block {
+                        for rule_id in check_entropy(line, opts.config) {
+                            file_findings.push(make_finding(
+                                path.to_path_buf(),
+                                rule_id,
+                                line_no + 1,
+                                None,
+                            ));
+                        }
+                    }
+                    if pem_end {
+                        in_pem_block = false;
                     }
                 }
             }
@@ -1106,9 +1197,17 @@ pub fn scan_text_content(
     cfg: &ScanConfig,
 ) -> Vec<Finding> {
     let mut findings = Vec::new();
+    let mut in_pem_block = false;
     for (line_no, line) in content.lines().enumerate() {
+        let (pem_begin, pem_end) = is_pem_boundary(line);
+        if pem_begin {
+            in_pem_block = true;
+        }
         for (name, regex) in patterns {
-            if regex.is_match(line) {
+            if let Some(m) = regex.find(line) {
+                if is_known_false_positive(m.as_str()) {
+                    continue;
+                }
                 findings.push(make_finding(
                     path_label.to_path_buf(),
                     name.clone(),
@@ -1117,13 +1216,18 @@ pub fn scan_text_content(
                 ));
             }
         }
-        for rule_id in check_entropy(line, cfg) {
-            findings.push(make_finding(
-                path_label.to_path_buf(),
-                rule_id,
-                line_no + 1,
-                None,
-            ));
+        if !in_pem_block {
+            for rule_id in check_entropy(line, cfg) {
+                findings.push(make_finding(
+                    path_label.to_path_buf(),
+                    rule_id,
+                    line_no + 1,
+                    None,
+                ));
+            }
+        }
+        if pem_end {
+            in_pem_block = false;
         }
     }
     findings
@@ -1494,6 +1598,76 @@ mod tests {
             hits.iter().any(|r| r.contains("hex")),
             "expected hex entropy hit, got: {:?}",
             hits
+        );
+    }
+
+    // ── Precision: known false positives & entropy noise ───────────────────
+
+    #[test]
+    fn test_allowlist_documented_example_key() {
+        // The canonical AWS example key must not be reported, even though it
+        // matches the AWS Access Key regex shape.
+        assert!(is_known_false_positive("AKIAIOSFODNN7EXAMPLE"));
+    }
+
+    #[test]
+    fn test_allowlist_placeholders_and_test_keys() {
+        assert!(is_known_false_positive("YOUR_API_KEY_HERE"));
+        assert!(is_known_false_positive("changeme"));
+        // Literals are split so the source never contains a contiguous
+        // provider-format key (avoids GitHub push-protection false positives).
+        assert!(is_known_false_positive(
+            &["sk_", "test_abcdefghij0123456789ABCD"].concat()
+        ));
+        // A real-looking live key is NOT allowlisted.
+        assert!(!is_known_false_positive(
+            &["sk_", "live_abcdefghij0123456789ABCD"].concat()
+        ));
+        assert!(!is_known_false_positive("AKIA3KGXQW7ZP2MTV9CD"));
+    }
+
+    #[test]
+    fn test_entropy_noise_skips_git_sha_and_integrity() {
+        let config = default_scan_config();
+        // 40-char git object id — high-entropy hex, but not a secret.
+        assert!(check_entropy("2eed506f9c3b1a4d7e8f0a1b2c3d4e5f6a7b8c9d", &config).is_empty());
+        // npm integrity digest.
+        assert!(
+            check_entropy(
+                "lodash sha512-abcdefghij0123456789ABCDEFGHIJ0123456789xyzAaBb==",
+                &config
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_entropy_noise_skips_data_uri() {
+        let config = default_scan_config();
+        let line =
+            ".logo{background:url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB\")}";
+        assert!(check_entropy(line, &config).is_empty());
+    }
+
+    #[test]
+    fn test_pem_boundary_detection() {
+        assert_eq!(is_pem_boundary("-----BEGIN PUBLIC KEY-----"), (true, false));
+        assert_eq!(
+            is_pem_boundary("-----END RSA PRIVATE KEY-----"),
+            (false, true)
+        );
+        assert_eq!(is_pem_boundary("const x = 1;"), (false, false));
+    }
+
+    #[test]
+    fn test_real_secret_still_flagged_by_entropy() {
+        // Guardrail: the precision filters must not suppress a genuine unknown
+        // high-entropy secret that isn't hash/placeholder/test-shaped.
+        let config = default_scan_config();
+        let hits = check_entropy("API_TOKEN=aB3dEfGhIjKlMnOpQrStUvWxYz012345", &config);
+        assert!(
+            !hits.is_empty(),
+            "genuine high-entropy token should still flag"
         );
     }
 

@@ -1,4 +1,6 @@
-use crate::modules::scanner::{Finding, check_entropy, is_sast_file, make_finding};
+use crate::modules::scanner::{
+    Finding, check_entropy, is_known_false_positive, is_sast_file, make_finding,
+};
 use crate::modules::taint::{TaintCache, taint_for_sink};
 use crate::utils::{
     config::{SastConfig, ScanConfig},
@@ -142,7 +144,10 @@ fn scan_string_literals(
 
             // Run every secret/PII regex against the string literal value only
             for (name, regex) in patterns {
-                if regex.is_match(text) {
+                if let Some(m) = regex.find(text) {
+                    if is_known_false_positive(m.as_str()) {
+                        continue;
+                    }
                     findings.push(make_finding(
                         path.to_path_buf(),
                         name.clone(),
@@ -1129,7 +1134,7 @@ mod tests {
     fn detects_aws_key_in_string_literal() {
         let (sast, scan) = default_configs();
         let patterns = compile_builtins();
-        let f = write_tmp("ts", "const key = \"AKIAIOSFODNN7EXAMPLE123\";\n"); // greengate: ignore
+        let f = write_tmp("ts", "const key = \"AKIA3KGXQW7ZP2MTV9CD\";\n"); // greengate: ignore
         let findings = scan_file(f.path(), &sast, &patterns, &scan, &[]);
         assert!(
             findings.iter().any(|x| x.rule_id == "AWS Access Key"),
@@ -1142,7 +1147,7 @@ mod tests {
     fn ignores_aws_key_in_comment() {
         let (sast, scan) = default_configs();
         let patterns = compile_builtins();
-        let f = write_tmp("ts", "// AKIAIOSFODNN7EXAMPLE123\n"); // greengate: ignore
+        let f = write_tmp("ts", "// AKIA3KGXQW7ZP2MTV9CD\n"); // greengate: ignore
         let findings = scan_file(f.path(), &sast, &patterns, &scan, &[]);
         assert!(
             findings.is_empty(),
@@ -1175,7 +1180,7 @@ mod tests {
     fn detects_secret_in_template_literal() {
         let (sast, scan) = default_configs();
         let patterns = compile_builtins();
-        let f = write_tmp("js", "const k = `AKIAIOSFODNN7EXAMPLE123`;\n"); // greengate: ignore
+        let f = write_tmp("js", "const k = `AKIA3KGXQW7ZP2MTV9CD`;\n"); // greengate: ignore
         let findings = scan_file(f.path(), &sast, &patterns, &scan, &[]);
         assert!(
             findings.iter().any(|x| x.rule_id == "AWS Access Key"),
@@ -1189,7 +1194,7 @@ mod tests {
         let patterns = compile_builtins();
         let f = write_tmp(
             "ts",
-            "const k = \"AKIAIOSFODNN7EXAMPLE123\"; // greengate: ignore\n",
+            "const k = \"AKIA3KGXQW7ZP2MTV9CD\"; // greengate: ignore\n",
         );
         let findings = scan_file(f.path(), &sast, &patterns, &scan, &[]);
         assert!(
