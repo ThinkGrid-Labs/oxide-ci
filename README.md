@@ -19,7 +19,7 @@ CVE scanners and lock-file diffing share a blind spot: they only catch *known* v
 
 Once it's in your pipeline, the same binary also runs the rest of your security and quality gates — secret scanning, AST-based SAST, dependency CVE audit, SBOM attestation, coverage, and CI-config hygiene — so you don't string together six separate tools. But the reason to reach for greengate first is the supply-chain gate the others don't have.
 
-No Node. No Python. No JVM. No Docker. Just copy the binary and run.
+No Node. No Python. No JVM. The core gates need no Docker either — just copy the binary and run. (A few opt-in features add a dependency: image scanning needs Docker, SBOM signing needs cosign, and the registry/CVE checks need network access.)
 
 ---
 
@@ -56,7 +56,7 @@ No Node. No Python. No JVM. No Docker. Just copy the binary and run.
 - **CI-native output** — emits SARIF, JUnit XML, GitLab SAST JSON, and GitHub Check Run annotations with per-line findings. Plugs into Code Scanning, GitLab Security Dashboard, and SonarQube out of the box.
 - **Zero configuration required** — sensible defaults work on any repo; `.greengate.toml` is optional.
 
-> **Where greengate is intentionally not the strongest tool:** on any single classic axis in isolation — raw secret-pattern count, deep inter-procedural taint, or a rules marketplace — a dedicated incumbent (gitleaks, Semgrep Pro) will go deeper. Our own reproducible [secret-detection benchmark](bench/) publishes the numbers honestly, false positives included. See [Known Limitations](https://thinkgrid-labs.github.io/greengate/reference/limitations) for exactly where the boundaries are. greengate's bet is the supply-chain gate plus good-enough coverage of everything else in one zero-dependency binary.
+> **Where greengate is intentionally not the strongest tool:** on any single classic axis in isolation — raw secret-pattern count, deep inter-procedural taint, or a rules marketplace — a dedicated incumbent (gitleaks, Semgrep Pro) will go deeper. Our own reproducible [secret-detection benchmark](bench/) publishes the numbers honestly, false positives included. See [Known Limitations](https://thinkgrid-labs.github.io/greengate/reference/limitations) for exactly where the boundaries are. greengate's bet is the supply-chain gate plus good-enough coverage of everything else in a single self-contained binary (a few features — image scanning, SBOM signing, registry checks — additionally need Docker, cosign, or network access).
 
 ---
 
