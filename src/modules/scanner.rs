@@ -270,8 +270,16 @@ fn classify_charset(token: &str) -> CharsetKind {
 /// merely sits near the word "example" is unaffected. Covers the canonical AWS
 /// example key `AKIAIOSFODNN7EXAMPLE`, `YOUR_API_KEY_HERE`, `changeme`, etc.
 const PLACEHOLDER_MARKERS: &[&str] = &[
-    "example", "changeme", "placeholder", "your_", "yourkey", "dummy", "sample",
-    "notreal", "redacted", "xxxxxx",
+    "example",
+    "changeme",
+    "placeholder",
+    "your_",
+    "yourkey",
+    "dummy",
+    "sample",
+    "notreal",
+    "redacted",
+    "xxxxxx",
 ];
 
 /// Credential prefixes that are safe by construction — e.g. Stripe **test** keys,
@@ -1625,22 +1633,29 @@ mod tests {
         assert!(check_entropy("2eed506f9c3b1a4d7e8f0a1b2c3d4e5f6a7b8c9d", &config).is_empty());
         // npm integrity digest.
         assert!(
-            check_entropy("lodash sha512-abcdefghij0123456789ABCDEFGHIJ0123456789xyzAaBb==", &config)
-                .is_empty()
+            check_entropy(
+                "lodash sha512-abcdefghij0123456789ABCDEFGHIJ0123456789xyzAaBb==",
+                &config
+            )
+            .is_empty()
         );
     }
 
     #[test]
     fn test_entropy_noise_skips_data_uri() {
         let config = default_scan_config();
-        let line = ".logo{background:url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB\")}";
+        let line =
+            ".logo{background:url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB\")}";
         assert!(check_entropy(line, &config).is_empty());
     }
 
     #[test]
     fn test_pem_boundary_detection() {
         assert_eq!(is_pem_boundary("-----BEGIN PUBLIC KEY-----"), (true, false));
-        assert_eq!(is_pem_boundary("-----END RSA PRIVATE KEY-----"), (false, true));
+        assert_eq!(
+            is_pem_boundary("-----END RSA PRIVATE KEY-----"),
+            (false, true)
+        );
         assert_eq!(is_pem_boundary("const x = 1;"), (false, false));
     }
 
@@ -1650,7 +1665,10 @@ mod tests {
         // high-entropy secret that isn't hash/placeholder/test-shaped.
         let config = default_scan_config();
         let hits = check_entropy("API_TOKEN=aB3dEfGhIjKlMnOpQrStUvWxYz012345", &config);
-        assert!(!hits.is_empty(), "genuine high-entropy token should still flag");
+        assert!(
+            !hits.is_empty(),
+            "genuine high-entropy token should still flag"
+        );
     }
 
     #[test]
