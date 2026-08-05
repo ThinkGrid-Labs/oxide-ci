@@ -14,7 +14,7 @@ hero:
       link: /commands/scan
     - theme: alt
       text: View on GitHub
-      link: https://github.com/thinkgrid-labs/greengate
+      link: https://github.com/greengate-dev/greengate
 
 features:
   - title: 🔒 Zero-Trust Supply Chain

@@ -311,7 +311,7 @@ pub fn run_sbom(output_file: Option<&str>) -> Result<()> {
         "metadata": {
             "timestamp": format_timestamp(now),
             "tools": [{
-                "vendor": "ThinkGrid Labs",
+                "vendor": "greengate-dev",
                 "name": "greengate",
                 "version": env!("CARGO_PKG_VERSION")
             }]

@@ -3,13 +3,13 @@
 **Stop the supply-chain attacks your CVE scanner can't see — one static binary, no Docker.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Build](https://img.shields.io/github/actions/workflow/status/thinkgrid-labs/greengate/ci.yml?branch=main)](https://github.com/thinkgrid-labs/greengate/actions)
-[![GitHub release](https://img.shields.io/github/v/release/thinkgrid-labs/greengate)](https://github.com/thinkgrid-labs/greengate/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/greengate-dev/greengate/ci.yml?branch=main)](https://github.com/greengate-dev/greengate/actions)
+[![GitHub release](https://img.shields.io/github/v/release/greengate-dev/greengate)](https://github.com/greengate-dev/greengate/releases/latest)
 [![Crates.io](https://img.shields.io/crates/v/greengate)](https://crates.io/crates/greengate)
 [![Downloads](https://img.shields.io/crates/d/greengate)](https://crates.io/crates/greengate)
 [![MSRV](https://img.shields.io/badge/MSRV-1.85-orange)](https://www.rust-lang.org)
 
-**[Docs](https://thinkgrid-labs.github.io/greengate)** · [Config Reference](https://thinkgrid-labs.github.io/greengate/reference/config) · [CI Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration) · [SAST Rules](https://thinkgrid-labs.github.io/greengate/reference/sast-rules)
+**[Docs](https://greengate-dev.github.io/greengate)** · [Config Reference](https://greengate-dev.github.io/greengate/reference/config) · [CI Integration](https://greengate-dev.github.io/greengate/guide/ci-integration) · [SAST Rules](https://greengate-dev.github.io/greengate/reference/sast-rules)
 
 ---
 
@@ -56,7 +56,7 @@ No Node. No Python. No JVM. The core gates need no Docker either — just copy t
 - **CI-native output** — emits SARIF, JUnit XML, GitLab SAST JSON, and GitHub Check Run annotations with per-line findings. Plugs into Code Scanning, GitLab Security Dashboard, and SonarQube out of the box.
 - **Zero configuration required** — sensible defaults work on any repo; `.greengate.toml` is optional.
 
-> **Where greengate is intentionally not the strongest tool:** on any single classic axis in isolation — raw secret-pattern count, deep inter-procedural taint, or a rules marketplace — a dedicated incumbent (gitleaks, Semgrep Pro) will go deeper. Our own reproducible [secret-detection benchmark](bench/) publishes the numbers honestly, false positives included. See [Known Limitations](https://thinkgrid-labs.github.io/greengate/reference/limitations) for exactly where the boundaries are. greengate's bet is the supply-chain gate plus good-enough coverage of everything else in a single self-contained binary (a few features — image scanning, SBOM signing, registry checks — additionally need Docker, cosign, or network access).
+> **Where greengate is intentionally not the strongest tool:** on any single classic axis in isolation — raw secret-pattern count, deep inter-procedural taint, or a rules marketplace — a dedicated incumbent (gitleaks, Semgrep Pro) will go deeper. Our own reproducible [secret-detection benchmark](bench/) publishes the numbers honestly, false positives included. See [Known Limitations](https://greengate-dev.github.io/greengate/reference/limitations) for exactly where the boundaries are. greengate's bet is the supply-chain gate plus good-enough coverage of everything else in a single self-contained binary (a few features — image scanning, SBOM signing, registry checks — additionally need Docker, cosign, or network access).
 
 ---
 
@@ -74,7 +74,7 @@ Commands are grouped by concern. Each runs standalone or as a step in `greengate
 
 > **What is the slopsquat guard?** See [Slopsquat / hallucinated-package guard](#slopsquat--hallucinated-package-guard) below — the AI-era defense that catches invented package names typosquat detection can't.
 
-> **Scope of the runtime check:** phantom-file detection polls the install tree while the package manager runs, so it catches droppers that touch disk. A payload that exfiltrates purely over the network without writing a file is *not* caught by this layer — pair it with the pre-flight script scan (which flags network/eval patterns) and CI-runner egress controls. Full network isolation is on the [roadmap](https://thinkgrid-labs.github.io/greengate/reference/roadmap) as `sandbox-install`.
+> **Scope of the runtime check:** phantom-file detection polls the install tree while the package manager runs, so it catches droppers that touch disk. A payload that exfiltrates purely over the network without writing a file is *not* caught by this layer — pair it with the pre-flight script scan (which flags network/eval patterns) and CI-runner egress controls. Full network isolation is on the [roadmap](https://greengate-dev.github.io/greengate/reference/roadmap) as `sandbox-install`.
 
 ### Secrets & Code Security
 
@@ -196,32 +196,32 @@ TIA walks the import graph using AST parsing to find which test files transitive
 
 **macOS (Apple Silicon):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-macos-arm64 \
+curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-macos-arm64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **macOS (Intel):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-macos-amd64 \
+curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-macos-amd64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Linux (x64, musl — works in Alpine/Docker):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-linux-amd64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Windows (x64) — PowerShell:**
 ```powershell
 Invoke-WebRequest `
-  -Uri "https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-windows-amd64.exe" `
+  -Uri "https://github.com/greengate-dev/greengate/releases/latest/download/greengate-windows-amd64.exe" `
   -OutFile "$env:USERPROFILE\.local\bin\greengate.exe"
 ```
 
 **Build from source (Rust 1.85+):**
 ```bash
-cargo install --git https://github.com/thinkgrid-labs/greengate
+cargo install --git https://github.com/greengate-dev/greengate
 ```
 
 ### Verifying a release binary
@@ -230,7 +230,7 @@ Every release binary is signed with [Sigstore](https://sigstore.dev) keyless sig
 
 ```bash
 VERSION=v0.3.2   # the release you downloaded
-BASE="https://github.com/thinkgrid-labs/greengate/releases/download/${VERSION}"
+BASE="https://github.com/greengate-dev/greengate/releases/download/${VERSION}"
 
 # Fetch the signature and certificate for your platform's asset
 curl -sLO "${BASE}/greengate-linux-amd64.sig"
@@ -570,7 +570,7 @@ steps:
 
   - name: Install greengate
     run: |
-      curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+      curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-linux-amd64 \
         -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
   - name: Generate and attest SBOM
@@ -750,7 +750,7 @@ jobs:
 
       - name: Install greengate
         run: |
-          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+          curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
       # Scan for secrets/SAST and upload results to GitHub Code Scanning
@@ -796,14 +796,14 @@ jobs:
 Or use the **composite action** (zero download boilerplate):
 
 ```yaml
-- uses: ThinkGrid-Labs/greengate@v0
+- uses: greengate-dev/greengate@v0
   with:
     profile: ci
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-> See [CI/CD Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration) for GitLab CI, Bitbucket Pipelines, and CircleCI examples.
+> See [CI/CD Integration](https://greengate-dev.github.io/greengate/guide/ci-integration) for GitLab CI, Bitbucket Pipelines, and CircleCI examples.
 
 ---
 
@@ -875,19 +875,19 @@ otlp_endpoint = "http://localhost:4318"   # OTLP HTTP — remove if not using
 service_name  = "my-service"
 ```
 
-Full reference → [Configuration Reference](https://thinkgrid-labs.github.io/greengate/reference/config)
+Full reference → [Configuration Reference](https://greengate-dev.github.io/greengate/reference/config)
 
 ---
 
 ## Documentation
 
-- [Getting Started](https://thinkgrid-labs.github.io/greengate/guide/getting-started)
-- [CI/CD Integration](https://thinkgrid-labs.github.io/greengate/guide/ci-integration)
-- [Secret Patterns](https://thinkgrid-labs.github.io/greengate/reference/secret-patterns)
-- [SAST Rules](https://thinkgrid-labs.github.io/greengate/reference/sast-rules)
-- [Output Formats](https://thinkgrid-labs.github.io/greengate/reference/output-formats) — SARIF, JUnit, GitLab, JSON
-- [Exit Codes](https://thinkgrid-labs.github.io/greengate/reference/exit-codes)
-- [Roadmap](https://thinkgrid-labs.github.io/greengate/reference/roadmap)
+- [Getting Started](https://greengate-dev.github.io/greengate/guide/getting-started)
+- [CI/CD Integration](https://greengate-dev.github.io/greengate/guide/ci-integration)
+- [Secret Patterns](https://greengate-dev.github.io/greengate/reference/secret-patterns)
+- [SAST Rules](https://greengate-dev.github.io/greengate/reference/sast-rules)
+- [Output Formats](https://greengate-dev.github.io/greengate/reference/output-formats) — SARIF, JUnit, GitLab, JSON
+- [Exit Codes](https://greengate-dev.github.io/greengate/reference/exit-codes)
+- [Roadmap](https://greengate-dev.github.io/greengate/reference/roadmap)
 - [Benchmarks](bench/) — reproducible secret-detection precision/recall vs. other scanners
 
 ---

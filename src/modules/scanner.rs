@@ -884,7 +884,7 @@ fn output_sarif(findings: &[Finding]) -> Result<()> {
             json!({
                 "id": id,
                 "shortDescription": { "text": format!("{} detected", id) },
-                "helpUri": "https://github.com/ThinkGrid-Labs/greengate"
+                "helpUri": "https://github.com/greengate-dev/greengate"
             })
         })
         .collect();
@@ -921,7 +921,7 @@ fn output_sarif(findings: &[Finding]) -> Result<()> {
                 "driver": {
                     "name": "greengate",
                     "version": env!("CARGO_PKG_VERSION"),
-                    "informationUri": "https://github.com/ThinkGrid-Labs/greengate",
+                    "informationUri": "https://github.com/greengate-dev/greengate",
                     "rules": rules
                 }
             },

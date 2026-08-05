@@ -13,25 +13,25 @@ GreenGate is a single compiled Rust binary — no runtime dependencies, no packa
 
 **macOS (Apple Silicon / M1+):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-macos-arm64 \
+curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-macos-arm64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **macOS (Intel):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-macos-amd64 \
+curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-macos-amd64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Linux (x64):**
 ```bash
-curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-linux-amd64 \
   -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 ```
 
 **Windows (x64) — PowerShell:**
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-windows-amd64.exe" `
+Invoke-WebRequest -Uri "https://github.com/greengate-dev/greengate/releases/latest/download/greengate-windows-amd64.exe" `
   -OutFile "$env:USERPROFILE\.local\bin\greengate.exe"
 # Add $env:USERPROFILE\.local\bin to your PATH if not already present
 ```
@@ -39,7 +39,7 @@ Invoke-WebRequest -Uri "https://github.com/thinkgrid-labs/greengate/releases/lat
 ### Build from source (requires Rust 1.85+)
 
 ```bash
-cargo install --git https://github.com/thinkgrid-labs/greengate
+cargo install --git https://github.com/greengate-dev/greengate
 ```
 
 ### Verify installation

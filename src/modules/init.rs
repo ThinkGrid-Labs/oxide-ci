@@ -262,10 +262,10 @@ jobs:
       - name: Scan (SARIF)
         run: |
           curl -sSfL \
-            "https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)-unknown-linux-musl" \
+            "https://github.com/greengate-dev/greengate/releases/latest/download/greengate-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)-unknown-linux-musl" \
             -o /usr/local/bin/greengate 2>/dev/null \
           || curl -sSfL \
-            "https://github.com/ThinkGrid-Labs/greengate/releases/latest/download/greengate-latest-x86_64-unknown-linux-musl" \
+            "https://github.com/greengate-dev/greengate/releases/latest/download/greengate-latest-x86_64-unknown-linux-musl" \
             -o /usr/local/bin/greengate
           chmod +x /usr/local/bin/greengate
           greengate scan --format sarif > greengate-scan.sarif || true
@@ -283,7 +283,7 @@ jobs:
       # as configured in .greengate.toml [pipeline].
       # This step fails the build if any gate is not met.
       - name: Run pipeline
-        uses: ThinkGrid-Labs/greengate@v0  # TODO: pin to commit SHA
+        uses: greengate-dev/greengate@v0  # TODO: pin to commit SHA
         with:
           profile: ci
         env:

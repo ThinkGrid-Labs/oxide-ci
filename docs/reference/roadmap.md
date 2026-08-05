@@ -41,7 +41,7 @@ The primary implementation dependency, `bollard` (the Rust Docker API crate), is
 
 Additionally, `sandbox-install` requires Docker to be running on the host — which breaks GreenGate's zero-runtime-dependency guarantee for that command. The plan is to make it gracefully fail with a clear error when Docker is not present, rather than requiring it globally.
 
-**Tracking:** Contributions welcome. See [CONTRIBUTING.md](https://github.com/ThinkGrid-Labs/greengate/blob/main/CONTRIBUTING.md) for architecture guidance.
+**Tracking:** Contributions welcome. See [CONTRIBUTING.md](https://github.com/greengate-dev/greengate/blob/main/CONTRIBUTING.md) for architecture guidance.
 
 ---
 

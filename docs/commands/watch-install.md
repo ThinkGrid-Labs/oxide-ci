@@ -155,7 +155,7 @@ Replace your existing `npm install` / `npm ci` step:
 ```yaml
 - name: Install GreenGate
   run: |
-    curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+    curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-linux-amd64 \
       -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
 - name: Zero-Trust supply chain install

@@ -33,17 +33,17 @@ export default defineConfig({
     ['meta', { property: 'og:title', content: 'GreenGate — Rust DevOps Security CLI' }],
     ['meta', { property: 'og:description', content: 'Zero-trust supply chain gate, secret scanning, AST-based SAST, test impact analysis, coverage gates, and Kubernetes linting — one Rust binary, no runtime dependencies.' }],
     ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:url', content: 'https://thinkgrid-labs.github.io/greengate/' }],
-    ['meta', { property: 'og:image', content: 'https://thinkgrid-labs.github.io/greengate/og-image.png' }],
+    ['meta', { property: 'og:url', content: 'https://greengate-dev.github.io/greengate/' }],
+    ['meta', { property: 'og:image', content: 'https://greengate-dev.github.io/greengate/og-image.png' }],
     // Twitter Card
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:title', content: 'GreenGate — Rust DevOps Security CLI' }],
     ['meta', { name: 'twitter:description', content: 'Zero-trust supply chain gate, secret scanning, SAST, test impact analysis, and coverage gates in a single Rust binary.' }],
-    ['meta', { name: 'twitter:image', content: 'https://thinkgrid-labs.github.io/greengate/og-image.png' }],
+    ['meta', { name: 'twitter:image', content: 'https://greengate-dev.github.io/greengate/og-image.png' }],
     // Discovery keywords (Bing, Yandex, DuckDuckGo)
     ['meta', { name: 'keywords', content: 'rust devops cli, supply chain security, npm security, secret scanning, SAST, test impact analysis, kubernetes linting, coverage gate, dependency audit, CI CD security, greengate' }],
     ['link', { rel: 'icon', href: '/greengate/favicon.ico' }],
-    ['link', { rel: 'canonical', href: 'https://thinkgrid-labs.github.io/greengate/' }],
+    ['link', { rel: 'canonical', href: 'https://greengate-dev.github.io/greengate/' }],
   ],
 
   markdown: {
@@ -58,7 +58,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Commands', link: '/commands/watch-install' },
       { text: 'Reference', link: '/reference/config' },
-      { text: 'GitHub', link: 'https://github.com/ThinkGrid-Labs/greengate' },
+      { text: 'GitHub', link: 'https://github.com/greengate-dev/greengate' },
     ],
 
     sidebar: [
@@ -122,12 +122,12 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/ThinkGrid-Labs/greengate' },
+      { icon: 'github', link: 'https://github.com/greengate-dev/greengate' },
     ],
 
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © ThinkGrid Labs',
+      copyright: 'Copyright © greengate-dev',
     },
 
     search: {
@@ -135,7 +135,7 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: 'https://github.com/ThinkGrid-Labs/greengate/edit/main/docs/:path',
+      pattern: 'https://github.com/greengate-dev/greengate/edit/main/docs/:path',
       text: 'Edit this page on GitHub',
     },
   },
