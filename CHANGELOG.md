@@ -69,4 +69,4 @@ Positioning greengate as the security & supply-chain gate for the AI-coding era.
 - `scan --fix` is de-emphasized in favour of suppression and baselines, with a
   clearer warning that it rewrites source in place.
 
-[0.3.3]: https://github.com/thinkgrid-labs/greengate/releases/tag/v0.3.3
+[0.3.3]: https://github.com/greengate-dev/greengate/releases/tag/v0.3.3

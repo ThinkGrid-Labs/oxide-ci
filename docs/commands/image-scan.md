@@ -101,7 +101,7 @@ jobs:
 
       - name: Download greengate
         run: |
-          curl -sSfL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+          curl -sSfL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
       - name: Build image

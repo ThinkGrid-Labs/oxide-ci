@@ -141,7 +141,7 @@ pub fn matches_internal(name: &str, patterns: &[String]) -> bool {
 // ── Registry metadata fetch ─────────────────────────────────────────────────
 
 const USER_AGENT: &str =
-    "greengate-supply-chain-gate (https://github.com/thinkgrid-labs/greengate)";
+    "greengate-supply-chain-gate (https://github.com/greengate-dev/greengate)";
 
 /// Package registries the guard understands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

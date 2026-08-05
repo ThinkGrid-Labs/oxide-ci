@@ -22,7 +22,7 @@ GreenGate monitors `node_modules/` every 250 ms while the package manager runs. 
 ```yaml
 - name: Install GreenGate
   run: |
-    curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+    curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-linux-amd64 \
       -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
 - name: Supply-chain safe install
@@ -79,7 +79,7 @@ jobs:
     steps:
       - name: Install greengate
         run: |
-          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+          curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
       - name: Lighthouse post-deploy audit
@@ -123,7 +123,7 @@ jobs:
     steps:
       - name: Install greengate
         run: |
-          curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+          curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-linux-amd64 \
             -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
       - name: Lighthouse pre-merge gate
@@ -237,7 +237,7 @@ min = 70.0
 ```yaml
 - name: Install greengate
   run: |
-    curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+    curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-linux-amd64 \
       -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
 - name: Scan
@@ -268,7 +268,7 @@ greengate install-hooks   # catch secrets before they leave your machine
 ```yaml
 - name: Install greengate
   run: |
-    curl -sL https://github.com/thinkgrid-labs/greengate/releases/latest/download/greengate-linux-amd64 \
+    curl -sL https://github.com/greengate-dev/greengate/releases/latest/download/greengate-linux-amd64 \
       -o /usr/local/bin/greengate && chmod +x /usr/local/bin/greengate
 
 - name: PR Review (Complexity + Coverage Gaps)
